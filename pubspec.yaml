@@ -1,0 +1,27 @@
+name: projekt_labor2
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_maps_flutter: ^2.5.0
+  mobile_scanner: ^3.5.2
+  firebase_core: ^2.24.2
+  cloud_firestore: ^4.14.0  
+  geolocator: ^10.1.0
+  flutter_polyline_points: ^2.0.0
+  # js: ^0.6.7 # This package is discontinued, using dart:js instead
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
