@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:geolocator/geolocator.dart';
 import 'models/station.dart';
-import 'services/map_service.dart';
+import 'data/mock_stations.dart';
 
 import 'config/firebase_config.dart';
 
@@ -54,28 +53,18 @@ class _HomeScreenState extends State<HomeScreen> {
     _getCurrentLocation();
   }
 
-  final MapService _mapService = MapService();
-  int? _currentTripId;
+  // Mock adatok használata, később itt lesz a backend kapcsolat
 
   Future<void> _loadStations() async {
     try {
-      if (_currentTripId == null) {
-        final trips = await _mapService.getTrips();
-        if (trips.isNotEmpty) {
-          _currentTripId = trips.first.id;
-        }
-      }
-      
-      if (_currentTripId != null) {
-        final stations = await _mapService.getStationsForTrip(_currentTripId!);
-        final pathPoints = await _mapService.getTripPath(_currentTripId!);
+      setState(() {
+        _stations = mockStations;
+        _updateMarkers();
         
-        setState(() {
-          _stations = stations;
-          _updateMarkers();
-          _updatePath(pathPoints);
-        });
-      }
+        // Állomások közötti útvonal
+        final pathPoints = _stations.map((s) => s.location).toList();
+        _updatePath(pathPoints);
+      });
     } catch (e) {
       debugPrint('Hiba az állomások betöltésekor: $e');
     }
@@ -99,14 +88,72 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _getCurrentLocation() async {
     try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        // Helymeghatározás szolgáltatás nincs bekapcsolva
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Helymeghatározás kikapcsolva'),
+            content: const Text('Kérlek, kapcsold be a helymeghatározást a telefon beállításaiban.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          // Felhasználó elutasította az engedélyt
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Helymeghatározás letiltva'),
+              content: const Text('Az alkalmazás megfelelő működéséhez szükség van a helymeghatározás engedélyezésére.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
       }
       
+      if (permission == LocationPermission.deniedForever) {
+        // A felhasználó véglegesen letiltotta az engedélyt
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Helymeghatározás letiltva'),
+            content: const Text('A helymeghatározás véglegesen le van tiltva. Kérlek, engedélyezd a telefon beállításaiban.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      // Ha minden engedély rendben van, lekérjük a pozíciót
       if (permission == LocationPermission.whileInUse || 
           permission == LocationPermission.always) {
-        Position position = await Geolocator.getCurrentPosition();
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5),
+        );
         setState(() {
           _currentPosition = position;
           _updateMarkers();
@@ -114,6 +161,19 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       debugPrint('Hiba a helymeghatározáskor: $e');
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Hiba történt'),
+          content: Text('Nem sikerült lekérni a helyzetet: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -263,29 +323,41 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // KÖZÉP: Google Térkép + overlay elemek
+          // KÖZÉP: Google Térkép + overlay elemek
       body: Stack(
         children: [
           // A TÉRKÉP – Nagyvázsony középre állítva
-          GoogleMap(
-            initialCameraPosition: const CameraPosition(
-              target: nagyvazsony,
-              zoom: 14.0,
-              tilt: 0,
-              bearing: 0,
-            ),
-            mapType: MapType.terrain,
-            myLocationButtonEnabled: true,
-            myLocationEnabled: true,
-            zoomControlsEnabled: true,
+          AbsorbPointer(
+            absorbing: false,
+            child: GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: nagyvazsony,
+                zoom: 14.0,
+                tilt: 0,
+                bearing: 0,
+              ),
+              mapType: MapType.terrain,
+              myLocationButtonEnabled: true,
+              myLocationEnabled: true,
+              zoomControlsEnabled: true,
+              zoomGesturesEnabled: true,
+              liteModeEnabled: false,
+              indoorViewEnabled: true,
+              trafficEnabled: false,
+              buildingsEnabled: true,
+            rotateGesturesEnabled: true,
+            tiltGesturesEnabled: true,
+            compassEnabled: true,
+            mapToolbarEnabled: false,
             markers: _markers,
             polylines: _polylines,
-            onMapCreated: (GoogleMapController controller) {
+            onMapCreated: (GoogleMapController controller) async {
               // A térkép létrejött
+              await Future.delayed(const Duration(milliseconds: 100));
+              setState(() {});
             },
-          ),
-
-          // FELÜLET a térkép fölött – „Útvonal indítása” demo
+          )),
+          // FELÜLET a térkép fölött – „Útvonal indítása" demo
           Positioned(
             top: 16,
             left: 16,

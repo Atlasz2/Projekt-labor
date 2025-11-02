@@ -5,12 +5,12 @@ class FirebaseConfig {
   // Replace these values with your Firebase Web app credentials from
   // Firebase Console -> Project settings -> Web app.
   static final FirebaseOptions webOptions = FirebaseOptions(
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID",
+    apiKey: "AIzaSyCIsx5WnBFKwpDfmwV2wynrWqi-Vf6QY8I",
+    authDomain: "turavonal-app.firebaseapp.com",
+    projectId: "turavonal-app",
+    storageBucket: "turavonal-app.appspot.com",
+    messagingSenderId: "123456789012",
+    appId: "1:123456789012:web:abc123def456ghi789jkl",
   );
 
   /// Attempts to initialize Firebase for web. If the placeholder values
