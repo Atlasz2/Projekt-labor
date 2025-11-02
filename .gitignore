@@ -43,3 +43,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local IDE and user files
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Generated plugin registrants and other ephemeral files
+**/generated_plugin_registrant.*
+**/*generated_plugins.*
