@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:geolocator/geolocator.dart';
-import 'models/station.dart';
-import 'data/mock_stations.dart';
+// ...existing code...
+import 'models/point_of_interest.dart';
+import 'services/api_service.dart';
 
 import 'config/firebase_config.dart';
 
@@ -41,8 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Position? _currentPosition;
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
-  List<Station> _stations = [];
-  
+  List<PointOfInterest> _stations = [];
+  int? _currentTripId;
+  final ApiService api = ApiService('http://localhost:5000'); // Itt állítsd be a backend címet
+
   // Nagyvázsony (HU) – térkép középpont
   static const LatLng nagyvazsony = LatLng(46.9890, 17.6990);
 
@@ -53,18 +56,21 @@ class _HomeScreenState extends State<HomeScreen> {
     _getCurrentLocation();
   }
 
-  // Mock adatok használata, később itt lesz a backend kapcsolat
-
   Future<void> _loadStations() async {
     try {
-      setState(() {
-        _stations = mockStations;
-        _updateMarkers();
-        
-        // Állomások közötti útvonal
-        final pathPoints = _stations.map((s) => s.location).toList();
-        _updatePath(pathPoints);
-      });
+      // Trip lekérése
+      final trips = await api.getTrips();
+      if (trips.isNotEmpty) {
+        _currentTripId = trips.first.id;
+        // Állomások lekérése
+        final stations = await api.getPointsOfInterest(_currentTripId!);
+        setState(() {
+          _stations = stations;
+          _updateMarkers();
+          final pathPoints = stations.map((s) => LatLng(s.latitude, s.longitude)).toList();
+          _updatePath(pathPoints);
+        });
+      }
     } catch (e) {
       debugPrint('Hiba az állomások betöltésekor: $e');
     }
@@ -184,11 +190,11 @@ class _HomeScreenState extends State<HomeScreen> {
     for (var station in _stations) {
       _markers.add(
         Marker(
-          markerId: MarkerId(station.id),
-          position: station.location,
+          markerId: MarkerId(station.id.toString()),
+          position: LatLng(station.latitude, station.longitude),
           infoWindow: InfoWindow(
-            title: station.name,
-            snippet: station.description,
+            title: station.description ?? '',
+            snippet: station.crybcodeIdentifier ?? '',
           ),
         ),
       );
@@ -236,31 +242,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _checkQRCode(String code) {
     final station = _stations.firstWhere(
-      (s) => s.qrCode == code,
+      (s) => s.crybcodeIdentifier == code,
       orElse: () => throw Exception('Ismeretlen QR kód'),
     );
 
     Navigator.pop(context); // Scanner bezárása
-    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(station.name),
+        title: Text(station.description ?? ''),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(station.description),
-            if (station.contents.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Text('További tartalmak:', style: TextStyle(fontWeight: FontWeight.bold)),
-              ...station.contents.map((content) => Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: content.contentType == 'text'
-                    ? Text(content.textContent ?? '')
-                    : Image.network(content.mediaUrl ?? ''),
-              )),
-            ],
+            Text(station.description ?? ''),
           ],
         ),
         actions: [

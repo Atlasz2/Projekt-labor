@@ -2,34 +2,44 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Trip {
   final int id;
-  final String name;
+  final int userId;
   final DateTime createdAt;
-  final String description;
-  final String imageUrl;
+  final String? description;
+  final String? imageUrl;
 
   Trip({
     required this.id,
-    required this.name,
+    required this.userId,
     required this.createdAt,
-    required this.description,
-    required this.imageUrl,
+    this.description,
+    this.imageUrl,
   });
 
   factory Trip.fromFirestore(DocumentSnapshot doc) {
     Map data = doc.data() as Map;
     return Trip(
       id: data['id'] as int,
-      name: data['name'] ?? '',
+      userId: data['userId'] as int,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       description: data['description'] ?? '',
       imageUrl: data['imageUrl'] ?? '',
     );
   }
 
+  factory Trip.fromJson(Map<String, dynamic> json) {
+    return Trip(
+      id: json['id'],
+      userId: json['userId'],
+      createdAt: DateTime.parse(json['createdAt']),
+      description: json['description'],
+      imageUrl: json['imageUrl'],
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'name': name,
+      'userId': userId,
       'createdAt': Timestamp.fromDate(createdAt),
       'description': description,
       'imageUrl': imageUrl,

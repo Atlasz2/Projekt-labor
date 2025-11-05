@@ -1,14 +1,14 @@
 class PointContent {
   final int id;
   final int pointOfInterestId;
-  final String contentType;
+  final String? contentType;
   final String? textContent;
   final String? mediaUrl;
 
   PointContent({
     required this.id,
     required this.pointOfInterestId,
-    required this.contentType,
+    this.contentType,
     this.textContent,
     this.mediaUrl,
   });
@@ -17,9 +17,19 @@ class PointContent {
     return PointContent(
       id: data['id'] as int,
       pointOfInterestId: data['pointOfInterestId'] as int,
-      contentType: data['contentType'] as String,
+      contentType: data['contentType'] as String?,
       textContent: data['textContent'] as String?,
       mediaUrl: data['mediaUrl'] as String?,
+    );
+  }
+
+  factory PointContent.fromJson(Map<String, dynamic> json) {
+    return PointContent(
+      id: json['id'],
+      pointOfInterestId: json['pointOfInterestId'],
+      contentType: json['contentType'],
+      textContent: json['textContent'],
+      mediaUrl: json['mediaUrl'],
     );
   }
 
