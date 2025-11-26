@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "149822291351",
+    "project_id": "projekt-labor-zolkooo",
+    "storage_bucket": "projekt-labor-zolkooo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:149822291351:android:b03c07aa690a5aed66d8d2",
+        "android_client_info": {
+          "package_name": "com.example.projekt_labor2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBRj0ivbbPVtUULFICT1VLnj0lvBfVRwgE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

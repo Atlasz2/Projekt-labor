@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Quick GMaps Test</title>
+    <style>html,body,#map{height:100%;margin:0;padding:0}</style>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_WEB_API_KEY&v=weekly"></script>
+    <script>
+      function init() {
+        const map = new google.maps.Map(document.getElementById('map'), {
+          center: {lat: 46.9890, lng: 17.6990}, // Nagyvázsony
+          zoom: 14,
+          mapTypeId: 'terrain'
+        });
+        new google.maps.Marker({
+          position: {lat: 46.9890, lng: 17.6990},
+          map,
+          title: 'Nagyvázsony'
+        });
+      }
+      window.addEventListener('load', init);
+    </script>
+  </head>
+  <body>
+    <div id="map"></div>
+  </body>
+</html>
