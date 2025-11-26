@@ -1,126 +1,190 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmap;
 
+/// Egy gyalogos/túra útvonal alternatíva
 class RouteChoice {
+  final List<gmap.LatLng> points;
+  final int walkDistanceMeters;
+  final int walkDurationSec;
+  final String summary;
+
   RouteChoice({
     required this.points,
     required this.walkDistanceMeters,
     required this.walkDurationSec,
     required this.summary,
   });
-
-  final List<LatLng> points;
-  final int walkDistanceMeters;
-  final int walkDurationSec;
-  final String summary;
 }
 
+/// Autós elérhetőség összefoglalása
 class DrivingOverview {
-  DrivingOverview({required this.available, this.distanceMeters, this.durationSec});
   final bool available;
   final int? distanceMeters;
   final int? durationSec;
+
+  DrivingOverview({
+    required this.available,
+    this.distanceMeters,
+    this.durationSec,
+  });
 }
 
+/// Útvonaltervező szolgáltatás:
+/// - Gyalog/túra: OpenRouteService (foot-hiking)
+/// - Autó: Google Directions (driving)
 class DirectionsService {
-  DirectionsService(this.apiKey);
-  final String apiKey;
+  final String googleApiKey;
+  final String orsApiKey;
 
-  // Gyalogos alternatívák részletes metaadatokkal
+  DirectionsService({
+    required this.googleApiKey,
+    required this.orsApiKey,
+  });
+
+    // ---------------------------------------------------------------------------
+  // 1) TÚRA / GYALOG ÚTVONAL – OpenRouteService, profil: foot-hiking
+  // ---------------------------------------------------------------------------
   Future<List<RouteChoice>> getWalkingAlternatives({
-    required LatLng origin,
-    required LatLng destination,
-    List<LatLng> waypoints = const [],
+    required gmap.LatLng origin,
+    required gmap.LatLng destination,
+    List<gmap.LatLng> waypoints = const <gmap.LatLng>[],
   }) async {
-    final wp = waypoints.isEmpty
-        ? null
-        : waypoints.map((p) => '${p.latitude},${p.longitude}').join('|');
+    // ORS API-ban a koordináta sorrend: [lon, lat]
+    final List<List<double>> coordinates = <List<double>>[
+      <double>[origin.longitude, origin.latitude],
+      ...waypoints.map(
+        (p) => <double>[p.longitude, p.latitude],
+      ),
+      <double>[destination.longitude, destination.latitude],
+    ];
 
-    final uri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
-      'origin': '${origin.latitude},${origin.longitude}',
-      'destination': '${destination.latitude},${destination.longitude}',
-      'alternatives': 'true',
-      'mode': 'walking',
-      if (wp != null) 'waypoints': wp,
-      'key': apiKey,
-    });
+    // Kifejezetten geojson végpontot hívunk
+    final uri = Uri.parse(
+      'https://api.openrouteservice.org/v2/directions/foot-hiking/geojson',
+    );
 
-    final res = await http.get(uri);
-    if (res.statusCode != 200) {
-      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    final response = await http.post(
+      uri,
+      headers: <String, String>{
+        'Authorization': orsApiKey,
+        'Content-Type': 'application/json; charset=utf-8',
+        'Accept':
+            'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'coordinates': coordinates,
+        'instructions': false,
+      }),
+    );
+
+    // HTTP hiba – pl. rossz kulcs, quota, stb.
+    if (response.statusCode != 200) {
+      throw Exception(
+          'ORS hiba (${response.statusCode}): ${response.body}');
     }
-    final data = json.decode(res.body);
-    if (data['status'] != 'OK') {
-      throw Exception('Directions hiba: ${data['status']} - ${data['error_message'] ?? ''}');
+
+    final Map<String, dynamic> data =
+        jsonDecode(response.body) as Map<String, dynamic>;
+
+    // ORS saját error mezője (itt szokott lenni az igazi üzenet)
+    if (data.containsKey('error')) {
+      final err = data['error'] as Map<String, dynamic>;
+      throw Exception('ORS hiba: ${err['message']}');
     }
 
-    final polylinePoints = PolylinePoints();
-    final List<RouteChoice> choices = [];
-    for (final route in data['routes']) {
-      final enc = route['overview_polyline']['points'] as String;
-      final pts = polylinePoints.decodePolyline(enc).map(
-        (p) => LatLng(p.latitude, p.longitude),
-      );
-
-      // Összesített táv/idő a route legs alapján
-      int dist = 0;
-      int dur = 0;
-      for (final leg in (route['legs'] as List)) {
-        dist += (leg['distance']['value'] as num).toInt();
-        dur  += (leg['duration']['value'] as num).toInt();
-      }
-
-      choices.add(RouteChoice(
-        points: pts.toList(),
-        walkDistanceMeters: dist,
-        walkDurationSec: dur,
-        summary: (route['summary'] as String?) ?? '',
-      ));
+    final List features = data['features'] as List? ?? <dynamic>[];
+    if (features.isEmpty) {
+      // Ez az az eset, amikor tényleg nincs útvonal a megadott pontok közt
+      throw Exception(
+          'ORS: nincs útvonal a megadott pontok között (foot-hiking).');
     }
-    return choices;
+
+    final Map<String, dynamic> feature =
+        features.first as Map<String, dynamic>;
+    final Map<String, dynamic> properties =
+        feature['properties'] as Map<String, dynamic>;
+    final Map<String, dynamic> summary =
+        properties['summary'] as Map<String, dynamic>;
+
+    final int distance =
+        (summary['distance'] as num).round(); // méter
+    final int duration =
+        (summary['duration'] as num).round(); // másodperc
+
+    final Map<String, dynamic> geometry =
+        feature['geometry'] as Map<String, dynamic>;
+    final List coordsRaw = geometry['coordinates'] as List;
+
+    final List<gmap.LatLng> points = coordsRaw.map<gmap.LatLng>((dynamic item) {
+      final List coord = item as List;
+      final double lon = (coord[0] as num).toDouble();
+      final double lat = (coord[1] as num).toDouble();
+      return gmap.LatLng(lat, lon);
+    }).toList();
+
+    return <RouteChoice>[
+      RouteChoice(
+        points: points,
+        walkDistanceMeters: distance,
+        walkDurationSec: duration,
+        summary: 'Túraútvonal',
+      ),
+    ];
   }
 
-  // Autós elérhetőség + kb. becslés (leggyorsabb autós út)
+  // ---------------------------------------------------------------------------
+  // 2) AUTÓS ÖSSZEFOGLALÓ – Google Directions (driving)
+  // ---------------------------------------------------------------------------
   Future<DrivingOverview> getDrivingOverview({
-    required LatLng origin,
-    required LatLng destination,
-    List<LatLng> waypoints = const [],
+    required gmap.LatLng origin,
+    required gmap.LatLng destination,
+    List<gmap.LatLng> waypoints = const <gmap.LatLng>[],
   }) async {
-    final wp = waypoints.isEmpty
-        ? null
-        : waypoints.map((p) => '${p.latitude},${p.longitude}').join('|');
+    final buffer = StringBuffer();
+    buffer.write(
+        'https://maps.googleapis.com/maps/api/directions/json'
+        '?mode=driving'
+        '&origin=${origin.latitude},${origin.longitude}'
+        '&destination=${destination.latitude},${destination.longitude}');
 
-    final uri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', {
-      'origin': '${origin.latitude},${origin.longitude}',
-      'destination': '${destination.latitude},${destination.longitude}',
-      'mode': 'driving',
-      'alternatives': 'false',
-      if (wp != null) 'waypoints': wp,
-      'key': apiKey,
-    });
-
-    final res = await http.get(uri);
-    if (res.statusCode != 200) {
-      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    if (waypoints.isNotEmpty) {
+      buffer.write('&waypoints=');
+      buffer.write(
+        waypoints
+            .map((p) => '${p.latitude},${p.longitude}')
+            .join('|'),
+      );
     }
-    final data = json.decode(res.body);
-    final status = data['status'];
-    if (status == 'ZERO_RESULTS') {
+
+    buffer.write('&key=$googleApiKey');
+
+    final uri = Uri.parse(buffer.toString());
+    final response = await http.get(uri);
+
+    if (response.statusCode != 200) {
       return DrivingOverview(available: false);
     }
-    if (status != 'OK') {
-      // Ha engedély gond stb., dobjunk hibaüzenetet a UI felé
-      throw Exception('Directions hiba: $status - ${data['error_message'] ?? ''}');
+
+    final Map<String, dynamic> data =
+        jsonDecode(response.body) as Map<String, dynamic>;
+
+    if (data['status'] != 'OK' || (data['routes'] as List).isEmpty) {
+      return DrivingOverview(available: false);
     }
 
-    int dist = 0;
-    int dur = 0;
-    for (final leg in (data['routes'][0]['legs'] as List)) {
-      dist += (leg['distance']['value'] as num).toInt();
-      dur  += (leg['duration']['value'] as num).toInt();
-    }
-    return DrivingOverview(available: true, distanceMeters: dist, durationSec: dur);
+    final Map<String, dynamic> firstRoute =
+        (data['routes'] as List).first as Map<String, dynamic>;
+    final Map<String, dynamic> firstLeg =
+        (firstRoute['legs'] as List).first as Map<String, dynamic>;
+
+    final int dist = (firstLeg['distance']['value'] as num).round(); // méter
+    final int dur = (firstLeg['duration']['value'] as num).round(); // másodperc
+
+    return DrivingOverview(
+      available: true,
+      distanceMeters: dist,
+      durationSec: dur,
+    );
   }
 }
