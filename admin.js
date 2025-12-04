@@ -1,39 +1,39 @@
 // Dummy adatok, cseréld le backend API hívásokra!
-const adminUser = { username: "admin", password: "admin123" };
+const adminUser = { username: "a", password: "as" };
+// A tényleges turistaútvonal (járható szakaszok) - pontosan a stations.json és path.json alapján
 let stations = [
-    { id: 1, name: "Kinizsi vár", status: "aktív", lat: 46.98495989257567, lng: 17.695659399032596, funFact: "A várat Kinizsi Pál építtette a 15. században." },
+    { id: 1, name: "Kinizsi vár", status: "aktív", lat: 46.98293554906191, lng: 17.69481718540192, funFact: "A várat Kinizsi Pál építtette a 15. században." },
     { id: 2, name: "Szent Ilona romok", status: "inaktív", lat: 46.98564788430669, lng: 17.689200639724735, funFact: "A romok egy középkori templom maradványai." },
-    { id: 3, name: "Forrás", status: "aktív", lat: 46.97926841129954, lng: 17.660238146781925, funFact: "A forrás vize egész évben iható." }
+    { id: 3, name: "Forrás", status: "inaktív", lat: 46.97926841129954, lng: 17.660238146781925, funFact: "A forrás vize egész évben iható." }
 ];
 
-// Túraútvonal pontok (valóban létező, járható utak mentén, OpenStreetMap alapján)
-// Ezek a pontok a nagyvázsonyi Kinizsi vár → Szent Ilona romok → Forrás útvonal tényleges, turistajelzéssel ellátott, járható szakaszai.
-// Az alábbi példa a sárga sáv turistajelzés mentén halad, a főbb elágazásokkal. További finomítás: OpenStreetMap vagy Waymarked Trails alapján!
-const tourPath = [
-    [46.98495989257567, 17.695659399032596], // Kinizsi vár
-    [46.985180, 17.695510], // Kinizsi vár utca
-    [46.985370, 17.695080], // Kinizsi vár utca
-    [46.985600, 17.694600], // Kinizsi vár utca
-    [46.985800, 17.694000], // Kinizsi vár utca
-    [46.985900, 17.693400], // Kinizsi vár utca
-    [46.986000, 17.692800], // Kinizsi vár utca
-    [46.986100, 17.692200], // Kinizsi vár utca
-    [46.986200, 17.691600], // Kinizsi vár utca
-    [46.986100, 17.691000], // Kinizsi vár utca
-    [46.985900, 17.690400], // Kinizsi vár utca
-    [46.985800, 17.689800], // Sárga sáv turistaút
+// A tényleges turistaútvonal (járható szakaszok) - pontosan a path.json alapján, a Forrás pont a végére került!
+let tourPath = [
+    [46.98293554906191, 17.69481718540192], // Kinizsi vár (helyes kezdőpont)
+    [46.98495989257567, 17.695659399032596],
+    [46.985180, 17.695510],
+    [46.985370, 17.695080],
+    [46.985600, 17.694600],
+    [46.985800, 17.694000],
+    [46.985900, 17.693400],
+    [46.986000, 17.692800],
+    [46.986100, 17.692200],
+    [46.986200, 17.691600],
+    [46.986100, 17.691000],
+    [46.985900, 17.690400],
+    [46.985800, 17.689800],
     [46.98564788430669, 17.689200639724735], // Szent Ilona romok
-    [46.985400, 17.688700], // Sárga sáv turistaút
-    [46.984900, 17.687900], // Sárga sáv turistaút
-    [46.984200, 17.686900], // Sárga sáv turistaút
-    [46.983500, 17.685900], // Sárga sáv turistaút
-    [46.982800, 17.684900], // Sárga sáv turistaút
-    [46.982100, 17.683900], // Sárga sáv turistaút
-    [46.981400, 17.682900], // Sárga sáv turistaút
-    [46.980700, 17.681900], // Sárga sáv turistaút
-    [46.980000, 17.680900], // Sárga sáv turistaút
-    [46.979500, 17.679000], // Sárga sáv turistaút
-    [46.97926841129954, 17.660238146781925]  // Forrás
+    [46.985400, 17.688700],
+    [46.984900, 17.687900],
+    [46.984200, 17.686900],
+    [46.983500, 17.685900],
+    [46.982800, 17.684900],
+    [46.982100, 17.683900],
+    [46.981400, 17.682900],
+    [46.980700, 17.681900],
+    [46.980000, 17.680900],
+    [46.979500, 17.679000],
+    [46.97926841129954, 17.660238146781925]  // Forrás (helyes végpont)
 ];
 
 let stats = {
@@ -50,9 +50,110 @@ let messages = [
     { text: "Felhasználó jelentett egy hibát a térképen.", date: "2024-06-09 18:05" }
 ];
 
+async function loadTripData() {
+    try {
+        console.log('loadTripData indul...');
+
+        // ⛳️ 1) Állomások – IDE ÍRD A VALÓDI API-DET
+const stationsRes = await fetch('./stations.json');
+
+        console.log('stationsRes status:', stationsRes.status);
+
+        if (!stationsRes.ok) {
+            throw new Error('Állomás lekérés sikertelen. HTTP ' + stationsRes.status);
+        }
+
+        // Ha nem vagy biztos a formátumban, először textként nézzük:
+        const stationsText = await stationsRes.text();
+        console.log('stations raw body:', stationsText);
+
+        let stationsData;
+        try {
+            stationsData = JSON.parse(stationsText);
+        } catch (e) {
+            throw new Error('Állomás JSON parse hiba: ' + e.message);
+        }
+
+        // ⛳️ 2) Útvonal – IDE IS A VALÓDI API-T
+const pathRes = await fetch('./path.json');
+        console.log('pathRes status:', pathRes.status);
+
+        if (!pathRes.ok) {
+            throw new Error('Útvonal lekérés sikertelen. HTTP ' + pathRes.status);
+        }
+
+        const pathText = await pathRes.text();
+        console.log('path raw body:', pathText);
+
+        let pathData;
+        try {
+            pathData = JSON.parse(pathText);
+        } catch (e) {
+            throw new Error('Útvonal JSON parse hiba: ' + e.message);
+        }
+
+        // ⛳️ 3) JSON → belső változók
+        // feltételezés: stationsData = [ {id, name, status, lat, lng, funFact}, ... ]
+        stations = stationsData;
+
+        // feltételezés: pathData.points = [ {lat, lng}, ... ]
+        if (!Array.isArray(pathData.points)) {
+            throw new Error('Útvonal formátum hiba: hiányzik a points tömb.');
+        }
+
+        tourPath = pathData.points.map(p => [p.lat, p.lng]);
+
+        console.log('Betöltött állomások:', stations);
+        console.log('Betöltött tourPath pontok száma:', tourPath.length);
+
+        // statok
+        stats.stations = stations.length;
+        stats.activeStations = stations.filter(s => s.status === 'aktív').length;
+
+        // UI friss
+        window.renderStats();
+        window.renderStations();
+        window.renderMessages();
+        setTimeout(window.initMap, 50);
+
+    } catch (err) {
+        console.error('loadTripData hiba:', err);
+        alert('Nem sikerült betölteni az útvonalat és/vagy állomásokat:\n' + err.message);
+    }
+}
+
+// Kijelentkezés gomb hozzáadása az admin felület tetejére
+function renderLogoutButton() {
+    let panel = document.getElementById('admin-panel');
+    if (!panel) return;
+    let logoutBtn = document.getElementById('logout-btn');
+    if (!logoutBtn) {
+        logoutBtn = document.createElement('button');
+        logoutBtn.id = 'logout-btn';
+        logoutBtn.className = 'logout-btn'; // csak class, ne inline style
+        logoutBtn.innerHTML = 'Kijelentkezés <span style="font-size:1.2em;">&#128274;</span>';
+        logoutBtn.onclick = window.logout;
+        panel.appendChild(logoutBtn);
+    }
+}
+
+// Kijelentkezés logika
+window.logout = function() {
+    document.getElementById('main-bg').style.display = 'none';
+    document.getElementById('admin-container').style.display = 'none';
+    document.getElementById('admin-panel').classList.add('hidden');
+    document.getElementById('login').style.display = '';
+    document.getElementById('login-bg').style.display = '';
+    // Töröld az esetleges hibákat, mezőket
+    document.getElementById('login-error').innerText = '';
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+};
+
 window.login = function() {
     const u = document.getElementById('username').value;
     const p = document.getElementById('password').value;
+
     if (u === adminUser.username && p === adminUser.password) {
         document.getElementById('login').style.display = 'none';
         document.getElementById('login-bg').style.display = 'none';
@@ -62,11 +163,15 @@ window.login = function() {
         window.renderStats();
         window.renderMessages();
         window.renderStations();
-        setTimeout(window.initMap, 100);
+        setTimeout(window.initMap, 50);
+        renderLogoutButton(); // <-- kijelentkezés gomb megjelenítése
     } else {
-        document.getElementById('login-error').innerText = "Hibás felhasználónév vagy jelszó!";
+        document.getElementById('login-error').innerText =
+            "Hibás felhasználónév vagy jelszó!";
     }
 };
+
+
 
 function createCrossIcon() {
     return L.divIcon({
@@ -80,17 +185,14 @@ function createCrossIcon() {
 function showCoordsPopup(lat, lng, onClose) {
     const popup = document.createElement('div');
     popup.className = 'coords-popup';
-    popup.style.padding = '0.7em 1.2em';
-    popup.style.fontSize = '0.98em';
-    popup.style.textAlign = 'center';
     popup.innerHTML = `
-        <div style="font-size:1.3em;color:#27ae60;margin-bottom:0.3em;">✚</div>
+        <div class="coords-popup-icon">✚</div>
         <div><strong>Koordináta:</strong></div>
-        <div style="margin:0.5em 0 0.7em 0;">
-            <span style="color:#2a4d69;">Lat:</span> <b>${lat}</b><br>
-            <span style="color:#2a4d69;">Lng:</span> <b>${lng}</b>
+        <div class="coords-popup-values">
+            <span>Lat:</span> <b>${lat}</b><br>
+            <span>Lng:</span> <b>${lng}</b>
         </div>
-        <button class="modal-coord-hide-btn" id="coords-popup-close" style="margin-top:0.5em;">Elrejtés</button>
+        <button class="modal-coord-hide-btn coords-popup-close" id="coords-popup-close">Elrejtés</button>
     `;
     document.body.appendChild(popup);
     document.getElementById('coords-popup-close').onclick = function() {
@@ -99,52 +201,57 @@ function showCoordsPopup(lat, lng, onClose) {
     };
 }
 
-// Dinamikus túraútvonal generálás: csak aktív állomások, sorrendben
-function getActiveTourPath() {
-    // Csak az aktív állomások koordinátáit adja vissza, sorrendben
-    return stations
-        .filter(s => s.status === "aktív")
-        .map(s => [s.lat, s.lng]);
-}
+// OSRM alapú gyalogos útvonal két állomás között
+async function drawRouteBetweenStations(fromStation, toStation) {
+    if (!map) return;
 
-window.initMap = function() {
-    if (map) { map.remove(); markers = []; }
-    // Számold ki a bounds-ot az összes állomásra
-    if (stations.length > 0) {
-        const latlngs = stations.map(s => [s.lat, s.lng]);
-        const bounds = L.latLngBounds(latlngs);
-        map = L.map('map');
-        map.fitBounds(bounds, { padding: [30, 30] });
-    } else {
-        map = L.map('map').setView([47.026, 17.652], 14);
-    }
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-    }).addTo(map);
+    const from = `${fromStation.lng},${fromStation.lat}`;
+    const to   = `${toStation.lng},${toStation.lat}`;
 
-    // Csak az aktív állomásokat kösse össze az útvonal!
-    const activeTourPath = getActiveTourPath();
-    if (activeTourPath.length > 1) {
-        L.polyline(activeTourPath, {
+    // foot = gyalogos útvonal
+    const url = `https://router.project-osrm.org/route/v1/foot/${from};${to}?overview=full&geometries=geojson`;
+
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.routes || !data.routes.length) return;
+
+        // GeoJSON -> [lat,lng] tömb Leafletnek
+        const coords = data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+
+        L.polyline(coords, {
             color: '#e1ad01',
             weight: 5,
             opacity: 0.85,
             lineJoin: 'round'
         }).addTo(map);
+
+    } catch (err) {
+        console.error('OSRM hiba:', err);
+        // Ha bármi gond van, fallback: sima légvonal, hogy legalább valami legyen
+        L.polyline(
+            [
+                [fromStation.lat, fromStation.lng],
+                [toStation.lat,   toStation.lng]
+            ],
+            {
+                color: '#e1ad01',
+                weight: 5,
+                opacity: 0.5,
+                dashArray: '5,8'
+            }
+        ).addTo(map);
     }
+}
 
-    window.updateMapMarkers();
 
-    window._selectCoordCallback = null;
-    map.on('click', function(e) {
-        if (typeof window._selectCoordCallback === 'function') {
-            const tempMarker = L.marker([e.latlng.lat, e.latlng.lng], { icon: createCrossIcon() }).addTo(map);
-            setTimeout(() => map.removeLayer(tempMarker), 1200);
-            window._selectCoordCallback(e.latlng.lat, e.latlng.lng);
-            window._selectCoordCallback = null;
-        }
-    });
-};
+// Dinamikus túraútvonal generálás: csak aktív állomások, sorrendben
+function getActiveTourPath() {
+    return stations
+        .filter(s => s.status === "aktív")
+        .map(s => [s.lat, s.lng]);
+}
 
 window.updateMapMarkers = function() {
     if (!map) return;
@@ -222,35 +329,100 @@ window.showMessageDetail = function(idx) {
 window.renderStations = function() {
     const container = document.getElementById('stations');
     container.innerHTML = '';
-    stations.forEach(station => {
+    stations.forEach((station, idx) => {
+        const isFirst = idx === 0;
+        const isLast = idx === stations.length - 1;
+        const isActive = station.status === 'aktív';
         container.innerHTML += `
-            <div class="station station-anim">
-                <div class="station-info">
-                    <div class="station-title">
-                        <span class="station-icon" title="Állomás">&#128205;</span>
-                        ${station.name}
+            <div class="station station-anim" style="box-shadow: 0 2px 8px rgba(42,77,105,0.10); border-left: 6px solid ${isActive ? '#27ae60' : '#e74c3c'}; padding: 0.9em 1.1em;">
+                <div class="station-info" style="gap:0.15em;">
+                    <div class="station-title" style="display:flex;align-items:center;gap:0.35em;font-size:1.05em;">
+                        <span class="station-icon" title="Állomás" style="background:${isActive ? '#27ae60' : '#e74c3c'};width:22px;height:22px;font-size:1em;">&#128205;</span>
+                        <span style="font-size:1em;">${station.name}</span>
                         <button class="station-coords-btn" title="Koordináta megjelenítése" onclick="showCoords(${station.id})">&#128269;</button>
+                        <div style="display:flex;flex-direction:column;gap:1px;margin-left:7px;">
+                            <button class="station-move-btn" title="Fel" onclick="moveStation(${idx},-1)" style="padding:1px 5px;border-radius:4px;background:#e0eafc;color:#2a4d69;border:none;box-shadow:0 1px 3px #b0c4de;cursor:pointer;transition:background 0.2s;font-size:1em;${isFirst ? 'opacity:0.4;cursor:not-allowed;' : ''}" ${isFirst ? 'disabled' : ''}>&#8593;</button>
+                            <button class="station-move-btn" title="Le" onclick="moveStation(${idx},1)" style="padding:1px 5px;border-radius:4px;background:#e0eafc;color:#2a4d69;border:none;box-shadow:0 1px 3px #b0c4de;cursor:pointer;transition:background 0.2s;font-size:1em;${isLast ? 'opacity:0.4;cursor:not-allowed;' : ''}" ${isLast ? 'disabled' : ''}>&#8595;</button>
+                        </div>
                     </div>
-                    <span class="station-status ${station.status === 'aktív' ? 'aktiv' : 'inaktiv'}">
+                    <span class="station-status ${isActive ? 'aktiv' : 'inaktiv'}" style="margin-top:0.15em;font-size:0.95em;">
                         ${station.status.charAt(0).toUpperCase() + station.status.slice(1)}
                     </span>
-                    <span class="station-funfact">
+                    <span class="station-funfact" style="margin-top:0.15em;font-size:0.95em;">
                         <strong>Érdekesség:</strong> ${station.funFact ? station.funFact : '<i>Nincs megadva</i>'}
                     </span>
                 </div>
-                <div class="station-actions">
-                    <button class="station-edit" onclick="editStation(${station.id})" title="Szerkesztés">&#9998; Szerkesztés</button>
-                    <button class="station-delete" onclick="deleteStation(${station.id})" title="Törlés">&#128465; Törlés</button>
+                <div class="station-actions" style="display:flex;flex-direction:column;gap:0.25em;">
+                    <button class="station-edit" onclick="editStation(${station.id})" title="Szerkesztés" style="background:#e0eafc;color:#2a4d69;padding:0.35em 0.8em;font-size:0.97em;">&#9998; Szerkesztés</button>
+                    <button class="station-delete" onclick="deleteStation(${station.id})" title="Törlés" style="background:#ffe3e3;color:#e74c3c;padding:0.35em 0.8em;font-size:0.97em;">&#128465; Törlés</button>
                 </div>
             </div>
         `;
     });
     window.updateMapMarkers();
-    // Útvonal is frissüljön, ha változott az állomások státusza
+    // Útvonal is frissüljön, ha változott a sorrend/státusz
     if (typeof window.initMap === 'function' && map) {
         window.initMap();
     }
 };
+
+// Fel-le mozgatás logika (marad)
+window.moveStation = function(idx, dir) {
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= stations.length) return;
+    const temp = stations[idx];
+    stations[idx] = stations[newIdx];
+    stations[newIdx] = temp;
+    window.renderStations();
+    window.renderStats();
+    window.updateMapMarkers();
+    if (typeof window.initMap === 'function' && map) {
+        window.initMap();
+    }
+};
+
+// Aktív állomások sorrendjében, minden szomszédos aktív között legyen gyalogos útvonal (OSRM)
+window.initMap = function() {
+    if (map) { 
+        map.remove(); 
+        markers = []; 
+    }
+
+    // Térkép középre állítása az összes állomás alapján
+    if (stations.length > 0) {
+        const latlngs = stations.map(s => [s.lat, s.lng]);
+        const bounds = L.latLngBounds(latlngs);
+        map = L.map('map');
+        map.fitBounds(bounds, { padding: [30, 30] });
+    } else {
+        map = L.map('map').setView([47.026, 17.652], 14);
+    }
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Csak az aktív állomások sorrendjében, minden szomszédos aktív között legyen szakasz
+    const activeStations = stations.filter(s => s.status === 'aktív');
+    (async () => {
+        for (let i = 0; i < activeStations.length - 1; i++) {
+            await drawRouteBetweenStations(activeStations[i], activeStations[i + 1]);
+        }
+    })();
+
+    window.updateMapMarkers();
+
+    window._selectCoordCallback = null;
+    map.on('click', function(e) {
+        if (typeof window._selectCoordCallback === 'function') {
+            const tempMarker = L.marker([e.latlng.lat, e.latlng.lng], { icon: createCrossIcon() }).addTo(map);
+            setTimeout(() => map.removeLayer(tempMarker), 1200);
+            window._selectCoordCallback(e.latlng.lat, e.latlng.lng);
+            window._selectCoordCallback = null;
+        }
+    });
+};
+
 
 // Jelszó mutatás/takarás
 window.showPwTemp = function() {
@@ -266,9 +438,11 @@ window.hidePw = function() {
 window.showCoords = function(stationId) {
     const station = stations.find(s => s.id === stationId);
     if (!station || !map) return;
+
     // Zoom and pan to the station's coordinates on the map
     map.setView([station.lat, station.lng], 18, { animate: true });
-    // Optionally, open the marker's popup if exists
+
+    // Nyissa meg a marker popupját, ha van ilyen marker
     const marker = markers.find(m => {
         const pos = m.getLatLng && m.getLatLng();
         return pos && Math.abs(pos.lat - station.lat) < 0.0001 && Math.abs(pos.lng - station.lng) < 0.0001;
@@ -276,6 +450,9 @@ window.showCoords = function(stationId) {
     if (marker && marker.openPopup) {
         marker.openPopup();
     }
+
+    // Mutassa a koordináta popupot is
+    showCoordsPopup(station.lat, station.lng);
 };
 
 function createStatusSwitch(idPrefix, currentStatus) {
