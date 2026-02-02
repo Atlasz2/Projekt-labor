@@ -14,6 +14,33 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
+// Get actual route from OSRM routing engine
+const getRouteCoordinates = async (coordinates) => {
+  if (coordinates.length < 2) return [];
+  
+  try {
+    const osmCoords = coordinates
+      .map(([lat, lon]) => `${lon},${lat}`)
+      .join(';');
+    
+    const response = await fetch(
+      `https://router.project-osrm.org/route/v1/foot/${osmCoords}`
+    );
+    
+    if (!response.ok) throw new Error('Routing failed');
+    
+    const data = await response.json();
+    
+    if (data.routes && data.routes.length > 0) {
+      return data.routes[0].geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+    }
+  } catch (error) {
+    console.error('Route calculation error:', error);
+  }
+  
+  return coordinates.map(([lat, lon]) => [lat, lon]);
+};
+
 function Trips() {
   const [trips, setTrips] = useState([]);
   const [stations, setStations] = useState([]);
@@ -22,6 +49,7 @@ function Trips() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [expandedTripId, setExpandedTripId] = useState(null);
+  const [routeCoordinates, setRouteCoordinates] = useState({});
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -54,8 +82,8 @@ function Trips() {
       }));
       setStations(stationsData);
     } catch (err) {
-      console.error('Hiba az adatok betöltésekor:', err);
-      setError('Nem sikerült betölteni az adatokat');
+      setError('Hiba az adatok betöltésénél');
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -69,10 +97,28 @@ function Trips() {
 
   const getMapCenter = (tripId) => {
     const tripStations = getTripsStations(tripId);
-    if (tripStations.length === 0) return [47.0600, 17.7150];
-    const avgLat = tripStations.reduce((sum, s) => sum + (s.location?.latitude || 0), 0) / tripStations.length;
-    const avgLng = tripStations.reduce((sum, s) => sum + (s.location?.longitude || 0), 0) / tripStations.length;
-    return [avgLat, avgLng];
+    if (tripStations.length === 0) return [47.5, 18.5];
+    
+    const avgLat = tripStations.reduce((sum, s) => sum + s.location.latitude, 0) / tripStations.length;
+    const avgLon = tripStations.reduce((sum, s) => sum + s.location.longitude, 0) / tripStations.length;
+    return [avgLat, avgLon];
+  };
+
+  const handleExpandTrip = async (tripId) => {
+    if (expandedTripId !== tripId) {
+      setExpandedTripId(tripId);
+      
+      if (!routeCoordinates[tripId]) {
+        const tripStations = getTripsStations(tripId);
+        if (tripStations.length > 1) {
+          const coords = tripStations.map(s => [s.location.latitude, s.location.longitude]);
+          const route = await getRouteCoordinates(coords);
+          setRouteCoordinates(prev => ({ ...prev, [tripId]: route }));
+        }
+      }
+    } else {
+      setExpandedTripId(null);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -85,51 +131,35 @@ function Trips() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.description) {
-      alert('Kérlek töltsd ki az összes mezőt!');
-      return;
-    }
-
     try {
       if (editingId) {
-        const tripRef = doc(db, 'trips', editingId);
-        await updateDoc(tripRef, formData);
+        await updateDoc(doc(db, 'trips', editingId), formData);
       } else {
         await addDoc(collection(db, 'trips'), formData);
       }
-      
-      setFormData({
-        name: '',
-        description: '',
-        distance: '',
-        duration: '',
-        difficulty: 'Könnyű',
-        isActive: true
-      });
-      setShowForm(false);
-      setEditingId(null);
       fetchData();
+      handleCancel();
     } catch (err) {
-      console.error('Hiba a túra mentésekor:', err);
-      alert('Nem sikerült menteni a túrát');
+      setError('Hiba a mentéskor');
+      console.error(err);
     }
   };
 
   const handleEdit = (trip) => {
-    setFormData(trip);
     setEditingId(trip.id);
+    setFormData(trip);
     setShowForm(true);
   };
 
   const handleDelete = async (tripId) => {
-    if (!window.confirm('Biztosan törölni szeretnéd ezt a túrát?')) return;
-    
-    try {
-      await deleteDoc(doc(db, 'trips', tripId));
-      fetchData();
-    } catch (err) {
-      console.error('Hiba a túra törlésekor:', err);
-      alert('Nem sikerült törölni a túrát');
+    if (window.confirm('Biztosan törölni szeretnéd ezt a túrát?')) {
+      try {
+        await deleteDoc(doc(db, 'trips', tripId));
+        fetchData();
+      } catch (err) {
+        setError('Hiba a törléskor');
+        console.error(err);
+      }
     }
   };
 
@@ -146,56 +176,48 @@ function Trips() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="trips">
-        <h1>Túrák kezelése</h1>
-        <p>Betöltés...</p>
-      </div>
-    );
-  }
+  if (loading) return <div className="trips"><p className="no-data">Betöltés...</p></div>;
 
   return (
     <div className="trips">
       <div className="trips-header">
-        <h1>Túrák kezelése</h1>
+        <h1>🏔️ Túrák</h1>
         {!showForm && (
           <button className="btn-primary" onClick={() => setShowForm(true)}>
-            ➕ Új túra
+            + Új túra
           </button>
         )}
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && <div className="error">{error}</div>}
 
       {showForm && (
         <div className="form-container">
           <h2>{editingId ? 'Túra szerkesztése' : 'Új túra hozzáadása'}</h2>
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Túra neve *</label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                placeholder="pl. Történelmi séta"
-                required
-              />
+            <div className="form-row">
+              <div className="form-group">
+                <label>Túra neve *</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="pl. Nagyvázsony felfedezése"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Leírás</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  placeholder="Túra leírása..."
+                  rows="3"
+                />
+              </div>
             </div>
-
-            <div className="form-group">
-              <label>Leírás *</label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                placeholder="A túra részletes leírása"
-                rows="4"
-                required
-              ></textarea>
-            </div>
-
             <div className="form-row">
               <div className="form-group">
                 <label>Távolság (km)</label>
@@ -208,7 +230,6 @@ function Trips() {
                   step="0.1"
                 />
               </div>
-
               <div className="form-group">
                 <label>Időtartam</label>
                 <input
@@ -219,7 +240,6 @@ function Trips() {
                   placeholder="2 óra"
                 />
               </div>
-
               <div className="form-group">
                 <label>Nehézség</label>
                 <select name="difficulty" value={formData.difficulty} onChange={handleInputChange}>
@@ -229,7 +249,6 @@ function Trips() {
                 </select>
               </div>
             </div>
-
             <div className="form-group checkbox">
               <label>
                 <input
@@ -241,7 +260,6 @@ function Trips() {
                 Aktív túra
               </label>
             </div>
-
             <div className="form-actions">
               <button type="submit" className="btn-primary">
                 {editingId ? 'Frissítés' : 'Hozzáadás'}
@@ -261,6 +279,7 @@ function Trips() {
           {trips.map(trip => {
             const tripStations = getTripsStations(trip.id);
             const isExpanded = expandedTripId === trip.id;
+            const routePath = routeCoordinates[trip.id];
             
             return (
               <div key={trip.id} className="trip-container">
@@ -268,7 +287,7 @@ function Trips() {
                   <div className="trip-info">
                     <button 
                       className="expand-btn"
-                      onClick={() => setExpandedTripId(isExpanded ? null : trip.id)}
+                      onClick={() => handleExpandTrip(trip.id)}
                     >
                       {isExpanded ? '▼' : '▶'}
                     </button>
@@ -279,12 +298,14 @@ function Trips() {
                       </p>
                     </div>
                   </div>
-                  <div className="trip-status-badge">
-                    {trip.isActive ? '🟢 Aktív' : '🔴 Inaktív'}
-                  </div>
+                  <span className={`trip-status-badge ${trip.isActive ? 'active' : 'inactive'}`}>
+                    {trip.isActive ? '🟢 Aktív' : '⚫ Inaktív'}
+                  </span>
                 </div>
 
-                <p className="trip-description">{trip.description}</p>
+                {trip.description && (
+                  <p className="trip-description">{trip.description}</p>
+                )}
 
                 {isExpanded && (
                   <div className="trip-expanded">
@@ -299,12 +320,12 @@ function Trips() {
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                           />
-                          {tripStations.length > 1 && (
+                          {routePath && routePath.length > 0 && (
                             <Polyline
-                              positions={tripStations.map(s => [s.location.latitude, s.location.longitude])}
+                              positions={routePath}
                               color="#2E7D32"
-                              weight={3}
-                              opacity={0.7}
+                              weight={4}
+                              opacity={0.8}
                             />
                           )}
                           {tripStations.map((station, idx) => (
@@ -340,7 +361,7 @@ function Trips() {
                           ))}
                         </ul>
                       ) : (
-                        <p className="empty-stations">Nincs még állomás</p>
+                        <p className="empty-stations">Nincsenek még állomások</p>
                       )}
                     </div>
                   </div>
@@ -364,3 +385,4 @@ function Trips() {
 }
 
 export default Trips;
+
