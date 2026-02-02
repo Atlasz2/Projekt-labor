@@ -146,6 +146,16 @@ class FirestoreService {
     }
   }
 
+  Stream<List<PointContent>> watchContentsByStationId(String stationId) {
+    return _db
+        .collection('point_contents')
+        .where('stationId', isEqualTo: stationId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => PointContent.fromFirestore(doc))
+            .toList());
+  }
+
   Future<PointContent?> getContentById(String contentId) async {
     try {
       final doc =
