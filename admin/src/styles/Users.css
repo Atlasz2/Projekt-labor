@@ -1,0 +1,26 @@
+.users-page {
+  padding: 24px;
+}
+
+.users-list {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.user-item {
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.user-item:last-child {
+  border-bottom: none;
+}
+
+.user-item strong {
+  color: #2E7D32;
+}
+
+.user-item span {
+  color: #666;
+}
