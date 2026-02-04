@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, GeoPoint } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
+import L from 'leaflet';
+import 'leaflet-routing-machine/dist/leaflet-routing-machine.css';
+import 'leaflet-routing-machine';
 import { Toast } from '../components/Toast';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { StationModal } from '../components/admin/StationModal';
 import { ProgramModal } from '../components/admin/ProgramModal';
 import { TripModal } from '../components/admin/TripModal';
+import { TripMap } from '../components/admin/TripMap';
 import '../styles/AdminPanel.css';
 
 export default function AdminPanel() {
@@ -84,6 +88,7 @@ export default function AdminPanel() {
             location: data.location || null,
             orderIndex: data.orderIndex || 0,
             qrCode: data.qrCode || '',
+            isActive: data.isActive === true,
             tripId: data.tripId || '',
             tripName: tripsData.find(t => t.id === data.tripId)?.name || 'Nincs hozzárendelve'
           };
@@ -297,6 +302,87 @@ export default function AdminPanel() {
     }
   };
 
+  // Helper komponens a túra térképhez statisztikákkal
+  function TripMapWithStats({ trip, stations }) {
+    const [routeInfo, setRouteInfo] = useState(null);
+
+    return (
+      <div className="trip-detail-card">
+        {/* Túra info szekció */}
+        <div className="trip-info-section">
+          <div className="trip-header-row">
+            <h3>{trip.name}</h3>
+            <button
+              className="btn btn-secondary"
+              onClick={() => handleEditTrip(trip)}
+            >
+              ✏️ Szerkesztés
+            </button>
+          </div>
+          
+          <p className="trip-description">{trip.description}</p>
+          
+          <div className="trip-meta-grid">
+            <div className="meta-card">
+              <span className="meta-label">Távolság</span>
+              <span className="meta-value">
+                {routeInfo ? `${routeInfo.distance} km` : `${trip.distance} km`}
+              </span>
+            </div>
+            <div className="meta-card">
+              <span className="meta-label">Időtartam</span>
+              <span className="meta-value">
+                {routeInfo 
+                  ? (routeInfo.time < 60 
+                      ? `${routeInfo.time} perc` 
+                      : `${Math.floor(routeInfo.time / 60)} óra ${routeInfo.time % 60} perc`)
+                  : `${trip.duration} perc`}
+              </span>
+            </div>
+            <div className="meta-card">
+              <span className="meta-label">Állomások</span>
+              <span className="meta-value">{stations.length} db</span>
+            </div>
+          </div>
+
+          <div className="trip-status">
+            <span className={`status-badge large ${trip.isActive ? 'active' : 'inactive'}`}>
+              {trip.isActive ? '● Publikált' : '○ Vázlat'}
+            </span>
+          </div>
+
+          {routeInfo && (
+            <div className="route-info-badge">
+              <span className="route-badge-icon">📊</span>
+              <span className="route-badge-text">
+                Valós útvonal adatok az OSRM alapján
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Térkép szekció */}
+        <div className="trip-map-section">
+          {stations.length < 2 ? (
+            <div className="map-placeholder">
+              <div className="placeholder-content">
+                <span className="placeholder-icon">⚠️</span>
+                <h4>Útvonal nem elérhető</h4>
+                <p>Legalább 2 állomás szükséges az útvonal megjelenítéséhez</p>
+              </div>
+            </div>
+          ) : (
+            <TripMap 
+              stations={stations} 
+              tripName={trip.name}
+              onRouteCalculated={setRouteInfo}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="admin-panel">
@@ -369,7 +455,6 @@ export default function AdminPanel() {
                       <th>Túra</th>
                       <th>Sorrend</th>
                       <th>QR kód</th>
-                      <th>Koordináták</th>
                       <th>Aktív</th>
                       <th>Műveletek</th>
                     </tr>
@@ -415,16 +500,6 @@ export default function AdminPanel() {
                           )}
                         </td>
                         <td>
-                          {station.location ? (
-                            <small className="coords">
-                              {(station.location._lat || station.location.latitude)?.toFixed(6)}° N<br />
-                              {(station.location._long || station.location.longitude)?.toFixed(6)}° E
-                            </small>
-                          ) : (
-                            <span className="badge badge-secondary">Nincs</span>
-                          )}
-                        </td>
-                        <td>
                           <label className="toggle-switch">
                             <input 
                               type="checkbox" 
@@ -432,7 +507,7 @@ export default function AdminPanel() {
                               onChange={async (e) => {
                                 const newStatus = e.target.checked;
                                 
-                                // Optimistic UI update - azonnal frissítjük a UI-t
+                                // Optimistic UI update
                                 setStations(prevStations => 
                                   prevStations.map(s => 
                                     s.id === station.id 
@@ -444,7 +519,6 @@ export default function AdminPanel() {
                                 try {
                                   console.log(`🔄 Állomás ${station.name} státusz mentése Firestore-ba:`, newStatus);
                                   
-                                  // Firestore-ba mentés
                                   await updateDoc(doc(db, 'stations', station.id), { 
                                     isActive: newStatus,
                                     updatedAt: serverTimestamp()
@@ -457,7 +531,6 @@ export default function AdminPanel() {
                                     message: `Állomás ${newStatus ? 'aktiválva ✅' : 'deaktiválva ❌'} és mentve!` 
                                   });
                                   
-                                  // Firestore-ból újratöltés megerősítéshez
                                   setTimeout(() => {
                                     fetchStations();
                                   }, 500);
@@ -465,7 +538,6 @@ export default function AdminPanel() {
                                 } catch (error) {
                                   console.error('❌ Hiba a Firestore mentés során:', error);
                                   
-                                  // Ha hiba van, visszaállítjuk az eredeti értéket
                                   setStations(prevStations => 
                                     prevStations.map(s => 
                                       s.id === station.id 
@@ -483,8 +555,8 @@ export default function AdminPanel() {
                             />
                             <span className="toggle-slider"></span>
                           </label>
-                          <span className={`status-label ${station.isActive === true ? 'active' : 'inactive'}`}>
-                            {station.isActive === true ? '✅ Aktív' : '❌ Inaktív'}
+                          <span className={`status-label-friendly ${station.isActive === true ? 'active' : 'inactive'}`}>
+                            {station.isActive === true ? '✓ Elérhető' : '○ Rejtett'}
                           </span>
                         </td>
                         <td>
@@ -542,8 +614,8 @@ export default function AdminPanel() {
                     <div className="program-content">
                       <div className="program-header">
                         <h3>{program.title}</h3>
-                        <span className={`status ${program.isActive ? 'active' : 'inactive'}`}>
-                          {program.isActive ? '✓ Aktív' : '✗ Inaktív'}
+                        <span className={`status-badge ${program.isActive ? 'active' : 'inactive'}`}>
+                          {program.isActive ? '● Látható' : '○ Elrejtve'}
                         </span>
                       </div>
                       <p className="program-description">{program.description}</p>
@@ -593,7 +665,7 @@ export default function AdminPanel() {
         {activeTab === 'trips' && (
           <div className="trips-section">
             <div className="section-header">
-              <h2>Túrák kezelése</h2>
+              <h2>🗺️ Túrák kezelése</h2>
             </div>
 
             {loading ? (
@@ -603,29 +675,19 @@ export default function AdminPanel() {
                 <p>Nincsenek túrák.</p>
               </div>
             ) : (
-              <div className="trips-simple-list">
-                {trips.map(trip => (
-                  <div key={trip.id} className="trip-simple-card">
-                    <div className="trip-simple-content">
-                      <h3>{trip.name}</h3>
-                      <p>{trip.description}</p>
-                      <div className="trip-simple-meta">
-                        <span>Nehézség: <strong>{trip.difficulty}</strong></span>
-                        <span>Távolság: <strong>{trip.distance} km</strong></span>
-                        <span>Időtartam: <strong>{trip.duration} perc</strong></span>
-                        <span className={`status ${trip.isActive ? 'active' : 'inactive'}`}>
-                          {trip.isActive ? '✓ Aktív' : '✗ Inaktív'}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleEditTrip(trip)}
-                    >
-                      ✏️ Szerkesztés
-                    </button>
-                  </div>
-                ))}
+              <div className="trips-with-maps">
+                {trips.map((trip) => {
+                  const tripStations = stations.filter(s => s.tripId === trip.id)
+                    .sort((a, b) => a.orderIndex - b.orderIndex);
+                  
+                  return (
+                    <TripMapWithStats 
+                      key={trip.id}
+                      trip={trip}
+                      stations={tripStations}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -667,8 +729,8 @@ export default function AdminPanel() {
                             : '-'}
                         </td>
                         <td>
-                          <span className={`status ${u.isAdmin ? 'active' : 'inactive'}`}>
-                            {u.isAdmin ? '✓ Admin' : '✗ Felhasználó'}
+                          <span className={`status-badge ${u.isAdmin ? 'active' : 'inactive'}`}>
+                            {u.isAdmin ? '★ Admin' : '● Felhasználó'}
                           </span>
                         </td>
                         <td>
@@ -676,7 +738,7 @@ export default function AdminPanel() {
                             className={`btn btn-sm ${u.isAdmin ? 'btn-warning' : 'btn-success'}`}
                             onClick={() => handleToggleAdmin(u.id, u.isAdmin)}
                           >
-                            {u.isAdmin ? '🔽 Admin elvétele' : '⬆️ Admin megadása'}
+                            {u.isAdmin ? '↓ Jogosultság visszavonása' : '↑ Admin jog megadása'}
                           </button>
                         </td>
                       </tr>
