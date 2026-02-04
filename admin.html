@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin felület</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+    <div id="login-bg"></div>
+    <div id="main-bg"></div>
+    <div id="login">
+        <h2>Admin bejelentkezés</h2>
+        <input type="text" id="username" placeholder="Felhasználónév" autocomplete="username" autofocus>
+        <div id="login-row" style="position: relative; width: 100%; margin-bottom: 0.5em;">
+            <input type="password" id="password" placeholder="Jelszó" autocomplete="current-password" style="width: 100%;">
+            <button class="pw-eye" type="button" tabindex="-1" aria-label="Jelszó mutatása/takarása"
+                onmousedown="showPwTemp()" onmouseup="hidePw()" onmouseleave="hidePw()">
+                <svg width="25" height="25" viewBox="0 0 20 20" style="display:block;">
+                    <path d="M10 4C5.5 4 2.1 7.1 1 10c1.1 2.9 4.5 6 9 6s7.9-3.1 9-6c-1.1-2.9-4.5-6-9-6zm0 10c-2.2 0-4-1.8-4-4s1.8-4 4-4 4 1.8 4 4-1.8 4-4 4zm0-6.5A2.5 2.5 0 1 0 10 13a2.5 2.5 0 0 0 0-5z" fill="#4b86b4"/>
+                </svg>
+            </button>
+        </div>
+        <button class="login-btn" onclick="login()">Belépés</button>
+        <div id="login-error"></div>
+    </div>
+    <div class="container" id="admin-container" style="display:none;">
+        <h1 style="text-align:center;color:#2a4d69;font-weight:800;margin-bottom:1.2em;letter-spacing:1px;">Admin felület</h1>
+        <div id="admin-panel">
+            <h2>Statisztikák</h2>
+            <div id="stats"></div>
+            <div id="messages-section">
+                <h2>Beérkező üzenetek</h2>
+                <div id="messages-list"></div>
+            </div>
+            <h2>Állomások térképen</h2>
+            <div id="map"></div>
+            <h2>Állomások kezelése</h2>
+            <button id="add-station-btn" style="margin-bottom:1em;background:#27ae60;color:#fff;padding:0.7em 1.5em;border:none;border-radius:8px;font-size:1em;cursor:pointer;">&#43; Új állomás</button>
+            <div id="stations"></div>
+        </div>
+    </div>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,523 @@
+.trail-details {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+/* HEADER */
+.trail-header-simple {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 10px 20px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+  margin-bottom: 20px;
+  display: inline-block;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.trail-header-simple h1 {
+  font-size: 2rem;
+  margin: 0 0 10px 0;
+  font-weight: 800;
+}
+
+.trail-header-simple p {
+  font-size: 1.1rem;
+  margin: 0;
+  opacity: 0.95;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* HERO */
+.trail-hero {
+  position: relative;
+  height: 450px;
+  overflow: hidden;
+  margin-bottom: 40px;
+}
+
+.trail-hero-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: zoomIn 0.6s ease-out;
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.trail-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.5));
+}
+
+.trail-hero-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 40px;
+  color: white;
+  z-index: 2;
+}
+
+/* PROXIMITY ALERT */
+.proximity-alert {
+  position: fixed;
+  top: 80px;
+  left: 20px;
+  right: 20px;
+  max-width: 400px;
+  background: linear-gradient(135deg, #fff3cd, #ffe69c);
+  border-left: 4px solid #ffc107;
+  padding: 16px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(255, 193, 7, 0.3);
+  z-index: 999;
+  animation: slideInDown 0.4s ease-out;
+  font-weight: 600;
+  color: #856404;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@keyframes slideInDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.proximity-pulse {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  background: #ffc107;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 193, 7, 0);
+  }
+}
+
+/* COMPLETION BANNER */
+.completion-banner {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  padding: 20px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 40px;
+  border-radius: 12px;
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* CONTAINER */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 60px 20px;
+}
+
+/* STATS */
+.trail-header-stats {
+  display: grid;
+  gap: 40px;
+  margin-bottom: 50px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.stat-card {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #999;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #667eea;
+  margin-bottom: 4px;
+}
+
+.stat-unit {
+  font-size: 0.85rem;
+  color: #999;
+}
+
+/* ACTIONS */
+.trail-actions {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border-radius: 50px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 1rem;
+  transition: all 0.3s;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(102, 126, 234, 0.6);
+}
+
+.btn-secondary {
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+}
+
+.btn-secondary:hover {
+  background: #667eea;
+  color: white;
+}
+
+.btn-scan {
+  width: 100%;
+  background: #667eea;
+  color: white;
+  padding: 12px 20px;
+}
+
+.btn-scan:hover {
+  background: #764ba2;
+}
+
+/* PROGRESS */
+.progress-section {
+  background: white;
+  padding: 32px;
+  border-radius: 12px;
+  margin-bottom: 50px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.progress-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #2c3e50;
+}
+
+.progress-percentage {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #667eea;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 15px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  position: relative;
+}
+
+.progress-fill.completed {
+  animation: celebrateProgress 0.6s ease-out;
+}
+
+@keyframes celebrateProgress {
+  0% {
+    width: 99%;
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.8);
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+.progress-text {
+  margin: 0;
+  color: #666;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* MAP */
+.map-section {
+  margin-bottom: 60px;
+}
+
+.map-section h2 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+.map-container {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.marker-popup h3 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.marker-popup p {
+  margin: 0 0 8px 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.qr-info {
+  background: #f8f9fa;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* STATIONS LIST */
+.stations-list-section {
+  margin-bottom: 60px;
+}
+
+.stations-list-section h2 {
+  font-size: 1.5rem;
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-weight: 700;
+}
+
+.no-stations {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 1rem;
+}
+
+.stations-list-simple {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.station-card-simple {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  transition: all 0.3s;
+}
+
+.station-card-simple:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  transform: translateX(4px);
+}
+
+.station-number {
+  min-width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.station-content-simple {
+  flex: 1;
+}
+
+.station-content-simple h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.3rem;
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.station-content-simple p {
+  margin: 0 0 12px 0;
+  color: #666;
+  line-height: 1.6;
+}
+
+.station-coords {
+  font-size: 0.9rem;
+  color: #999;
+  margin-bottom: 8px;
+}
+
+.station-qr {
+  display: inline-block;
+  background: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #667eea;
+  border-left: 3px solid #667eea;
+}
+
+.station-qr strong {
+  color: #2c3e50;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .trail-header-simple {
+    padding: 30px 15px;
+  }
+
+  .trail-header-simple h1 {
+    font-size: 1.5rem;
+  }
+
+  .trail-header-simple p {
+    font-size: 1rem;
+  }
+
+  .container {
+    padding: 40px 15px;
+  }
+
+  .map-container {
+    height: 350px !important;
+  }
+
+  .station-card-simple {
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .station-number {
+    width: 45px;
+    height: 45px;
+  }
+}
+
+@media (max-width: 480px) {
+  .trail-header-simple {
+    padding: 25px 15px;
+  }
+
+  .trail-header-simple h1 {
+    font-size: 1.3rem;
+  }
+
+  .map-container {
+    height: 300px !important;
+  }
+
+  .stations-list-simple {
+    gap: 15px;
+  }
+
+  .station-card-simple {
+    padding: 16px;
+  }
+}

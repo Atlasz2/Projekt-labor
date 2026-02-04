@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Kinizsi vár",
+    "status": "aktív",
+    "lat": 46.98293554906191,
+    "lng": 17.69481718540192,
+    "funFact": "A várat Kinizsi Pál építtette a 15. században."
+  },
+  {
+    "id": 2,
+    "name": "Szent Ilona romok",
+    "status": "inaktív",
+    "lat": 46.98564788430669,
+    "lng": 17.689200639724735,
+    "funFact": "A romok egy középkori templom maradványai."
+  },
+  {
+    "id": 3,
+    "name": "Forrás",
+    "status": "aktív",
+    "lat": 46.97926841129954,
+    "lng": 17.660238146781925,
+    "funFact": "A forrás vize egész évben iható."
+  }
+]

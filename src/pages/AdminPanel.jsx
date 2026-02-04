@@ -1,0 +1,738 @@
+import React, { useState, useEffect } from 'react';
+import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, serverTimestamp, GeoPoint } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { Toast } from '../components/Toast';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { StationModal } from '../components/admin/StationModal';
+import { ProgramModal } from '../components/admin/ProgramModal';
+import { TripModal } from '../components/admin/TripModal';
+import '../styles/AdminPanel.css';
+
+export default function AdminPanel() {
+  const [user] = useAuthState(auth);
+  const [activeTab, setActiveTab] = useState('stations');
+  const [stations, setStations] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [trips, setTrips] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+  const [showStationModal, setShowStationModal] = useState(false);
+  const [showProgramModal, setShowProgramModal] = useState(false);
+  const [showTripModal, setShowTripModal] = useState(false);
+  const [editingStation, setEditingStation] = useState(null);
+  const [editingProgram, setEditingProgram] = useState(null);
+  const [editingTrip, setEditingTrip] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+
+  // Fetch data on mount and tab change
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, activeTab]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'stations') {
+        await fetchStations();
+      } else if (activeTab === 'programs') {
+        await fetchPrograms();
+      } else if (activeTab === 'trips') {
+        await fetchTrips();
+      } else if (activeTab === 'users') {
+        await fetchUsers();
+      }
+    } catch (error) {
+      console.error('Hiba az adatok betöltésekor:', error);
+      setToast({ type: 'error', message: 'Hiba az adatok betöltésekor' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStations = async () => {
+    try {
+      console.log('🔍 Állomások betöltése...');
+      
+      // Túrák betöltése
+      const tripsSnapshot = await getDocs(collection(db, 'trips'));
+      const tripsData = tripsSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
+      console.log('✅ Túrák betöltve:', tripsData.length);
+      setTrips(tripsData);
+
+      // Állomások betöltése - EGYSZERŰ getDocs, nincs where/orderBy
+      const stationsSnapshot = await getDocs(collection(db, 'stations'));
+      console.log('📊 Firestore stations snapshot:', stationsSnapshot.size, 'dokumentum');
+      
+      // Manuális feldolgozás, szűrés és rendezés
+      const stationsData = stationsSnapshot.docs
+        .map(doc => {
+          const data = doc.data();
+          console.log('📍 Állomás raw adat:', doc.id, data);
+          
+          return {
+            id: doc.id,
+            name: data.name || 'Névtelen állomás',
+            description: data.description || '',
+            location: data.location || null,
+            orderIndex: data.orderIndex || 0,
+            qrCode: data.qrCode || '',
+            tripId: data.tripId || '',
+            tripName: tripsData.find(t => t.id === data.tripId)?.name || 'Nincs hozzárendelve'
+          };
+        })
+        .sort((a, b) => a.orderIndex - b.orderIndex); // Manuális rendezés
+
+      console.log('✅ Állomások feldolgozva és rendezve:', stationsData.length);
+      
+      setStations(stationsData);
+      
+      if (stationsData.length === 0) {
+        console.warn('⚠️ Nincs állomás az adatbázisban!');
+        setToast({ 
+          type: 'info', 
+          message: 'Még nincsenek állomások az adatbázisban. Hozz létre egyet!' 
+        });
+      }
+    } catch (error) {
+      console.error('❌ Hiba az állomások betöltésekor:', error);
+      setToast({ type: 'error', message: `Hiba az állomások betöltésekor: ${error.message}` });
+    }
+  };
+
+  const fetchPrograms = async () => {
+    try {
+      console.log('🔍 Programok betöltése...');
+      const snapshot = await getDocs(collection(db, 'programs'));
+      console.log('📊 Firestore programs snapshot:', snapshot.size, 'dokumentum');
+      
+      const programsData = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      }));
+      
+      console.log('✅ Programok betöltve:', programsData);
+      
+      const sortedPrograms = programsData.sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        return b.date.seconds - a.date.seconds;
+      });
+      
+      setPrograms(sortedPrograms);
+      
+      if (programsData.length === 0) {
+        console.warn('⚠️ Nincs program az adatbázisban!');
+      }
+    } catch (error) {
+      console.error('❌ Hiba a programok betöltésekor:', error);
+      setToast({ type: 'error', message: `Hiba a programok betöltésekor: ${error.message}` });
+    }
+  };
+
+  const fetchTrips = async () => {
+    const snapshot = await getDocs(collection(db, 'trips'));
+    setTrips(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  };
+
+  const fetchUsers = async () => {
+    const snapshot = await getDocs(collection(db, 'users'));
+    setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+  };
+
+  // STATION ACTIONS
+  const handleCreateStation = () => {
+    setEditingStation(null);
+    setShowStationModal(true);
+  };
+
+  const handleEditStation = (station) => {
+    setEditingStation(station);
+    setShowStationModal(true);
+  };
+
+  const handleDeleteStation = (station) => {
+    setConfirmDialog({
+      title: 'Állomás törlése',
+      message: `Biztosan törölni szeretnéd a(z) "${station.name}" állomást?`,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'stations', station.id));
+          setToast({ type: 'success', message: 'Állomás törölve!' });
+          fetchStations();
+        } catch (error) {
+          setToast({ type: 'error', message: 'Hiba a törlés során' });
+        }
+      }
+    });
+  };
+
+  const handleSaveStation = async (stationData) => {
+    try {
+      console.log('💾 Állomás mentése:', stationData);
+      
+      const dataToSave = {
+        name: stationData.name,
+        description: stationData.description,
+        location: new GeoPoint(
+          parseFloat(stationData.latitude),
+          parseFloat(stationData.longitude)
+        ),
+        orderIndex: parseInt(stationData.orderIndex) || 0,
+        qrCode: stationData.qrCode || '',
+        tripId: stationData.tripId
+      };
+
+      console.log('💾 Firestore-ba mentendő adat:', dataToSave);
+
+      if (editingStation) {
+        await updateDoc(doc(db, 'stations', editingStation.id), dataToSave);
+        console.log('✅ Állomás frissítve:', editingStation.id);
+        setToast({ type: 'success', message: 'Állomás sikeresen frissítve!' });
+      } else {
+        const docRef = await addDoc(collection(db, 'stations'), {
+          ...dataToSave,
+          createdAt: serverTimestamp()
+        });
+        console.log('✅ Új állomás létrehozva:', docRef.id);
+        setToast({ type: 'success', message: 'Új állomás sikeresen létrehozva!' });
+      }
+      
+      setShowStationModal(false);
+      fetchStations();
+    } catch (error) {
+      console.error('❌ Hiba az állomás mentésekor:', error);
+      setToast({ type: 'error', message: `Hiba a mentés során: ${error.message}` });
+    }
+  };
+
+  // PROGRAM ACTIONS
+  const handleCreateProgram = () => {
+    setEditingProgram(null);
+    setShowProgramModal(true);
+  };
+
+  const handleEditProgram = (program) => {
+    setEditingProgram(program);
+    setShowProgramModal(true);
+  };
+
+  const handleDeleteProgram = (program) => {
+    setConfirmDialog({
+      title: 'Program törlése',
+      message: `Biztosan törölni szeretnéd a(z) "${program.title}" programot?`,
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'programs', program.id));
+          setToast({ type: 'success', message: 'Program törölve!' });
+          fetchPrograms();
+        } catch (error) {
+          setToast({ type: 'error', message: 'Hiba a törlés során' });
+        }
+      }
+    });
+  };
+
+  const handleSaveProgram = async (programData) => {
+    try {
+      console.log('💾 Program mentése:', programData);
+      
+      if (editingProgram) {
+        await updateDoc(doc(db, 'programs', editingProgram.id), programData);
+        console.log('✅ Program frissítve:', editingProgram.id);
+        setToast({ type: 'success', message: 'Program sikeresen frissítve!' });
+      } else {
+        const docRef = await addDoc(collection(db, 'programs'), {
+          ...programData,
+          createdAt: serverTimestamp()
+        });
+        console.log('✅ Új program létrehozva:', docRef.id);
+        setToast({ type: 'success', message: 'Új program sikeresen létrehozva!' });
+      }
+      
+      setShowProgramModal(false);
+      fetchPrograms();
+    } catch (error) {
+      console.error('❌ Hiba a program mentésekor:', error);
+      setToast({ type: 'error', message: `Hiba a mentés során: ${error.message}` });
+    }
+  };
+
+  // TRIP ACTIONS
+  const handleEditTrip = (trip) => {
+    setEditingTrip(trip);
+    setShowTripModal(true);
+  };
+
+  const handleSaveTrip = async (tripData) => {
+    try {
+      await updateDoc(doc(db, 'trips', editingTrip.id), tripData);
+      setToast({ type: 'success', message: 'Túra frissítve!' });
+      setShowTripModal(false);
+      fetchTrips();
+    } catch (error) {
+      setToast({ type: 'error', message: 'Hiba a mentés során' });
+    }
+  };
+
+  // USER ACTIONS
+  const handleToggleAdmin = async (userId, currentStatus) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        isAdmin: !currentStatus
+      });
+      setToast({ 
+        type: 'success', 
+        message: `Admin jogosultság ${!currentStatus ? 'megadva' : 'elvéve'}!` 
+      });
+      fetchUsers();
+    } catch (error) {
+      setToast({ type: 'error', message: 'Hiba a jogosultság módosítása során' });
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="admin-panel">
+        <div className="loading">Bejelentkezés szükséges...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-panel">
+      <header className="admin-header">
+        <h1>🛠️ Admin Panel</h1>
+        <p>Állomások, programok és túrák kezelése</p>
+      </header>
+
+      <div className="admin-tabs">
+        <button
+          className={`tab ${activeTab === 'stations' ? 'active' : ''}`}
+          onClick={() => setActiveTab('stations')}
+        >
+          📍 Állomások
+        </button>
+        <button
+          className={`tab ${activeTab === 'programs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('programs')}
+        >
+          🎪 Programok
+        </button>
+        <button
+          className={`tab ${activeTab === 'trips' ? 'active' : ''}`}
+          onClick={() => setActiveTab('trips')}
+        >
+          🗺️ Túrák
+        </button>
+        <button
+          className={`tab ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          👥 Felhasználók
+        </button>
+      </div>
+
+      <div className="admin-content">
+        {/* ÁLLOMÁSOK TAB */}
+        {activeTab === 'stations' && (
+          <div className="stations-section">
+            <div className="section-header">
+              <h2>Állomások kezelése</h2>
+              <button className="btn btn-primary" onClick={handleCreateStation}>
+                ➕ Új állomás
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="loading">Betöltés...</div>
+            ) : stations.length === 0 ? (
+              <div className="empty-state">
+                <p>Még nincsenek állomások. Hozz létre egyet!</p>
+                <button className="btn btn-primary" onClick={handleCreateStation}>
+                  ➕ Első állomás létrehozása
+                </button>
+              </div>
+            ) : (
+              <div className="data-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Név</th>
+                      <th>Túra</th>
+                      <th>Sorrend</th>
+                      <th>QR kód</th>
+                      <th>Koordináták</th>
+                      <th>Aktív</th>
+                      <th>Műveletek</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stations.map((station, index) => (
+                      <tr key={station.id}>
+                        <td>{index + 1}</td>
+                        <td>
+                          <strong>{station.name}</strong>
+                          <br />
+                          <small className="text-muted">
+                            {station.description?.substring(0, 50)}
+                            {station.description?.length > 50 ? '...' : ''}
+                          </small>
+                        </td>
+                        <td>
+                          <span className="badge badge-info">{station.tripName}</span>
+                        </td>
+                        <td>
+                          <input 
+                            type="number" 
+                            value={station.orderIndex || 0}
+                            onChange={async (e) => {
+                              try {
+                                await updateDoc(doc(db, 'stations', station.id), { 
+                                  orderIndex: parseInt(e.target.value) || 0 
+                                });
+                                fetchStations();
+                              } catch (error) {
+                                console.error('Hiba a sorrend mentésekor:', error);
+                              }
+                            }}
+                            style={{width: '60px', padding: '4px 8px', textAlign: 'center' }}
+                            className="order-input"
+                          />
+                        </td>
+                        <td>
+                          {station.qrCode ? (
+                            <span className="badge badge-success">✓ {station.qrCode}</span>
+                          ) : (
+                            <span className="badge badge-secondary">Nincs</span>
+                          )}
+                        </td>
+                        <td>
+                          {station.location ? (
+                            <small className="coords">
+                              {(station.location._lat || station.location.latitude)?.toFixed(6)}° N<br />
+                              {(station.location._long || station.location.longitude)?.toFixed(6)}° E
+                            </small>
+                          ) : (
+                            <span className="badge badge-secondary">Nincs</span>
+                          )}
+                        </td>
+                        <td>
+                          <label className="toggle-switch">
+                            <input 
+                              type="checkbox" 
+                              checked={station.isActive === true}
+                              onChange={async (e) => {
+                                const newStatus = e.target.checked;
+                                
+                                // Optimistic UI update - azonnal frissítjük a UI-t
+                                setStations(prevStations => 
+                                  prevStations.map(s => 
+                                    s.id === station.id 
+                                      ? { ...s, isActive: newStatus }
+                                      : s
+                                  )
+                                );
+
+                                try {
+                                  console.log(`🔄 Állomás ${station.name} státusz mentése Firestore-ba:`, newStatus);
+                                  
+                                  // Firestore-ba mentés
+                                  await updateDoc(doc(db, 'stations', station.id), { 
+                                    isActive: newStatus,
+                                    updatedAt: serverTimestamp()
+                                  });
+                                  
+                                  console.log(`✅ Firestore frissítve: stations/${station.id} -> isActive: ${newStatus}`);
+                                  
+                                  setToast({ 
+                                    type: 'success', 
+                                    message: `Állomás ${newStatus ? 'aktiválva ✅' : 'deaktiválva ❌'} és mentve!` 
+                                  });
+                                  
+                                  // Firestore-ból újratöltés megerősítéshez
+                                  setTimeout(() => {
+                                    fetchStations();
+                                  }, 500);
+                                  
+                                } catch (error) {
+                                  console.error('❌ Hiba a Firestore mentés során:', error);
+                                  
+                                  // Ha hiba van, visszaállítjuk az eredeti értéket
+                                  setStations(prevStations => 
+                                    prevStations.map(s => 
+                                      s.id === station.id 
+                                        ? { ...s, isActive: !newStatus }
+                                        : s
+                                    )
+                                  );
+                                  
+                                  setToast({ 
+                                    type: 'error', 
+                                    message: `Hiba a mentés során: ${error.message}` 
+                                  });
+                                }
+                              }}
+                            />
+                            <span className="toggle-slider"></span>
+                          </label>
+                          <span className={`status-label ${station.isActive === true ? 'active' : 'inactive'}`}>
+                            {station.isActive === true ? '✅ Aktív' : '❌ Inaktív'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button
+                              className="btn-icon btn-edit"
+                              onClick={() => handleEditStation(station)}
+                              title="Szerkesztés"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="btn-icon btn-delete"
+                              onClick={() => handleDeleteStation(station)}
+                              title="Törlés"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* PROGRAMOK TAB */}
+        {activeTab === 'programs' && (
+          <div className="programs-section">
+            <div className="section-header">
+              <h2>Programok kezelése</h2>
+              <button className="btn btn-primary" onClick={handleCreateProgram}>
+                ➕ Új program
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="loading">Betöltés...</div>
+            ) : programs.length === 0 ? (
+              <div className="empty-state">
+                <p>Még nincsenek programok. Hozz létre egyet!</p>
+              </div>
+            ) : (
+              <div className="programs-grid">
+                {programs.map(program => (
+                  <div key={program.id} className="program-card">
+                    {program.imageUrl && (
+                      <div className="program-image">
+                        <img src={program.imageUrl} alt={program.title} />
+                      </div>
+                    )}
+                    <div className="program-content">
+                      <div className="program-header">
+                        <h3>{program.title}</h3>
+                        <span className={`status ${program.isActive ? 'active' : 'inactive'}`}>
+                          {program.isActive ? '✓ Aktív' : '✗ Inaktív'}
+                        </span>
+                      </div>
+                      <p className="program-description">{program.description}</p>
+                      <div className="program-meta">
+                        <div className="meta-item">
+                          <span className="meta-icon">📅</span>
+                          <span>
+                            {program.date 
+                              ? new Date(program.date.seconds * 1000).toLocaleDateString('hu-HU', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })
+                              : 'Nincs dátum'}
+                          </span>
+                        </div>
+                        <div className="meta-item">
+                          <span className="meta-icon">📍</span>
+                          <span>{program.location || 'Nincs helyszín'}</span>
+                        </div>
+                      </div>
+                      <div className="program-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleEditProgram(program)}
+                        >
+                          ✏️ Szerkesztés
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDeleteProgram(program)}
+                        >
+                          🗑️ Törlés
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TÚRÁK TAB */}
+        {activeTab === 'trips' && (
+          <div className="trips-section">
+            <div className="section-header">
+              <h2>Túrák kezelése</h2>
+            </div>
+
+            {loading ? (
+              <div className="loading">Betöltés...</div>
+            ) : trips.length === 0 ? (
+              <div className="empty-state">
+                <p>Nincsenek túrák.</p>
+              </div>
+            ) : (
+              <div className="trips-simple-list">
+                {trips.map(trip => (
+                  <div key={trip.id} className="trip-simple-card">
+                    <div className="trip-simple-content">
+                      <h3>{trip.name}</h3>
+                      <p>{trip.description}</p>
+                      <div className="trip-simple-meta">
+                        <span>Nehézség: <strong>{trip.difficulty}</strong></span>
+                        <span>Távolság: <strong>{trip.distance} km</strong></span>
+                        <span>Időtartam: <strong>{trip.duration} perc</strong></span>
+                        <span className={`status ${trip.isActive ? 'active' : 'inactive'}`}>
+                          {trip.isActive ? '✓ Aktív' : '✗ Inaktív'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleEditTrip(trip)}
+                    >
+                      ✏️ Szerkesztés
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FELHASZNÁLÓK TAB */}
+        {activeTab === 'users' && (
+          <div className="users-section">
+            <div className="section-header">
+              <h2>Felhasználók kezelése</h2>
+            </div>
+
+            {loading ? (
+              <div className="loading">Betöltés...</div>
+            ) : users.length === 0 ? (
+              <div className="empty-state">
+                <p>Még nincsenek regisztrált felhasználók.</p>
+              </div>
+            ) : (
+              <div className="data-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Név</th>
+                      <th>Email</th>
+                      <th>Regisztráció</th>
+                      <th>Admin</th>
+                      <th>Műveletek</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map(u => (
+                      <tr key={u.id}>
+                        <td>{u.displayName || '-'}</td>
+                        <td>{u.email}</td>
+                        <td>
+                          {u.createdAt 
+                            ? new Date(u.createdAt.seconds * 1000).toLocaleDateString('hu-HU')
+                            : '-'}
+                        </td>
+                        <td>
+                          <span className={`status ${u.isAdmin ? 'active' : 'inactive'}`}>
+                            {u.isAdmin ? '✓ Admin' : '✗ Felhasználó'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className={`btn btn-sm ${u.isAdmin ? 'btn-warning' : 'btn-success'}`}
+                            onClick={() => handleToggleAdmin(u.id, u.isAdmin)}
+                          >
+                            {u.isAdmin ? '🔽 Admin elvétele' : '⬆️ Admin megadása'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* MODALS */}
+      {showStationModal && (
+        <StationModal
+          station={editingStation}
+          trips={trips}
+          onClose={() => setShowStationModal(false)}
+          onSave={handleSaveStation}
+        />
+      )}
+
+      {showProgramModal && (
+        <ProgramModal
+          program={editingProgram}
+          onClose={() => setShowProgramModal(false)}
+          onSave={handleSaveProgram}
+        />
+      )}
+
+      {showTripModal && (
+        <TripModal
+          trip={editingTrip}
+          onClose={() => setShowTripModal(false)}
+          onSave={handleSaveTrip}
+        />
+      )}
+
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          onClose={() => setConfirmDialog(null)}
+          actions={[
+            { label: 'Megerősítés', onClick: confirmDialog.onConfirm }
+          ]}
+        />
+      )}
+
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
+    </div>
+  );
+}
