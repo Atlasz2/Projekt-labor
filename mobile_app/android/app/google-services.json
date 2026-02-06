@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1062295539229",
+    "project_id": "projekt-labor-a4b1c",
+    "storage_bucket": "projekt-labor-a4b1c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062295539229:android:5fa7cddbe97519437840f4",
+        "android_client_info": {
+          "package_name": "com.example.projekt_labor2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADEGWEQ8_LdK5a8Bt88qw8wFbnv5I7hN8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1062295539229:android:a0d9133c55d5f9137840f4",
+        "android_client_info": {
+          "package_name": "com.nagyvazsony.mobile_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADEGWEQ8_LdK5a8Bt88qw8wFbnv5I7hN8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
