@@ -747,12 +747,12 @@ export default function AdminPanel() {
                         </td>
                         <td>
                           <span className="badge badge-info">
-                            {u.completedTrips ? (u.completedTrips.split(',').filter(t => t).length) : 0} túra
+                            {Array.isArray(u.completedTrips) ? u.completedTrips.length : 0} túra
                           </span>
                         </td>
                         <td>
                           <span className="badge badge-success">
-                            {u.visitedStations ? (u.visitedStations.split(',').filter(s => s).length) : 0} állomás
+                            {Array.isArray(u.visitedStations) ? u.visitedStations.length : 0} állomás
                           </span>
                         </td>
                         <td>

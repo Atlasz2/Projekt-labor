@@ -1,50 +1,37 @@
 import 'package:flutter/material.dart';
-import 'screens/map_trips_screen.dart';
-import 'screens/camera_screen.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'screens/events_screen.dart';
-import 'screens/history_screen.dart';
-import 'screens/contact_screen.dart';
-import 'screens/accommodation_screen.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    }
-  } catch (e) {
-    // Firebase már inicializálva van (hot reload esetén)
-    print('Firebase init error (expected on hot reload): $e');
-  }
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Nagyvázsony',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF667EEA)),
-        useMaterial3: true,
-        textTheme: const TextTheme(
-          titleLarge: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      home: const MainMenuScreen(),
-    );
-  }
-}
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MainMenuScreen extends StatelessWidget {
   const MainMenuScreen({super.key});
+
+  Future<void> _handleLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Kijelentkezés'),
+        content: const Text('Biztosan kijelentkezel?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Nem'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Igen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await FirebaseAuth.instance.signOut();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sikeresen kijelentkeztél!')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,37 +40,55 @@ class MainMenuScreen extends StatelessWidget {
         title: 'Térkép / Túrák',
         icon: Icons.map_outlined,
         color: const Color(0xFF667EEA),
-        page: const MapTripsScreen(),
+        page: const SimplePage(
+          title: 'Térkép / Túrák',
+          body: 'Itt lesz a túrák térképes listája és útvonalak.',
+        ),
       ),
       _MenuItem(
         title: 'Kamera',
         icon: Icons.qr_code_scanner,
         color: const Color(0xFF4CAF50),
-        page: const CameraScreen(),
+        page: const SimplePage(
+          title: 'Kamera',
+          body: 'Itt lesz a QR-kód beolvasás.',
+        ),
       ),
       _MenuItem(
         title: 'Rendezvények',
         icon: Icons.celebration_outlined,
         color: const Color(0xFFFF9800),
-        page: const EventsScreen(),
+        page: const SimplePage(
+          title: 'Rendezvények',
+          body: 'Itt lesznek az aktív programok és események.',
+        ),
       ),
       _MenuItem(
         title: 'Nagyvázsony története',
         icon: Icons.history_edu_outlined,
         color: const Color(0xFF8E44AD),
-        page: const HistoryScreen(),
+        page: const SimplePage(
+          title: 'Nagyvázsony története',
+          body: 'Itt lesz a történeti tartalom és leírások.',
+        ),
       ),
       _MenuItem(
         title: 'Kapcsolat',
         icon: Icons.call_outlined,
         color: const Color(0xFF0097A7),
-        page: const ContactScreen(),
+        page: const SimplePage(
+          title: 'Kapcsolat',
+          body: 'Itt lesznek elérhetőségek, cím, email, telefon.',
+        ),
       ),
       _MenuItem(
         title: 'Szállások & Vendéglátás',
         icon: Icons.hotel_outlined,
         color: const Color(0xFFE91E63),
-        page: const AccommodationScreen(),
+        page: const SimplePage(
+          title: 'Szállások & Vendéglátás',
+          body: 'Itt lesznek szállások, éttermek, vendéglátó helyek.',
+        ),
       ),
     ];
 
@@ -94,6 +99,13 @@ class MainMenuScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Nagyvázsony'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Kijelentkezés',
+            onPressed: () => _handleLogout(context),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -165,6 +177,34 @@ class _MenuCard extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SimplePage extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const SimplePage({
+    super.key,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            body,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16),
           ),
         ),
       ),
