@@ -141,6 +141,10 @@
   color: #666;
   line-height: 1.6;
   flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .trip-meta-minimal {
@@ -280,5 +284,51 @@
   .trip-card-image,
   .program-card-image {
     height: 160px;
+  }
+}
+
+/* Mobilbarát elrendezés */
+@media (max-width: 900px) {
+  .content-wrapper {
+    padding: 40px 16px;
+  }
+
+  .trips-grid-minimal,
+  .programs-grid-minimal {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .trip-card-image,
+  .program-card-image {
+    height: 180px;
+  }
+
+  .trip-meta-minimal {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero-minimal {
+    padding: 48px 16px;
+  }
+
+  .hero-title {
+    font-size: 1.6rem;
+  }
+
+  .hero-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .trip-card-body,
+  .program-card-body {
+    padding: 16px;
+  }
+
+  .section-header-minimal h2 {
+    font-size: 1.4rem;
   }
 }

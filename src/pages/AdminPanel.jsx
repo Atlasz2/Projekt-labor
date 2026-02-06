@@ -714,6 +714,9 @@ export default function AdminPanel() {
                       <th>Név</th>
                       <th>Email</th>
                       <th>Regisztráció</th>
+                      <th>Pontok</th>
+                      <th>Teljesített túrák</th>
+                      <th>Meglátogatott állomások</th>
                       <th>Admin</th>
                       <th>Műveletek</th>
                     </tr>
@@ -721,7 +724,9 @@ export default function AdminPanel() {
                   <tbody>
                     {users.map(u => (
                       <tr key={u.id}>
-                        <td>{u.displayName || '-'}</td>
+                        <td>
+                          <strong>{u.displayName || '-'}</strong>
+                        </td>
                         <td>{u.email}</td>
                         <td>
                           {u.createdAt 
@@ -729,17 +734,42 @@ export default function AdminPanel() {
                             : '-'}
                         </td>
                         <td>
+                          <span style={{
+                            background: '#667eea',
+                            color: 'white',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontWeight: 'bold',
+                            fontSize: '14px'
+                          }}>
+                            ⭐ {u.points || 0}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="badge badge-info">
+                            {u.completedTrips ? (u.completedTrips.split(',').filter(t => t).length) : 0} túra
+                          </span>
+                        </td>
+                        <td>
+                          <span className="badge badge-success">
+                            {u.visitedStations ? (u.visitedStations.split(',').filter(s => s).length) : 0} állomás
+                          </span>
+                        </td>
+                        <td>
                           <span className={`status-badge ${u.isAdmin ? 'active' : 'inactive'}`}>
                             {u.isAdmin ? '★ Admin' : '● Felhasználó'}
                           </span>
                         </td>
                         <td>
-                          <button
-                            className={`btn btn-sm ${u.isAdmin ? 'btn-warning' : 'btn-success'}`}
-                            onClick={() => handleToggleAdmin(u.id, u.isAdmin)}
-                          >
-                            {u.isAdmin ? '↓ Jogosultság visszavonása' : '↑ Admin jog megadása'}
-                          </button>
+                          <div className="action-buttons">
+                            <button
+                              className={`btn-icon ${u.isAdmin ? 'btn-warning' : 'btn-success'}`}
+                              onClick={() => handleToggleAdmin(u.id, u.isAdmin)}
+                              title={u.isAdmin ? 'Admin jog visszavonása' : 'Admin jog megadása'}
+                            >
+                              {u.isAdmin ? '⬇️' : '⬆️'}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

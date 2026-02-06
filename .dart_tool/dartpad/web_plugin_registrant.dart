@@ -22,3 +22,5 @@ void registerPlugins([final Registrar? pluginRegistrar]) {
   MobileScannerWebPlugin.registerWith(registrar);
   registrar.registerMessageHandler();
 }
+
+
