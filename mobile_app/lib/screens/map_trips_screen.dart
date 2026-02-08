@@ -16,32 +16,12 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
   Set<Marker> markers = {};
   Set<Polyline> polylines = {};
 
-  final List<Map<String, dynamic>> _dummyTrips = const [
-    {
-      'name': 'Nagyvázsony Kastély Túra',
-      'distance': '5.2 km',
-      'difficulty': '⭐⭐☆',
-      'duration': '2h',
-      'rating': 4.8,
-      'color': 0xFF667EEA,
-      'startLat': 47.1234,
-      'startLng': 17.7890,
-      'routePoints': [
-        [47.1234, 17.7890],
-        [47.1250, 17.7900],
-        [47.1270, 17.7920],
-        [47.1280, 17.7940],
-      ]
-    },
-    {
-      'name': 'Vínás völgy Túra',
-      'distance': '8.5 km',
-      'difficulty': '⭐⭐⭐',
-      'duration': '3h 30min',
-      'rating': 4.5,
-      'color': 0xFF4CAF50,
+  // Default coordinates and routes for trips
+  final Map<String, Map<String, dynamic>> tripDefaults = {
+    'piás': {
       'startLat': 47.1100,
       'startLng': 17.8000,
+      'color': 0xFF4CAF50,
       'routePoints': [
         [47.1100, 17.8000],
         [47.1120, 17.8020],
@@ -49,22 +29,18 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         [47.1180, 17.8100],
       ]
     },
-    {
-      'name': 'Történeti Nagyvázsony',
-      'distance': '3.2 km',
-      'difficulty': '⭐☆☆',
-      'duration': '1h 30min',
-      'rating': 4.9,
-      'color': 0xFFFF9800,
+    'történelmi': {
       'startLat': 47.1300,
       'startLng': 17.7800,
+      'color': 0xFFFF9800,
       'routePoints': [
         [47.1300, 17.7800],
         [47.1310, 17.7810],
         [47.1320, 17.7830],
+        [47.1340, 17.7850],
       ]
-    },
-  ];
+    }
+  };
 
   @override
   void initState() {
@@ -90,7 +66,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
       setState(() {
         userLocation = LatLng(position.latitude, position.longitude);
-        // Add user location marker
         markers.add(
           Marker(
             markerId: const MarkerId('user_location'),
@@ -101,107 +76,97 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         );
       });
     } catch (e) {
-      print('Error getting location: Ye');
-      // Default to Nagyvázsony center if location fails
+      print('Error getting location: $e');
       setState(() {
         userLocation = const LatLng(47.1200, 17.8000);
       });
     }
   }
 
+  Map<String, dynamic> _getTripDefaults(String tripName) {
+    final lowerName = tripName.toLowerCase();
+    if (lowerName.contains('piás') || lowerName.contains('vínás')) {
+      return tripDefaults['piás']!;
+    } else if (lowerName.contains('történelmi') || lowerName.contains('történeti')) {
+      return tripDefaults['történelmi']!;
+    }
+    // Default fallback
+    return {
+      'startLat': 47.1200,
+      'startLng': 17.8000,
+      'color': 0xFF667EEA,
+      'routePoints': [[47.1200, 17.8000]]
+    };
+  }
+
   Future<void> _loadTrips() async {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('trips').get();
-      final trips = snapshot.docs.isEmpty ? _dummyTrips : snapshot.docs.map((doc) {
-        final data = doc.data();
-        return {
-          'name': data['name'] ?? 'Unknown',
-          'distance': data['distance'] ?? '0 km',
-          'difficulty': data['difficulty'] ?? '⭐',
-          'duration': data['duration'] ?? '0h',
-          'rating': (data['rating'] ?? 0.0).toDouble(),
-          'description': data['description'] ?? 'No description',
-          'color': int.parse(data['color'] ?? '0xFF667EEA'),
-          'startLat': data['startLat'] ?? 47.1200,
-          'startLng': data['startLng'] ?? 17.8000,
-          'routePoints': data['routePoints'] ?? [[47.1200, 17.8000]],
-        };
-      }).toList();
+      
+      if (snapshot.docs.isEmpty) {
+        print('No trips found in Firestore');
+        return;
+      }
 
       setState(() {
-        // Add markers and polylines for each trip
-        for (int i = 0; i < trips.length; i++) {
-          final trip = trips[i];
-          final color = Color(trip['color'] as int);
+        for (int i = 0; i < snapshot.docs.length; i++) {
+          final doc = snapshot.docs[i];
+          final data = doc.data();
+          
+          final name = data['name'] ?? 'Unknown Trip';
+          final defaults = _getTripDefaults(name);
+          
+          final startLat = (data['startLat'] ?? defaults['startLat']) as double;
+          final startLng = (data['startLng'] ?? defaults['startLng']) as double;
+          final colorInt = (data['color'] != null 
+              ? int.tryParse(data['color'].toString()) ?? defaults['color']
+              : defaults['color']) as int;
+          final color = Color(colorInt);
+          final routePoints = (data['routePoints'] ?? defaults['routePoints']) as List;
 
           // Add marker for trip start
           markers.add(
             Marker(
-              markerId: MarkerId('trip_Yi'),
-              position: LatLng(trip['startLat'] as double, trip['startLng'] as double),
-              infoWindow: InfoWindow(title: trip['name'] as String),
+              markerId: MarkerId('trip_$i'),
+              position: LatLng(startLat, startLng),
+              infoWindow: InfoWindow(title: name as String),
               icon: BitmapDescriptor.defaultMarkerWithHue(
-                trip['color'] == 0xFF667EEA ? BitmapDescriptor.hueRed :
-                trip['color'] == 0xFF4CAF50 ? BitmapDescriptor.hueGreen :
+                colorInt == 0xFF667EEA ? BitmapDescriptor.hueRed :
+                colorInt == 0xFF4CAF50 ? BitmapDescriptor.hueGreen :
                 BitmapDescriptor.hueOrange
               ),
             ),
           );
 
-          // Add polyline for route
-          final routePoints = (trip['routePoints'] as List).cast<List>();
           if (routePoints.isNotEmpty) {
-            polylines.add(
-              Polyline(
-                polylineId: PolylineId('route_Yi'),
-                points: routePoints.map((p) => LatLng(p[0] as double, p[1] as double)).toList(),
-                color: color,
-                width: 5,
-                geodesic: true,
-              ),
-            );
+            try {
+              final points = routePoints.map((p) {
+                if (p is List && p.length >= 2) {
+                  return LatLng(p[0] as double, p[1] as double);
+                }
+                return null;
+              }).whereType<LatLng>().toList();
+
+              if (points.isNotEmpty) {
+                polylines.add(
+                  Polyline(
+                    polylineId: PolylineId('route_$i'),
+                    points: points,
+                    color: color,
+                    width: 5,
+                    geodesic: true,
+                  ),
+                );
+              }
+            } catch (e) {
+              print('Error parsing route points for trip $i: $e');
+            }
           }
         }
       });
     } catch (e) {
-      print('Error loading trips: Ye');
-      _loadDummyTrips();
+      print('Error loading trips from Firestore: $e');
     }
-  }
-
-  void _loadDummyTrips() {
-    setState(() {
-      for (int i = 0; i < _dummyTrips.length; i++) {
-        final trip = _dummyTrips[i];
-        final color = Color(trip['color'] as int);
-
-        markers.add(
-          Marker(
-            markerId: MarkerId('trip_Yi'),
-            position: LatLng(trip['startLat'] as double, trip['startLng'] as double),
-            infoWindow: InfoWindow(title: trip['name'] as String),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              trip['color'] == 0xFF667EEA ? BitmapDescriptor.hueRed :
-              trip['color'] == 0xFF4CAF50 ? BitmapDescriptor.hueGreen :
-              BitmapDescriptor.hueOrange
-            ),
-          ),
-        );
-
-        final routePoints = (trip['routePoints'] as List).cast<List>();
-        if (routePoints.isNotEmpty) {
-          polylines.add(
-            Polyline(
-              polylineId: PolylineId('route_Yi'),
-              points: routePoints.map((p) => LatLng(p[0] as double, p[1] as double)).toList(),
-              color: color,
-              width: 5,
-              geodesic: true,
-            ),
-          );
-        }
-      }
-    });
   }
 
   @override

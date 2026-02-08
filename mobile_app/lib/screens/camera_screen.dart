@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -8,26 +10,119 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
+  late MobileScannerController controller;
   bool _isScanned = false;
-  int _currentPoints = 0;
-  int _totalPoints = 0;
+  String _scannedValue = '';
+  String _scannedName = '';
+  int _scannedPoints = 0;
 
-  final List<Map<String, dynamic>> _scannedLocations = [
+  final List<Map<String, dynamic>> _scannableLocations = [
     {
+      'qrCode': 'nagyvazsony-kastely',
       'name': 'Nagyvázsony Kastély',
       'points': 15,
-      'date': '2026-02-06',
     },
     {
+      'qrCode': 'var-etterem',
       'name': 'Vár Étterem',
       'points': 10,
-      'date': '2026-02-05',
+    },
+    {
+      'qrCode': 'pias-route',
+      'name': 'Piás Útvonal',
+      'points': 12,
     },
   ];
 
+  List<Map<String, dynamic>> _scannedLocations = [];
+
+  @override
+  void initState() {
+    super.initState();
+    controller = MobileScannerController();
+    _loadScannedLocations();
+  }
+
+  Future<void> _loadScannedLocations() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('scanned_qr_codes')
+          .orderBy('timestamp', descending: true)
+          .get();
+      
+      setState(() {
+        _scannedLocations = snapshot.docs.map((doc) {
+          return {
+            'name': doc['name'] ?? 'Unknown',
+            'points': doc['points'] ?? 0,
+            'date': (doc['timestamp'] as dynamic)?.toDate().toString().split(' ')[0] ?? 'Unknown',
+          };
+        }).toList();
+      });
+    } catch (e) {
+      print('Error loading scanned locations: $e');
+    }
+  }
+
+  Future<void> _handleQRCode(String qrValue) async {
+    // Find the location based on QR code
+    Map<String, dynamic>? location;
+    try {
+      location = _scannableLocations.firstWhere(
+        (loc) => loc['qrCode'] == qrValue,
+      );
+    } catch (_) {
+      location = null;
+    }
+
+    if (location != null) {
+      setState(() {
+        _isScanned = true;
+        _scannedValue = qrValue;
+        _scannedName = location!['name'];
+        _scannedPoints = location['points'];
+      });
+
+      // Save to Firebase
+      try {
+        await FirebaseFirestore.instance.collection('scanned_qr_codes').add({
+          'qrCode': qrValue,
+          'name': location['name'],
+          'points': location['points'],
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+
+        // Reload scanned history
+        await _loadScannedLocations();
+      } catch (e) {
+        print('Error saving to Firestore: $e');
+      }
+    } else {
+      // Unknown QR code
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ismeretlen QR-kód!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  int getTotalPoints() {
+    return _scannedLocations.fold<int>(0, (sum, item) => sum + (item['points'] as int));
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final totalScanned = _scannedLocations.fold<int>(0, (sum, item) => sum + (item['points'] as int));
+    final totalScanned = getTotalPoints();
 
     return Scaffold(
       appBar: AppBar(
@@ -55,9 +150,7 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
         ],
       ),
-      body: _isScanned
-          ? _buildScannedState(totalScanned)
-          : _buildScanningState(),
+      body: _isScanned ? _buildScannedState(totalScanned) : _buildScanningState(),
     );
   }
 
@@ -65,84 +158,55 @@ class _CameraScreenState extends State<CameraScreen> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // QR Code Scanner Preview
-        Center(
+        Expanded(
           child: Container(
-            width: 250,
-            height: 250,
             decoration: BoxDecoration(
               border: Border.all(color: Colors.blue, width: 3),
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.3),
-                  blurRadius: 15,
-                  spreadRadius: 5,
-                ),
-              ],
             ),
-            child: Stack(
-              children: [
-                Center(
-                  child: Icon(
-                    Icons.qr_code_2,
-                    size: 120,
-                    color: Colors.blue.withOpacity(0.6),
+            margin: const EdgeInsets.all(20),
+            child: MobileScanner(
+              controller: controller,
+              onDetect: (capture) {
+                final List<Barcode> barcodes = capture.barcodes;
+                for (final barcode in barcodes) {
+                  if (barcode.rawValue != null) {
+                    _handleQRCode(barcode.rawValue!);
+                    break;
+                  }
+                }
+              },
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Text(
+                'QR-kód beolvasásához irányítsd\na kamera felé',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                '140 pont összegyűjtésétől speciális jutalmazott',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 20),
+              if (_scannedLocations.isNotEmpty)
+                ElevatedButton.icon(
+                  onPressed: () => _showScannedHistory(context),
+                  icon: const Icon(Icons.history),
+                  label: const Text('Beolvasási előzmények'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[600],
                   ),
                 ),
-                // Animated scanning lines
-                Positioned(
-                  top: 20,
-                  left: 20,
-                  right: 20,
-                  child: Container(
-                    height: 3,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.blue.withOpacity(0),
-                          Colors.blue,
-                          Colors.blue.withOpacity(0),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
         ),
-        const SizedBox(height: 40),
-        const Text(
-          'QR-kód beolvasásához irányítsd\na kamera felé',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          '140 pont összegyűjtésétől speciális jutalmazott',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: Colors.grey),
-        ),
-        const SizedBox(height: 40),
-        ElevatedButton.icon(
-          onPressed: () => setState(() => _isScanned = true),
-          icon: const Icon(Icons.camera_alt),
-          label: const Text('Szimuláció: Beolvasás'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          ),
-        ),
-        const SizedBox(height: 20),
-        if (_scannedLocations.isNotEmpty)
-          ElevatedButton.icon(
-            onPressed: () => _showScannedHistory(context),
-            icon: const Icon(Icons.history),
-            label: const Text('Beolvasási előzmények'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey[600],
-            ),
-          ),
       ],
     );
   }
@@ -153,7 +217,6 @@ class _CameraScreenState extends State<CameraScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const SizedBox(height: 40),
-          // Success Icon
           Container(
             width: 100,
             height: 100,
@@ -172,7 +235,7 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Nagyvázsony Kastély',
+            _scannedName,
             style: TextStyle(fontSize: 18, color: Colors.grey[700]),
           ),
           const SizedBox(height: 8),
@@ -187,7 +250,7 @@ class _CameraScreenState extends State<CameraScreen> {
               children: [
                 const Icon(Icons.add_circle, color: Colors.amber, size: 24),
                 const SizedBox(width: 8),
-                const Text('15 pont', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber)),
+                Text('$_scannedPoints pont', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber)),
               ],
             ),
           ),
@@ -197,7 +260,6 @@ class _CameraScreenState extends State<CameraScreen> {
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
           const SizedBox(height: 40),
-          // Progress Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(
