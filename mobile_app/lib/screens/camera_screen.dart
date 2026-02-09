@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -12,27 +13,10 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> {
   late MobileScannerController controller;
   bool _isScanned = false;
-  String _scannedValue = '';
+  bool _isProcessing = false;
   String _scannedName = '';
   int _scannedPoints = 0;
-
-  final List<Map<String, dynamic>> _scannableLocations = [
-    {
-      'qrCode': 'nagyvazsony-kastely',
-      'name': 'Nagyvázsony Kastély',
-      'points': 15,
-    },
-    {
-      'qrCode': 'var-etterem',
-      'name': 'Vár Étterem',
-      'points': 10,
-    },
-    {
-      'qrCode': 'pias-route',
-      'name': 'Piás Útvonal',
-      'points': 12,
-    },
-  ];
+  String? _userId;
 
   List<Map<String, dynamic>> _scannedLocations = [];
 
@@ -40,16 +24,37 @@ class _CameraScreenState extends State<CameraScreen> {
   void initState() {
     super.initState();
     controller = MobileScannerController();
-    _loadScannedLocations();
+    _signInAnonymously();
+  }
+
+  Future<void> _signInAnonymously() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        _userId = currentUser.uid;
+        await _loadScannedLocations();
+        return;
+      }
+
+      final userCredential = await FirebaseAuth.instance.signInAnonymously();
+      _userId = userCredential.user?.uid;
+      await _loadScannedLocations();
+    } catch (e) {
+      print('Error signing in: $e');
+    }
   }
 
   Future<void> _loadScannedLocations() async {
+    if (_userId == null) {
+      return;
+    }
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('scanned_qr_codes')
+          .where('userId', isEqualTo: _userId)
           .orderBy('timestamp', descending: true)
           .get();
-      
+
       setState(() {
         _scannedLocations = snapshot.docs.map((doc) {
           return {
@@ -65,47 +70,105 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   Future<void> _handleQRCode(String qrValue) async {
-    // Find the location based on QR code
-    Map<String, dynamic>? location;
-    try {
-      location = _scannableLocations.firstWhere(
-        (loc) => loc['qrCode'] == qrValue,
-      );
-    } catch (_) {
-      location = null;
-    }
+    if (_isProcessing || _isScanned) return;
 
-    if (location != null) {
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('stations')
+          .where('qrCode', isEqualTo: qrValue)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ismeretlen QR-kód!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final doc = snapshot.docs.first;
+      final data = doc.data();
+      final name = data['name'] ?? 'Ismeretlen állomás';
+      final pointsRaw = data['points'];
+      final points = pointsRaw is num ? pointsRaw.toInt() : 10;
+
+      if (_userId == null) {
+        await _signInAnonymously();
+        if (_userId == null) {
+          return;
+        }
+      }
+
+      final duplicateSnapshot = await FirebaseFirestore.instance
+          .collection('scanned_qr_codes')
+          .where('userId', isEqualTo: _userId)
+          .where('stationId', isEqualTo: doc.id)
+          .limit(1)
+          .get();
+
+      if (duplicateSnapshot.docs.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ezt az allomast mar beolvastad.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
       setState(() {
         _isScanned = true;
-        _scannedValue = qrValue;
-        _scannedName = location!['name'];
-        _scannedPoints = location['points'];
+        _scannedName = name;
+        _scannedPoints = points;
       });
 
-      // Save to Firebase
+      await controller.stop();
+
       try {
         await FirebaseFirestore.instance.collection('scanned_qr_codes').add({
+          'userId': _userId,
           'qrCode': qrValue,
-          'name': location['name'],
-          'points': location['points'],
+          'stationId': doc.id,
+          'name': name,
+          'points': points,
           'timestamp': FieldValue.serverTimestamp(),
         });
 
-        // Reload scanned history
+        // Update user points
+        if (_userId != null) {
+          final userDocRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(_userId);
+          await userDocRef.set({
+            'userId': _userId,
+            'points': FieldValue.increment(points),
+            'visitedStations': FieldValue.increment(1),
+            'lastScanAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+
         await _loadScannedLocations();
       } catch (e) {
         print('Error saving to Firestore: $e');
       }
-    } else {
-      // Unknown QR code
+    } catch (e) {
+      print('Error looking up station: $e');
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ismeretlen QR-kód!'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _isProcessing = false;
+        });
       }
     }
   }
@@ -266,7 +329,7 @@ class _CameraScreenState extends State<CameraScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Előrehaladás: ${((totalScanned / 140) * 100).toStringAsFixed(0)}%',
+                  'Előrehaladás: $totalScanned / 140 pont (${((totalScanned / 140) * 100).toStringAsFixed(0)}%)',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
@@ -289,7 +352,12 @@ class _CameraScreenState extends State<CameraScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton(
-                onPressed: () => setState(() => _isScanned = false),
+                onPressed: () {
+                  setState(() {
+                    _isScanned = false;
+                  });
+                  controller.start();
+                },
                 child: const Text('Újra beolvasni'),
               ),
               const SizedBox(width: 12),
@@ -369,3 +437,11 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
+
+
+
+
+
+
+
+

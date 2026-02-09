@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import '../../styles/Modal.css';
@@ -12,6 +13,7 @@ export const StationModal = ({ station, trips, onClose, onSave }) => {
     longitude: '',
     orderIndex: 1,
     qrCode: '',
+    points: 10,
     tripId: ''
   });
   const [showMap, setShowMap] = useState(false);
@@ -26,10 +28,36 @@ export const StationModal = ({ station, trips, onClose, onSave }) => {
         longitude: station.location?._long || station.location?.longitude || '',
         orderIndex: station.orderIndex || 1,
         qrCode: station.qrCode || '',
+        points: station.points || 10,
         tripId: station.tripId || ''
       });
     }
   }, [station]);
+
+  const slugify = (value) => {
+    if (!value) return '';
+    return value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  };
+
+  const handleGenerateQrCode = () => {
+    const generated = slugify(formData.name);
+    setFormData({ ...formData, qrCode: generated });
+  };
+
+  const handleDownloadQr = () => {
+    const canvas = document.getElementById('station-qr-canvas');
+    if (!canvas) return;
+    const url = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${formData.qrCode || 'qr-code'}.png`;
+    link.click();
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -137,6 +165,17 @@ export const StationModal = ({ station, trips, onClose, onSave }) => {
             </div>
 
             <div className="form-group">
+              <label>Pontok *</label>
+              <input
+                type="number"
+                min="0"
+                value={formData.points}
+                onChange={(e) => setFormData({ ...formData, points: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="form-group">
               <label>QR kód azonosító</label>
               <input
                 type="text"
@@ -144,8 +183,33 @@ export const StationModal = ({ station, trips, onClose, onSave }) => {
                 onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })}
                 placeholder="qr-station-01"
               />
+              <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-secondary" onClick={handleGenerateQrCode}>
+                  QR generálás a névből
+                </button>
+                {formData.qrCode && (
+                  <button type="button" className="btn btn-secondary" onClick={handleDownloadQr}>
+                    QR letöltése
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
+          {formData.qrCode && (
+            <div className="form-group">
+              <label>QR kód előnézet</label>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <QRCodeCanvas id="station-qr-canvas" value={formData.qrCode} size={160} />
+                <div>
+                  <div><strong>Azonosító:</strong> {formData.qrCode}</div>
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '6px' }}>
+                    Ezt a kódot nyomtasd ki és tedd ki az állomásnál.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="modal-actions">
             <button type="button" onClick={onClose} className="btn btn-secondary">

@@ -7,6 +7,7 @@ import 'screens/events_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/contact_screen.dart';
 import 'screens/accommodation_screen.dart';
+import 'screens/profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,6 +79,12 @@ class MainMenuScreen extends StatelessWidget {
         icon: Icons.call_outlined,
         color: const Color(0xFF0097A7),
         page: const ContactScreen(),
+      ),
+      _MenuItem(
+        title: 'Fiókom',
+        icon: Icons.person_outlined,
+        color: const Color(0xFF2196F3),
+        page: const ProfileScreen(),
       ),
       _MenuItem(
         title: 'Szállások & Vendéglátás',
@@ -171,3 +178,5 @@ class _MenuCard extends StatelessWidget {
     );
   }
 }
+
+

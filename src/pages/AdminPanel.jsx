@@ -88,6 +88,7 @@ export default function AdminPanel() {
             location: data.location || null,
             orderIndex: data.orderIndex || 0,
             qrCode: data.qrCode || '',
+            points: data.points ?? 10,
             isActive: data.isActive === true,
             tripId: data.tripId || '',
             tripName: tripsData.find(t => t.id === data.tripId)?.name || 'Nincs hozzárendelve'
@@ -177,10 +178,21 @@ export default function AdminPanel() {
       }
     });
   };
-
+  const generateQrCode = (name) => {
+    if (!name) return '';
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  };
   const handleSaveStation = async (stationData) => {
     try {
       console.log('💾 Állomás mentése:', stationData);
+
+      const qrCodeValue = (stationData.qrCode || generateQrCode(stationData.name)).trim();
+      const pointsValue = parseInt(stationData.points, 10);
       
       const dataToSave = {
         name: stationData.name,
@@ -190,7 +202,8 @@ export default function AdminPanel() {
           parseFloat(stationData.longitude)
         ),
         orderIndex: parseInt(stationData.orderIndex) || 0,
-        qrCode: stationData.qrCode || '',
+        qrCode: qrCodeValue,
+        points: Number.isFinite(pointsValue) ? pointsValue : 10,
         tripId: stationData.tripId
       };
 
@@ -454,6 +467,7 @@ export default function AdminPanel() {
                       <th>Név</th>
                       <th>Túra</th>
                       <th>Sorrend</th>
+                      <th>Pont</th>
                       <th>QR kód</th>
                       <th>Aktív</th>
                       <th>Műveletek</th>
@@ -491,6 +505,9 @@ export default function AdminPanel() {
                             style={{width: '60px', padding: '4px 8px', textAlign: 'center' }}
                             className="order-input"
                           />
+                        </td>
+                        <td>
+                          <strong>{station.points ?? 10}</strong>
                         </td>
                         <td>
                           {station.qrCode ? (
@@ -828,3 +845,6 @@ export default function AdminPanel() {
     </div>
   );
 }
+
+
+

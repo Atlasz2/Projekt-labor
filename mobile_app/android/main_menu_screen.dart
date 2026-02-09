@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'trips_screen.dart';
 import 'programs_screen.dart';
 import 'profile_screen.dart';
