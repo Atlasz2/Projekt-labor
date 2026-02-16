@@ -1,49 +1,286 @@
+/* ========== Map Page Container ========== */
 .map-page {
-  padding: 24px;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  background: #f5f7fa;
 }
 
-.map-page h1 {
-  color: #2E7D32;
-  margin-bottom: 24px;
-  font-size: 2rem;
+/* ========== Loading State ========== */
+.map-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  z-index: 100;
+  gap: 20px;
 }
 
-.map-container {
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.map-loading p {
+  font-size: 1.1em;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+/* ========== Error State ========== */
+.map-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: white;
-  padding: 24px;
+  padding: 40px;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  z-index: 100;
 }
 
+.map-error h2 {
+  color: #e74c3c;
+  margin-top: 0;
+}
+
+.map-error p {
+  color: #7f8c8d;
+  font-size: 1.05em;
+}
+
+/* ========== Empty State ========== */
+.map-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  z-index: 100;
+}
+
+.map-empty p {
+  color: #7f8c8d;
+  font-size: 1.1em;
+  margin: 0;
+}
+
+/* ========== Legend ========== */
 .map-legend {
-  margin-top: 16px;
-  padding: 16px;
-  background: #f9f9f9;
-  border-radius: 8px;
-  border-left: 4px solid #2E7D32;
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  padding: 0;
+  min-width: 280px;
+  max-width: 380px;
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 50;
+  animation: slideUp 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.map-legend h3 {
-  margin: 0 0 12px 0;
-  color: #2E7D32;
-  font-size: 1rem;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.legend-header {
+  padding: 20px;
+  border-bottom: 2px solid #f0f2f5;
+  background: linear-gradient(135deg, #f9fafb 0%, #f0f2f5 100%);
+  border-radius: 12px 12px 0 0;
+}
+
+.legend-header h3 {
+  margin: 0;
+  font-size: 1.2em;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.legend-items {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .legend-item {
   display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-  font-size: 0.9rem;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
-.legend-line {
+.legend-item:hover {
+  background: #ecf0f1;
+  border-color: #3498db;
+}
+
+.legend-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 2px solid white;
+}
+
+.legend-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.legend-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.95em;
+  margin-bottom: 6px;
+}
+
+.legend-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-badge {
   display: inline-block;
-  width: 30px;
-  height: 3px;
-  margin-right: 8px;
-  border-radius: 2px;
+  background: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8em;
+  color: #34495e;
+  font-weight: 500;
+  border: 1px solid #ecf0f1;
+  width: fit-content;
 }
 
-.leaflet-container {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+/* ========== Info Window Styling ========== */
+.infowindow-content {
+  padding: 8px;
+  max-width: 250px;
+}
+
+.infowindow-content strong {
+  display: block;
+  color: #2c3e50;
+  margin-bottom: 6px;
+}
+
+.infowindow-content p {
+  color: #34495e;
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+.infowindow-content em {
+  display: block;
+  color: #95a5a6;
+  font-size: 0.85em;
+  margin-top: 6px;
+}
+
+/* ========== Scrollbar Styling ========== */
+.map-legend::-webkit-scrollbar {
+  width: 6px;
+}
+
+.map-legend::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.map-legend::-webkit-scrollbar-thumb {
+  background: #cbd2dc;
+  border-radius: 3px;
+}
+
+.map-legend::-webkit-scrollbar-thumb:hover {
+  background: #a8b5c8;
+}
+
+/* ========== Responsive Design ========== */
+@media (max-width: 768px) {
+  .map-legend {
+    bottom: 15px;
+    left: 15px;
+    right: 15px;
+    max-width: none;
+  }
+
+  .legend-header h3 {
+    font-size: 1.1em;
+  }
+
+  .legend-items {
+    max-height: 300px;
+  }
+
+  .detail-badge {
+    font-size: 0.75em;
+    padding: 3px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .map-legend {
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+  }
+
+  .legend-header {
+    padding: 15px;
+  }
+
+  .legend-header h3 {
+    font-size: 1em;
+  }
+
+  .legend-item {
+    padding: 10px;
+  }
+
+  .legend-name {
+    font-size: 0.9em;
+  }
 }

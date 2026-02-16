@@ -1,25 +1,102 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
-import { db } from '../firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
-import 'leaflet/dist/leaflet.css';
-import '../styles/Map.css';
-import L from 'leaflet';
+import React, { useState, useEffect } from "react";
+import {
+  GoogleMap,
+  Marker,
+  Polyline,
+  InfoWindow,
+  useLoadScript,
+} from "@react-google-maps/api";
+import { db } from "../firebaseConfig";
+import { collection, getDocs } from "firebase/firestore";
+import "../styles/Map.css";
 
-// Fix Leaflet default marker icons
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
+const MAP_CONTAINER_STYLE = { height: "100vh", width: "100%" };
+
+const TRIP_COLORS = [
+  "#FF6B6B",
+  "#4ECDC4",
+  "#45B7D1",
+  "#FFA07A",
+  "#98D8C8",
+  "#F7DC6F",
+  "#BB8FCE",
+  "#85C1E2",
+];
+
+const getStationCoords = (station) => {
+  const lat =
+    typeof station.latitude === "number"
+      ? station.latitude
+      : station.location?.latitude;
+  const lon =
+    typeof station.longitude === "number"
+      ? station.longitude
+      : station.location?.longitude;
+  if (typeof lat !== "number" || typeof lon !== "number") return null;
+  return [lat, lon];
+};
+
+const getRouteData = async (coordinates) => {
+  if (coordinates.length < 2) {
+    return { coords: [], distanceMeters: 0, durationSeconds: 0 };
+  }
+
+  try {
+    const osmCoords = coordinates.map(([lat, lon]) => `${lon},${lat}`).join(";");
+    const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${osmCoords}?geometries=geojson`;
+
+    const response = await fetch(osrmUrl);
+    const data = await response.json();
+
+    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const distanceMeters = route.distance || 0;
+      const durationSeconds = route.duration || 0;
+
+      if (
+        route.geometry &&
+        route.geometry.coordinates &&
+        route.geometry.coordinates.length > 0
+      ) {
+        const coords = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+        return { coords, distanceMeters, durationSeconds };
+      }
+    }
+  } catch (error) {
+    console.error("Route error:", error);
+  }
+
+  return { coords: [], distanceMeters: 0, durationSeconds: 0 };
+};
+
+const formatDistance = (meters) => {
+  if (!meters || meters <= 0) return "N/A";
+  const km = meters / 1000;
+  return `${km.toFixed(1)} km`;
+};
+
+const formatDuration = (seconds) => {
+  if (!seconds || seconds <= 0) return "N/A";
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours} ó ${minutes} p`;
+  return `${minutes} p`;
+};
 
 function Map() {
   const [stations, setStations] = useState([]);
   const [trips, setTrips] = useState([]);
+  const [routeData, setRouteData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [center, setCenter] = useState([47.0600, 17.7150]); // Nagyvázsony default
+  const [center, setCenter] = useState(DEFAULT_CENTER);
+  const [selectedStation, setSelectedStation] = useState(null);
+
+  const { isLoaded, loadError } = useLoadScript({
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
+  });
 
   useEffect(() => {
     fetchData();
@@ -30,30 +107,62 @@ function Map() {
       setLoading(true);
       setError(null);
 
-      const stationsSnapshot = await getDocs(collection(db, 'stations'));
-      const stationsData = stationsSnapshot.docs.map(doc => ({
+      const tripsSnapshot = await getDocs(collection(db, "trips"));
+      const tripsData = tripsSnapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
-      })).filter(station => station.location); // Only stations with location
-
-      const tripsSnapshot = await getDocs(collection(db, 'trips'));
-      const tripsData = tripsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       }));
 
-      setStations(stationsData);
-      setTrips(tripsData);
+      const stationsSnapshot = await getDocs(collection(db, "stations"));
+      const stationsData = stationsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-      // Calculate map center from stations
-      if (stationsData.length > 0) {
-        const avgLat = stationsData.reduce((sum, s) => sum + s.location.latitude, 0) / stationsData.length;
-        const avgLng = stationsData.reduce((sum, s) => sum + s.location.longitude, 0) / stationsData.length;
-        setCenter([avgLat, avgLng]);
+      const stationsWithCoords = stationsData
+        .map((station) => {
+          const coords = getStationCoords(station);
+          if (!coords) return null;
+          return { ...station, _coords: coords };
+        })
+        .filter(Boolean);
+
+      setTrips(tripsData);
+      setStations(stationsWithCoords);
+
+      // Fetch routes for all trips
+      const routes = {};
+      for (const trip of tripsData) {
+        const tripStations = stationsWithCoords
+          .filter((s) => s.tripId === trip.id)
+          .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+
+        if (tripStations.length > 1) {
+          const coords = tripStations.map((s) => s._coords);
+          const routeResult = await getRouteData(coords);
+          routes[trip.id] = {
+            ...routeResult,
+            stations: tripStations,
+          };
+        }
+      }
+
+      setRouteData(routes);
+
+      if (stationsWithCoords.length > 0) {
+        const avgLat =
+          stationsWithCoords.reduce((sum, s) => sum + s._coords[0], 0) /
+          stationsWithCoords.length;
+        const avgLng =
+          stationsWithCoords.reduce((sum, s) => sum + s._coords[1], 0) /
+          stationsWithCoords.length;
+        setCenter({ lat: avgLat, lng: avgLng });
+      } else {
+        setCenter(DEFAULT_CENTER);
       }
     } catch (err) {
-      console.error('Hiba az adatok betöltésekor:', err);
-      setError('Nem sikerült betölteni a térkép adatait');
+      console.error("Hiba az adatok betöltésekor:", err);
+      setError("Nem sikerült betölteni a térkép adatait");
     } finally {
       setLoading(false);
     }
@@ -62,8 +171,10 @@ function Map() {
   if (loading) {
     return (
       <div className="map-page">
-        <h1>Térkép</h1>
-        <p>Betöltés...</p>
+        <div className="map-loading">
+          <div className="spinner"></div>
+          <p>Térkép betöltése...</p>
+        </div>
       </div>
     );
   }
@@ -71,86 +182,150 @@ function Map() {
   if (error) {
     return (
       <div className="map-page">
-        <h1>Térkép</h1>
-        <p className="error">{error}</p>
+        <div className="map-error">
+          <h2>Hiba</h2>
+          <p>{error}</p>
+        </div>
       </div>
     );
   }
 
-  // Group stations by tripId for routes
-  const routesByTrip = {};
-  stations.forEach(station => {
-    const tripId = station.tripId;
-    if (!routesByTrip[tripId]) {
-      routesByTrip[tripId] = [];
-    }
-    routesByTrip[tripId].push(station);
-  });
+  if (loadError) {
+    return (
+      <div className="map-page">
+        <div className="map-error">
+          <h2>Google Maps Hiba</h2>
+          <p>Ellenőrizd az API kulcsot.</p>
+        </div>
+      </div>
+    );
+  }
 
-  // Sort stations by orderIndex for each trip
-  Object.keys(routesByTrip).forEach(tripId => {
-    routesByTrip[tripId].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-  });
+  if (!isLoaded) {
+    return (
+      <div className="map-page">
+        <div className="map-loading">
+          <div className="spinner"></div>
+          <p>Google Maps betöltése...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="map-page">
-      <h1>Térkép</h1>
-
       {stations.length === 0 ? (
-        <p>Még nincsenek állomások koordinátákkal az adatbázisban.</p>
+        <div className="map-empty">
+          <p>Még nincsenek állomások a térképen.</p>
+        </div>
       ) : (
-        <div className="map-container">
-          <MapContainer center={center} zoom={14} style={{ height: '600px', width: '100%' }}>
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {/* Draw routes for each trip */}
-            {Object.entries(routesByTrip).map(([tripId, tripStations], idx) => {
-              const trip = trips.find(t => t.id === tripId);
-              const color = ['#2E7D32', '#66BB6A', '#1B5E20', '#81C784'][idx % 4];
-              const positions = tripStations.map(s => [s.location.latitude, s.location.longitude]);
-              
-              return positions.length > 1 ? (
-                <Polyline 
-                  key={tripId}
-                  positions={positions}
-                  color={color}
-                  weight={3}
-                  opacity={0.7}
-                />
-              ) : null;
-            })}
-
-            {/* Draw station markers */}
-            {stations.map(station => (
-              <Marker 
-                key={station.id}
-                position={[station.location.latitude, station.location.longitude]}
-              >
-                <Popup>
-                  <strong>{station.name}</strong><br />
-                  {station.description}<br />
-                  <em>Állomás #{station.orderIndex || '?'}</em>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-
-          <div className="map-legend">
-            <h3>Jelmagyarázat</h3>
+        <>
+          <GoogleMap
+            mapContainerStyle={MAP_CONTAINER_STYLE}
+            center={center}
+            zoom={13}
+            options={{
+              streetViewControl: false,
+              mapTypeControl: true,
+              fullscreenControl: true,
+              zoomControl: true,
+            }}
+          >
             {trips.map((trip, idx) => {
-              const color = ['#2E7D32', '#66BB6A', '#1B5E20', '#81C784'][idx % 4];
+              const route = routeData[trip.id];
+              if (!route || !route.coords || route.coords.length === 0)
+                return null;
+
+              const color = TRIP_COLORS[idx % TRIP_COLORS.length];
+              const path = route.coords.map(([lat, lng]) => ({ lat, lng }));
+
               return (
-                <div key={trip.id} className="legend-item">
-                  <div className="legend-line" style={{ backgroundColor: color }}></div>
-                  <span>{trip.name}</span>
-                </div>
+                <Polyline
+                  key={trip.id}
+                  path={path}
+                  options={{
+                    strokeColor: color,
+                    strokeOpacity: 0.85,
+                    strokeWeight: 4,
+                    geodesic: true,
+                  }}
+                />
               );
             })}
+
+            {stations.map((station) => (
+              <Marker
+                key={station.id}
+                position={{ lat: station._coords[0], lng: station._coords[1] }}
+                onClick={() => setSelectedStation(station)}
+                title={station.name}
+              />
+            ))}
+
+            {selectedStation && (
+              <InfoWindow
+                position={{
+                  lat: selectedStation._coords[0],
+                  lng: selectedStation._coords[1],
+                }}
+                onCloseClick={() => setSelectedStation(null)}
+              >
+                <div className="infowindow-content">
+                  <strong style={{ fontSize: "1.1em" }}>
+                    {selectedStation.name}
+                  </strong>
+                  <p style={{ margin: "5px 0", fontSize: "0.9em" }}>
+                    {selectedStation.description}
+                  </p>
+                  <em style={{ fontSize: "0.85em", color: "#666" }}>
+                    Állomás #{selectedStation.orderIndex || "?"}
+                  </em>
+                </div>
+              </InfoWindow>
+            )}
+          </GoogleMap>
+
+          <div className="map-legend">
+            <div className="legend-header">
+              <h3>📍 Túraútvonalak</h3>
+            </div>
+            <div className="legend-items">
+              {trips.map((trip, idx) => {
+                const route = routeData[trip.id];
+                const color = TRIP_COLORS[idx % TRIP_COLORS.length];
+                const tripStationCount =
+                  stations.filter((s) => s.tripId === trip.id).length || 0;
+
+                return (
+                  <div key={trip.id} className="legend-item">
+                    <div
+                      className="legend-color"
+                      style={{ backgroundColor: color }}
+                    ></div>
+                    <div className="legend-info">
+                      <div className="legend-name">{trip.name}</div>
+                      <div className="legend-details">
+                        {route && (
+                          <>
+                            <span className="detail-badge">
+                              📏 {formatDistance(route.distanceMeters)}
+                            </span>
+                            <span className="detail-badge">
+                              ⏱️ {formatDuration(route.durationSeconds)}
+                            </span>
+                          </>
+                        )}
+                        <span className="detail-badge">
+                          📍 {tripStationCount} állomás
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

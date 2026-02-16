@@ -1,0 +1,278 @@
+﻿/* ========== Content Page Container ========== */
+.content-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  min-height: 100vh;
+}
+
+/* ========== Page Header ========== */
+.page-header {
+  margin-bottom: 40px;
+}
+
+.page-header h1 {
+  font-size: 2.5em;
+  color: #2c3e50;
+  margin: 0 0 10px 0;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.page-header p {
+  font-size: 1.1em;
+  color: #7f8c8d;
+  margin: 0;
+  font-weight: 400;
+}
+
+/* ========== Form Container ========== */
+.form-container {
+  background: white;
+  padding: 32px;
+  border-radius: 12px;
+  margin-bottom: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.form-container h2 {
+  font-size: 1.8em;
+  color: #2c3e50;
+  margin: 0 0 24px 0;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #667eea;
+}
+
+/* ========== Form Elements ========== */
+.form-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-container input,
+.form-container textarea,
+.form-container select {
+  padding: 12px 16px;
+  border: 1px solid #e0e6ed;
+  border-radius: 8px;
+  font-size: 1em;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  background: #f8f9fb;
+}
+
+.form-container input:focus,
+.form-container textarea:focus,
+.form-container select:focus {
+  outline: none;
+  border-color: #667eea;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-container textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+/* ========== Primary Button ========== */
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* ========== Secondary Button ========== */
+.btn-secondary {
+  background: #ecf0f1;
+  color: #2c3e50;
+  border: 1px solid #bdc3c7;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: #d5dce0;
+  border-color: #a3adb5;
+}
+
+/* ========== Edit Button ========== */
+.btn-edit {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-edit:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+/* ========== Delete Button ========== */
+.btn-delete {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-delete:hover {
+  background: #c0392b;
+  transform: translateY(-1px);
+}
+
+/* ========== Cards Grid ========== */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  margin-top: 32px;
+}
+
+/* ========== Card ========== */
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  border: 1px solid #e8ecf1;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.card h3 {
+  font-size: 1.4em;
+  color: #2c3e50;
+  margin: 0 0 12px 0;
+  word-break: break-word;
+}
+
+.card p {
+  color: #34495e;
+  margin: 8px 0;
+  font-size: 0.95em;
+  line-height: 1.5;
+}
+
+.card strong {
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+/* ========== Card Actions ========== */
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8ecf1;
+}
+
+.card-actions button {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.85em;
+}
+
+/* ========== Error Message ========== */
+.error-message {
+  background: #fadbd8;
+  color: #c0392b;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border-left: 4px solid #c0392b;
+  font-weight: 500;
+}
+
+/* ========== Success Message ========== */
+.success-message {
+  background: #d5f4e6;
+  color: #27ae60;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border-left: 4px solid #27ae60;
+  font-weight: 500;
+}
+
+/* ========== Responsive Design ========== */
+@media (max-width: 768px) {
+  .content-page {
+    padding: 24px 16px;
+  }
+
+  .page-header h1 {
+    font-size: 2em;
+  }
+
+  .form-container {
+    padding: 24px;
+  }
+
+  .cards-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .card-actions {
+    flex-direction: column;
+  }
+
+  .card-actions button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .content-page {
+    padding: 16px 12px;
+  }
+
+  .page-header h1 {
+    font-size: 1.6em;
+  }
+
+  .form-container {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+}

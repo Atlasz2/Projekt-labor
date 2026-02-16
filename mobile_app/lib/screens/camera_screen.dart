@@ -11,185 +11,225 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  late MobileScannerController controller;
-  bool _isScanned = false;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  
+  MobileScannerController? _scannerController;
   bool _isProcessing = false;
-  String _scannedName = '';
-  int _scannedPoints = 0;
-  String? _userId;
-
-  List<Map<String, dynamic>> _scannedLocations = [];
+  bool _isScanned = false;
+  List<Map<String, dynamic>> _completedStations = [];
 
   @override
   void initState() {
     super.initState();
-    controller = MobileScannerController();
-    _signInAnonymously();
+    _scannerController = MobileScannerController();
+    _loadCompletedStations();
   }
 
-  Future<void> _signInAnonymously() async {
-    try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        _userId = currentUser.uid;
-        await _loadScannedLocations();
-        return;
-      }
-
-      final userCredential = await FirebaseAuth.instance.signInAnonymously();
-      _userId = userCredential.user?.uid;
-      await _loadScannedLocations();
-    } catch (e) {
-      print('Error signing in: $e');
-    }
+  @override
+  void dispose() {
+    _scannerController?.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadScannedLocations() async {
-    if (_userId == null) {
+  Future<void> _loadCompletedStations() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      print('⚠️ Nincs bejelentkezett felhasználó');
       return;
     }
+
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('scanned_qr_codes')
-          .where('userId', isEqualTo: _userId)
-          .orderBy('timestamp', descending: true)
+      print('📸 Felhasználó állomásainak betöltése: ${user.uid}');
+      final snapshot = await _firestore
+          .collection('user_progress')
+          .doc(user.uid)
+          .collection('completed_stations')
+          .orderBy('completedAt', descending: true)
           .get();
 
-      setState(() {
-        _scannedLocations = snapshot.docs.map((doc) {
-          return {
-            'name': doc['name'] ?? 'Unknown',
-            'points': doc['points'] ?? 0,
-            'date': (doc['timestamp'] as dynamic)?.toDate().toString().split(' ')[0] ?? 'Unknown',
-          };
-        }).toList();
-      });
+      if (mounted) {
+        setState(() {
+          _completedStations = snapshot.docs.map((doc) {
+            final data = doc.data();
+            return {
+              'id': doc.id,
+              'name': data['stationName'] ?? 'Ismeretlen állomás',
+              'points': data['points'] ?? 10,
+              'date': _formatDate(data['completedAt']),
+            };
+          }).toList();
+        });
+        print('✅ ${_completedStations.length} állomás betöltve');
+      }
     } catch (e) {
-      print('Error loading scanned locations: $e');
+      print('❌ Hiba az állomások betöltése közben: $e');
     }
   }
 
-  Future<void> _handleQRCode(String qrValue) async {
-    if (_isProcessing || _isScanned) return;
+  String _formatDate(dynamic timestamp) {
+    if (timestamp == null) return 'N/A';
+    try {
+      if (timestamp is Timestamp) {
+        final date = timestamp.toDate();
+        return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      }
+      return timestamp.toString();
+    } catch (e) {
+      return 'N/A';
+    }
+  }
 
+  Future<void> _handleQRCode(String qrCode) async {
+    if (_isProcessing) return;
+    
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('stations')
-          .where('qrCode', isEqualTo: qrValue)
-          .limit(1)
-          .get();
+      print('📸 QR kód beolvasva: $qrCode');
 
-      if (snapshot.docs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Ismeretlen QR-kód!'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      final user = _auth.currentUser;
+      if (user == null) {
+        _showError('Kérlek jelentkezz be!');
+        setState(() {
+          _isProcessing = false;
+        });
         return;
       }
 
-      final doc = snapshot.docs.first;
-      final data = doc.data();
-      final name = data['name'] ?? 'Ismeretlen állomás';
-      final pointsRaw = data['points'];
-      final points = pointsRaw is num ? pointsRaw.toInt() : 10;
+      // Ellenőrizd, hogy létezik-e ez az állomás
+      final stationQuery = await _firestore
+          .collection('stations')
+          .where('qrCode', isEqualTo: qrCode)
+          .limit(1)
+          .get();
 
-      if (_userId == null) {
-        await _signInAnonymously();
-        if (_userId == null) {
+      if (stationQuery.docs.isEmpty) {
+        // Próbáld ID alapján
+        final stationDoc = await _firestore
+            .collection('stations')
+            .doc(qrCode)
+            .get();
+
+        if (!stationDoc.exists) {
+          _showError('Érvénytelen QR kód!');
+          setState(() {
+            _isProcessing = false;
+          });
           return;
         }
       }
 
-      final duplicateSnapshot = await FirebaseFirestore.instance
-          .collection('scanned_qr_codes')
-          .where('userId', isEqualTo: _userId)
-          .where('stationId', isEqualTo: doc.id)
-          .limit(1)
+      final station = stationQuery.docs.isNotEmpty
+          ? stationQuery.docs.first
+          : await _firestore.collection('stations').doc(qrCode).get();
+
+      final stationData = station.data()!;
+      final stationId = station.id;
+      final stationName = stationData['name'] ?? 'Ismeretlen';
+      final points = stationData['points'] ?? 10;
+
+      // Ellenőrizd, hogy már beolvasta-e
+      final progressDoc = await _firestore
+          .collection('user_progress')
+          .doc(user.uid)
+          .collection('completed_stations')
+          .doc(stationId)
           .get();
 
-      if (duplicateSnapshot.docs.isNotEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Ezt az allomast mar beolvastad.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        return;
-      }
-
-      setState(() {
-        _isScanned = true;
-        _scannedName = name;
-        _scannedPoints = points;
-      });
-
-      await controller.stop();
-
-      try {
-        await FirebaseFirestore.instance.collection('scanned_qr_codes').add({
-          'userId': _userId,
-          'qrCode': qrValue,
-          'stationId': doc.id,
-          'name': name,
-          'points': points,
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-
-        // Update user points
-        if (_userId != null) {
-          final userDocRef = FirebaseFirestore.instance
-              .collection('users')
-              .doc(_userId);
-          await userDocRef.set({
-            'userId': _userId,
-            'points': FieldValue.increment(points),
-            'visitedStations': FieldValue.increment(1),
-            'lastScanAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
-
-        await _loadScannedLocations();
-      } catch (e) {
-        print('Error saving to Firestore: $e');
-      }
-    } catch (e) {
-      print('Error looking up station: $e');
-    } finally {
-      if (mounted) {
+      if (progressDoc.exists) {
+        _showError('Ezt az állomást már beolvastad!');
         setState(() {
           _isProcessing = false;
         });
+        return;
       }
+
+      // Mentsd el az új állomást
+      await _firestore
+          .collection('user_progress')
+          .doc(user.uid)
+          .collection('completed_stations')
+          .doc(stationId)
+          .set({
+        'stationId': stationId,
+        'stationName': stationName,
+        'points': points,
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+
+      print('✅ Állomás mentve: $stationName (+$points pont)');
+
+      // Frissítsd a felhasználó összpontszámát
+      await _firestore.collection('user_progress').doc(user.uid).set({
+        'userId': user.uid,
+        'email': user.email,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Töltsd újra az állomásokat
+      await _loadCompletedStations();
+
+      // Sikeres beolvasás visszajelzés
+      if (mounted) {
+        _showSuccess('$stationName beolvasva! +$points pont');
+        setState(() {
+          _isScanned = false; // Vissza a kamera nézethez
+        });
+      }
+    } catch (e) {
+      print('❌ Hiba: $e');
+      _showError('Hiba történt a beolvasás közben');
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
     }
   }
 
-  int getTotalPoints() {
-    return _scannedLocations.fold<int>(0, (sum, item) => sum + (item['points'] as int));
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
+  void _showSuccess(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
+
+  int get totalPoints => _completedStations.length * 10;
 
   @override
   Widget build(BuildContext context) {
-    final totalScanned = getTotalPoints();
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR-kód Beolvasás'),
+        title: const Text('QR Kód Beolvasó'),
         elevation: 0,
         actions: [
           Padding(
@@ -202,10 +242,17 @@ class _CameraScreenState extends State<CameraScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.star, color: Colors.amber, size: 20),
                     const SizedBox(width: 4),
-                    Text('$totalScanned pont'),
+                    Text(
+                      '$totalPoints pont',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -213,235 +260,163 @@ class _CameraScreenState extends State<CameraScreen> {
           ),
         ],
       ),
-      body: _isScanned ? _buildScannedState(totalScanned) : _buildScanningState(),
-    );
-  }
-
-  Widget _buildScanningState() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.blue, width: 3),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            margin: const EdgeInsets.all(20),
-            child: MobileScanner(
-              controller: controller,
-              onDetect: (capture) {
-                final List<Barcode> barcodes = capture.barcodes;
-                for (final barcode in barcodes) {
-                  if (barcode.rawValue != null) {
-                    _handleQRCode(barcode.rawValue!);
-                    break;
-                  }
-                }
-              },
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Text(
-                'QR-kód beolvasásához irányítsd\na kamera felé',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                '140 pont összegyűjtésétől speciális jutalmazott',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-              const SizedBox(height: 20),
-              if (_scannedLocations.isNotEmpty)
-                ElevatedButton.icon(
-                  onPressed: () => _showScannedHistory(context),
-                  icon: const Icon(Icons.history),
-                  label: const Text('Beolvasási előzmények'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[600],
+      body: Column(
+        children: [
+          // Kamera nézet
+          Expanded(
+            flex: 2,
+            child: Stack(
+              children: [
+                MobileScanner(
+                  controller: _scannerController,
+                  onDetect: (capture) {
+                    final List<Barcode> barcodes = capture.barcodes;
+                    if (barcodes.isNotEmpty && !_isProcessing) {
+                      final String? code = barcodes.first.rawValue;
+                      if (code != null && code.isNotEmpty) {
+                        _handleQRCode(code);
+                      }
+                    }
+                  },
+                ),
+                // Overlay
+                Center(
+                  child: Container(
+                    width: 250,
+                    height: 250,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white, width: 3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildScannedState(int totalScanned) {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 40),
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(50),
-            ),
-            child: const Center(
-              child: Icon(Icons.check_circle, size: 80, color: Color(0xFF4CAF50)),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Fénykép beolvasva!',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _scannedName,
-            style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.add_circle, color: Colors.amber, size: 24),
-                const SizedBox(width: 8),
-                Text('$_scannedPoints pont', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Összesen: $totalScanned pont',
-            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 40),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Előrehaladás: $totalScanned / 140 pont (${((totalScanned / 140) * 100).toStringAsFixed(0)}%)',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: LinearProgressIndicator(
-                    value: (totalScanned / 140).clamp(0.0, 1.0),
-                    minHeight: 10,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      totalScanned >= 140 ? Colors.green : Colors.blue,
+                // Utasítás
+                Positioned(
+                  bottom: 20,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _isProcessing
+                          ? 'Feldolgozás...'
+                          : 'Helyezd a QR kódot a keretbe',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 40),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _isScanned = false;
-                  });
-                  controller.start();
-                },
-                child: const Text('Újra beolvasni'),
+          // Beolvasott állomások lista
+          Expanded(
+            flex: 1,
+            child: Container(
+              color: Colors.grey[100],
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Beolvasott állomások',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${_completedStations.length} db',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: _completedStations.isEmpty
+                        ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.qr_code_scanner, size: 64, color: Colors.grey),
+                                SizedBox(height: 16),
+                                Text(
+                                  'Még nincs beolvasott állomás',
+                                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Olvasd be az első QR kódot!',
+                                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: _completedStations.length,
+                            itemBuilder: (context, index) {
+                              final station = _completedStations[index];
+                              return Card(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: Colors.green,
+                                    child: Text(
+                                      '${index + 1}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    station['name'] as String,
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: Text(station['date'] as String),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.star, color: Colors.amber, size: 20),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '+${station['points']}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: () => _showScannedHistory(context),
-                child: const Text('Előzmények'),
-              ),
-            ],
+            ),
           ),
-          const SizedBox(height: 40),
         ],
       ),
     );
   }
-
-  void _showScannedHistory(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Beolvasási előzmények', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _scannedLocations.length,
-                itemBuilder: (context, index) {
-                  final location = _scannedLocations[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  location['name'] as String,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  location['date'] as String,
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.star, size: 16, color: Colors.amber),
-                                const SizedBox(width: 4),
-                                Text('${location['points']}'),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
-
-
-
-
-
-
-
-
