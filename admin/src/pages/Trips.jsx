@@ -18,6 +18,7 @@ import {
 } from "@react-google-maps/api";
 import { jsPDF } from "jspdf";
 import "../styles/Trips.css";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 
@@ -170,6 +171,7 @@ function Trips() {
   const [expandedTripId, setExpandedTripId] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState({});
   const [tripMetrics, setTripMetrics] = useState({});
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const cleanupRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -338,17 +340,20 @@ function Trips() {
     setShowForm(true);
   };
 
-  const handleDelete = async (tripId) => {
-    if (
-      window.confirm("Biztosan torolni szeretned ezt a turat?")
-    ) {
-      try {
-        await deleteDoc(doc(db, "trips", tripId));
-        fetchData();
-      } catch (err) {
-        setError("Hiba a torleskor");
-        console.error(err);
-      }
+  const handleDelete = (tripId) => {
+    setDeleteDialog({ open: true, id: tripId });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id) return;
+    try {
+      await deleteDoc(doc(db, "trips", deleteDialog.id));
+      setDeleteDialog({ open: false, id: null });
+      fetchData();
+    } catch (err) {
+      setError("Hiba a torleskor");
+      console.error(err);
+      setDeleteDialog({ open: false, id: null });
     }
   };
 
@@ -633,8 +638,18 @@ function Trips() {
           </div>
         )}
       </div>
+          <ConfirmDialog
+        open={deleteDialog.open}
+        title="Túra törlése"
+        message="Biztosan torolni szeretned ezt a turat?"
+        confirmText="Törlés"
+        onClose={() => setDeleteDialog({ open: false, id: null })}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
 
 export default Trips;
+
+

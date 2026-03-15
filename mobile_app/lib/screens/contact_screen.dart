@@ -37,8 +37,16 @@ class _ContactScreenState extends State<ContactScreen> {
       
       if (snapshot.docs.isNotEmpty) {
         debugPrint("✅ Firestore adat betöltve");
+        final rawData = snapshot.docs.first.data();
+        final mainOffice = (rawData["mainOffice"] as Map<String, dynamic>?) ?? rawData;
         setState(() {
-          _contactData = snapshot.docs.first.data();
+          _contactData = {
+            "name": mainOffice["name"],
+            "address": mainOffice["address"],
+            "phone": mainOffice["phone"],
+            "email": mainOffice["email"],
+            "hours": rawData["hours"] ?? mainOffice["hours"],
+          };
           _isLoading = false;
         });
       } else {

@@ -46,7 +46,7 @@ class _EventsScreenState extends State<EventsScreen> {
             final data = doc.data() as Map<String, dynamic>;
             return {
               "id": doc.id,
-              "title": _safeString(data["title"]),
+              "title": _safeString(data["name"]),
               "description": _safeString(data["description"]),
               "date": _safeString(data["date"]),
               "location": _safeString(data["location"]),

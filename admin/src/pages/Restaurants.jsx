@@ -1,13 +1,9 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc } from "firebase/firestore";
 import "../styles/Content.css";
-
-const safeString = (val) => {
-  if (val === null || val === undefined) return "";
-  if (typeof val === "object") return "";
-  return String(val).trim();
-};
+import { safeString } from "../utils/safeString";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 function Restaurants() {
   const [restaurants, setRestaurants] = useState([]);
@@ -15,6 +11,7 @@ function Restaurants() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [formData, setFormData] = useState({
     name: "",
     type: "hungarian",
@@ -31,10 +28,10 @@ function Restaurants() {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "restaurants"));
-      const data = snapshot.docs.map((doc) => {
-        const docData = doc.data();
+      const data = snapshot.docs.map((item) => {
+        const docData = item.data();
         return {
-          id: doc.id,
+          id: item.id,
           name: safeString(docData.name),
           type: safeString(docData.type) || "hungarian",
           cuisine: safeString(docData.cuisine),
@@ -43,7 +40,7 @@ function Restaurants() {
         };
       });
       setRestaurants(data);
-    } catch (err) {
+    } catch {
       setError("Hiba az adatok betöltésekor");
     } finally {
       setLoading(false);
@@ -80,7 +77,7 @@ function Restaurants() {
       setShowForm(false);
       setEditingId(null);
       fetchRestaurants();
-    } catch (err) {
+    } catch {
       setError("Hiba a mentéskor");
     }
   };
@@ -97,14 +94,19 @@ function Restaurants() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Biztosan törlöd?")) {
-      try {
-        await deleteDoc(doc(db, "restaurants", id));
-        fetchRestaurants();
-      } catch (err) {
-        setError("Hiba a törlékor");
-      }
+  const handleDelete = (id) => {
+    setDeleteDialog({ open: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id) return;
+    try {
+      await deleteDoc(doc(db, "restaurants", deleteDialog.id));
+      setDeleteDialog({ open: false, id: null });
+      fetchRestaurants();
+    } catch {
+      setError("Hiba a törlékor");
+      setDeleteDialog({ open: false, id: null });
     }
   };
 
@@ -129,19 +131,8 @@ function Restaurants() {
         <div className="form-container">
           <h2>{editingId ? "Szerkesztés" : "Új étterem"}</h2>
           <form onSubmit={handleSubmit}>
-            <input
-              type="text"
-              name="name"
-              placeholder="Étterem neve"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-            />
-            <select
-              name="type"
-              value={formData.type}
-              onChange={handleInputChange}
-            >
+            <input type="text" name="name" placeholder="Étterem neve" value={formData.name} onChange={handleInputChange} required />
+            <select name="type" value={formData.type} onChange={handleInputChange}>
               <option value="hungarian">Magyar konyha</option>
               <option value="fish">Halételek</option>
               <option value="cafe">Kávézó</option>
@@ -149,40 +140,11 @@ function Restaurants() {
               <option value="icecream">Fagylaltozó</option>
               <option value="bar">Bár</option>
             </select>
-            <input
-              type="text"
-              name="cuisine"
-              placeholder="Konyha típusa"
-              value={formData.cuisine}
-              onChange={handleInputChange}
-              required
-            />
-            <input
-              type="text"
-              name="priceRange"
-              placeholder="Árszint"
-              value={formData.priceRange}
-              onChange={handleInputChange}
-              required
-            />
-            <textarea
-              name="description"
-              placeholder="Leírás"
-              value={formData.description}
-              onChange={handleInputChange}
-              rows="3"
-            />
-            <button type="submit" className="btn-primary">
-              {editingId ? "Frissítés" : "Hozzáadás"}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setShowForm(false);
-                setEditingId(null);
-              }}
-            >
+            <input type="text" name="cuisine" placeholder="Konyha típusa" value={formData.cuisine} onChange={handleInputChange} required />
+            <input type="text" name="priceRange" placeholder="Árszint" value={formData.priceRange} onChange={handleInputChange} required />
+            <textarea name="description" placeholder="Leírás" value={formData.description} onChange={handleInputChange} rows="3" />
+            <button type="submit" className="btn-primary">{editingId ? "Frissítés" : "Hozzáadás"}</button>
+            <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setEditingId(null); }}>
               Mégse
             </button>
           </form>
@@ -193,30 +155,28 @@ function Restaurants() {
         {restaurants.map((rest) => (
           <div key={rest.id} className="card">
             <h3>{rest.name || "Nincs név"}</h3>
-            {rest.cuisine && (
-              <p>
-                <strong>Konyha:</strong> {rest.cuisine}
-              </p>
-            )}
-            {rest.priceRange && (
-              <p>
-                <strong>Árszint:</strong> {rest.priceRange}
-              </p>
-            )}
+            {rest.cuisine && <p><strong>Konyha:</strong> {rest.cuisine}</p>}
+            {rest.priceRange && <p><strong>Árszint:</strong> {rest.priceRange}</p>}
             {rest.description && <p>{rest.description}</p>}
             <div className="card-actions">
-              <button className="btn-edit" onClick={() => handleEdit(rest)}>
-                Szerkesztés
-              </button>
-              <button className="btn-delete" onClick={() => handleDelete(rest.id)}>
-                Törlés
-              </button>
+              <button className="btn-edit" onClick={() => handleEdit(rest)}>Szerkesztés</button>
+              <button className="btn-delete" onClick={() => handleDelete(rest.id)}>Törlés</button>
             </div>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={deleteDialog.open}
+        title="Étterem törlése"
+        message="Biztosan törlöd ezt az éttermet?"
+        confirmText="Törlés"
+        onClose={() => setDeleteDialog({ open: false, id: null })}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
 
 export default Restaurants;
+

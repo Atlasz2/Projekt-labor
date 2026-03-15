@@ -1,13 +1,9 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from "firebase/firestore";
 import "../styles/About.css";
-
-const safeString = (val) => {
-  if (val === null || val === undefined) return "";
-  if (typeof val === "object") return "";
-  return String(val).trim();
-};
+import { safeString } from "../utils/safeString";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 function About() {
   const [events, setEvents] = useState([]);
@@ -20,6 +16,7 @@ function About() {
     title: "",
     description: "",
   });
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
 
   useEffect(() => {
     fetchEvents();
@@ -29,20 +26,15 @@ function About() {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "about"));
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        year: safeString(doc.data().year),
-        title: safeString(doc.data().title),
-        description: safeString(doc.data().description),
+      const data = snapshot.docs.map((item) => ({
+        id: item.id,
+        year: safeString(item.data().year),
+        title: safeString(item.data().title),
+        description: safeString(item.data().description),
       }));
-      // Sort chronologically: earliest first
-      data.sort((a, b) => {
-        const yearA = parseInt(a.year) || 0;
-        const yearB = parseInt(b.year) || 0;
-        return yearA - yearB;
-      });
+      data.sort((a, b) => (parseInt(a.year) || 0) - (parseInt(b.year) || 0));
       setEvents(data);
-    } catch (err) {
+    } catch {
       setError("Hiba az adatok betöltésénél");
     } finally {
       setLoading(false);
@@ -73,7 +65,7 @@ function About() {
       setShowForm(false);
       setEditingId(null);
       fetchEvents();
-    } catch (err) {
+    } catch {
       setError("Hiba a mentéskor");
     }
   };
@@ -88,14 +80,19 @@ function About() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Biztosan törlöd ezt az eseményt?")) {
-      try {
-        await deleteDoc(doc(db, "about", id));
-        fetchEvents();
-      } catch (err) {
-        setError("Hiba a törlékor");
-      }
+  const handleDelete = (id) => {
+    setDeleteDialog({ open: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id) return;
+    try {
+      await deleteDoc(doc(db, "about", deleteDialog.id));
+      setDeleteDialog({ open: false, id: null });
+      fetchEvents();
+    } catch {
+      setError("Hiba a törlékor");
+      setDeleteDialog({ open: false, id: null });
     }
   };
 
@@ -204,8 +201,18 @@ function About() {
           ))
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteDialog.open}
+        title="Esemény törlése"
+        message="Biztosan törlöd ezt a történeti eseményt?"
+        confirmText="Törlés"
+        onClose={() => setDeleteDialog({ open: false, id: null })}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
 
 export default About;
+

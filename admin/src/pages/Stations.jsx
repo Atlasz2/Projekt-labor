@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
 import { jsPDF } from 'jspdf';
 import '../styles/Stations.css';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: '220px', width: '100%' };
@@ -58,6 +59,7 @@ export default function Stations() {
   const [editingId, setEditingId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [formData, setFormData] = useState({
     name: '',
     latitude: null,
@@ -169,14 +171,20 @@ export default function Stations() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Biztosan torolni szeretned ezt az allomast?')) return;
+  const handleDelete = (id) => {
+    setDeleteDialog({ open: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id) return;
     try {
-      await deleteDoc(doc(db, 'stations', id));
+      await deleteDoc(doc(db, 'stations', deleteDialog.id));
+      setDeleteDialog({ open: false, id: null });
       fetchStations();
     } catch (error) {
       console.error('Torles sikertelen:', error);
       alert('Hiba a torles kozben');
+      setDeleteDialog({ open: false, id: null });
     }
   };
 
@@ -358,3 +366,5 @@ export default function Stations() {
     </div>
   );
 }
+
+

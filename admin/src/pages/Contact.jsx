@@ -1,13 +1,8 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import "../styles/Content.css";
-
-const safeString = (val) => {
-  if (val === null || val === undefined) return "";
-  if (typeof val === "object") return "";
-  return String(val).trim();
-};
+import { safeString } from "../utils/safeString";
 
 function Contact() {
   const [contact, setContact] = useState({
@@ -151,3 +146,4 @@ function Contact() {
 }
 
 export default Contact;
+

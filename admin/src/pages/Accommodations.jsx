@@ -1,13 +1,9 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc } from "firebase/firestore";
 import "../styles/Content.css";
-
-const safeString = (val) => {
-  if (val === null || val === undefined) return "";
-  if (typeof val === "object") return "";
-  return String(val).trim();
-};
+import { safeString } from "../utils/safeString";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 function Accommodations() {
   const [accommodations, setAccommodations] = useState([]);
@@ -15,6 +11,7 @@ function Accommodations() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [formData, setFormData] = useState({
     name: "",
     type: "hotel",
@@ -31,10 +28,10 @@ function Accommodations() {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "accommodations"));
-      const data = snapshot.docs.map((doc) => {
-        const docData = doc.data();
+      const data = snapshot.docs.map((item) => {
+        const docData = item.data();
         return {
-          id: doc.id,
+          id: item.id,
           name: safeString(docData.name),
           type: safeString(docData.type) || "hotel",
           pricePerNight: safeString(docData.pricePerNight),
@@ -43,7 +40,7 @@ function Accommodations() {
         };
       });
       setAccommodations(data);
-    } catch (err) {
+    } catch {
       setError("Hiba az adatok betöltésekor");
     } finally {
       setLoading(false);
@@ -80,7 +77,7 @@ function Accommodations() {
       setShowForm(false);
       setEditingId(null);
       fetchAccommodations();
-    } catch (err) {
+    } catch {
       setError("Hiba a mentéskor");
     }
   };
@@ -97,14 +94,19 @@ function Accommodations() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Biztosan törlöd?")) {
-      try {
-        await deleteDoc(doc(db, "accommodations", id));
-        fetchAccommodations();
-      } catch (err) {
-        setError("Hiba a törlékor");
-      }
+  const handleDelete = (id) => {
+    setDeleteDialog({ open: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id) return;
+    try {
+      await deleteDoc(doc(db, "accommodations", deleteDialog.id));
+      setDeleteDialog({ open: false, id: null });
+      fetchAccommodations();
+    } catch {
+      setError("Hiba a törlékor");
+      setDeleteDialog({ open: false, id: null });
     }
   };
 
@@ -129,58 +131,18 @@ function Accommodations() {
         <div className="form-container">
           <h2>{editingId ? "Szerkesztés" : "Új szállás"}</h2>
           <form onSubmit={handleSubmit}>
-            <input
-              type="text"
-              name="name"
-              placeholder="Szállás neve"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-            />
-            <select
-              name="type"
-              value={formData.type}
-              onChange={handleInputChange}
-            >
+            <input type="text" name="name" placeholder="Szállás neve" value={formData.name} onChange={handleInputChange} required />
+            <select name="type" value={formData.type} onChange={handleInputChange}>
               <option value="hotel">Hotel</option>
               <option value="guesthouse">Vendégház</option>
               <option value="apartment">Apartman</option>
               <option value="campsite">Kemping</option>
             </select>
-            <input
-              type="text"
-              name="pricePerNight"
-              placeholder="Ár/éjszaka"
-              value={formData.pricePerNight}
-              onChange={handleInputChange}
-              required
-            />
-            <input
-              type="number"
-              name="capacity"
-              placeholder="Kapacitás"
-              value={formData.capacity}
-              onChange={handleInputChange}
-              required
-            />
-            <textarea
-              name="description"
-              placeholder="Leírás"
-              value={formData.description}
-              onChange={handleInputChange}
-              rows="3"
-            />
-            <button type="submit" className="btn-primary">
-              {editingId ? "Frissítés" : "Hozzáadás"}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setShowForm(false);
-                setEditingId(null);
-              }}
-            >
+            <input type="text" name="pricePerNight" placeholder="Ár/éjszaka" value={formData.pricePerNight} onChange={handleInputChange} required />
+            <input type="number" name="capacity" placeholder="Kapacitás" value={formData.capacity} onChange={handleInputChange} required />
+            <textarea name="description" placeholder="Leírás" value={formData.description} onChange={handleInputChange} rows="3" />
+            <button type="submit" className="btn-primary">{editingId ? "Frissítés" : "Hozzáadás"}</button>
+            <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setEditingId(null); }}>
               Mégse
             </button>
           </form>
@@ -191,35 +153,29 @@ function Accommodations() {
         {accommodations.map((acc) => (
           <div key={acc.id} className="card">
             <h3>{acc.name || "Nincs név"}</h3>
-            {acc.type && (
-              <p>
-                <strong>Típus:</strong> {acc.type}
-              </p>
-            )}
-            {acc.pricePerNight && (
-              <p>
-                <strong>Ár:</strong> {acc.pricePerNight}
-              </p>
-            )}
-            {acc.capacity && (
-              <p>
-                <strong>Kapacitás:</strong> {acc.capacity}
-              </p>
-            )}
+            {acc.type && <p><strong>Típus:</strong> {acc.type}</p>}
+            {acc.pricePerNight && <p><strong>Ár:</strong> {acc.pricePerNight}</p>}
+            {acc.capacity && <p><strong>Kapacitás:</strong> {acc.capacity}</p>}
             {acc.description && <p>{acc.description}</p>}
             <div className="card-actions">
-              <button className="btn-edit" onClick={() => handleEdit(acc)}>
-                Szerkesztés
-              </button>
-              <button className="btn-delete" onClick={() => handleDelete(acc.id)}>
-                Törlés
-              </button>
+              <button className="btn-edit" onClick={() => handleEdit(acc)}>Szerkesztés</button>
+              <button className="btn-delete" onClick={() => handleDelete(acc.id)}>Törlés</button>
             </div>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={deleteDialog.open}
+        title="Szállás törlése"
+        message="Biztosan törlöd ezt a szállást?"
+        confirmText="Törlés"
+        onClose={() => setDeleteDialog({ open: false, id: null })}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
 
 export default Accommodations;
+

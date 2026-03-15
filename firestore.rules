@@ -27,39 +27,44 @@ service cloud.firestore {
     // ================================================
     // ADMIN ÍRÁSI JOG - Minden egyéb collection
     // ================================================
-    match /trips/{tripId} {
+        match /users/{userId} {
       allow read: if true;
       allow write: if request.auth != null;
+    }
+
+    match /trips/{tripId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.email != null;
     }
     
     match /stations/{stationId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email != null;
     }
     
     match /events/{eventId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email != null;
     }
     
     match /accommodations/{accommodationId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email != null;
     }
     
     match /restaurants/{restaurantId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email != null;
     }
     
     match /about/{aboutId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email != null;
     }
     
     match /contact/{contactId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email != null;
     }
   }
 }

@@ -1,13 +1,9 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc } from "firebase/firestore";
 import "../styles/Content.css";
-
-const safeString = (val) => {
-  if (val === null || val === undefined) return "";
-  if (typeof val === "object") return "";
-  return String(val).trim();
-};
+import { safeString } from "../utils/safeString";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 function Events() {
   const [events, setEvents] = useState([]);
@@ -15,6 +11,7 @@ function Events() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [formData, setFormData] = useState({
     name: "",
     date: "",
@@ -30,10 +27,10 @@ function Events() {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "events"));
-      const data = snapshot.docs.map((doc) => {
-        const docData = doc.data();
+      const data = snapshot.docs.map((item) => {
+        const docData = item.data();
         return {
-          id: doc.id,
+          id: item.id,
           name: safeString(docData.name),
           date: safeString(docData.date),
           description: safeString(docData.description),
@@ -41,7 +38,7 @@ function Events() {
         };
       });
       setEvents(data);
-    } catch (err) {
+    } catch {
       setError("Hiba az adatok betöltésekor");
     } finally {
       setLoading(false);
@@ -71,7 +68,7 @@ function Events() {
       setShowForm(false);
       setEditingId(null);
       fetchEvents();
-    } catch (err) {
+    } catch {
       setError("Hiba a mentéskor");
     }
   };
@@ -87,14 +84,19 @@ function Events() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Biztosan törlöd?")) {
-      try {
-        await deleteDoc(doc(db, "events", id));
-        fetchEvents();
-      } catch (err) {
-        setError("Hiba a törlékor");
-      }
+  const handleDelete = (id) => {
+    setDeleteDialog({ open: true, id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id) return;
+    try {
+      await deleteDoc(doc(db, "events", deleteDialog.id));
+      setDeleteDialog({ open: false, id: null });
+      fetchEvents();
+    } catch {
+      setError("Hiba a törlékor");
+      setDeleteDialog({ open: false, id: null });
     }
   };
 
@@ -119,47 +121,12 @@ function Events() {
         <div className="form-container">
           <h2>{editingId ? "Szerkesztés" : "Új rendezvény"}</h2>
           <form onSubmit={handleSubmit}>
-            <input
-              type="text"
-              name="name"
-              placeholder="Rendezvény neve"
-              value={formData.name}
-              onChange={handleInputChange}
-              required
-            />
-            <input
-              type="date"
-              name="date"
-              value={formData.date}
-              onChange={handleInputChange}
-              required
-            />
-            <input
-              type="text"
-              name="location"
-              placeholder="Helyszín"
-              value={formData.location}
-              onChange={handleInputChange}
-              required
-            />
-            <textarea
-              name="description"
-              placeholder="Leírás"
-              value={formData.description}
-              onChange={handleInputChange}
-              rows="3"
-            />
-            <button type="submit" className="btn-primary">
-              {editingId ? "Frissítés" : "Hozzáadás"}
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setShowForm(false);
-                setEditingId(null);
-              }}
-            >
+            <input type="text" name="name" placeholder="Rendezvény neve" value={formData.name} onChange={handleInputChange} required />
+            <input type="date" name="date" value={formData.date} onChange={handleInputChange} required />
+            <input type="text" name="location" placeholder="Helyszín" value={formData.location} onChange={handleInputChange} required />
+            <textarea name="description" placeholder="Leírás" value={formData.description} onChange={handleInputChange} rows="3" />
+            <button type="submit" className="btn-primary">{editingId ? "Frissítés" : "Hozzáadás"}</button>
+            <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setEditingId(null); }}>
               Mégse
             </button>
           </form>
@@ -170,30 +137,28 @@ function Events() {
         {events.map((event) => (
           <div key={event.id} className="card">
             <h3>{event.name || "Nincs név"}</h3>
-            {event.date && (
-              <p>
-                <strong>Dátum:</strong> {event.date}
-              </p>
-            )}
-            {event.location && (
-              <p>
-                <strong>Helyszín:</strong> {event.location}
-              </p>
-            )}
+            {event.date && <p><strong>Dátum:</strong> {event.date}</p>}
+            {event.location && <p><strong>Helyszín:</strong> {event.location}</p>}
             {event.description && <p>{event.description}</p>}
             <div className="card-actions">
-              <button className="btn-edit" onClick={() => handleEdit(event)}>
-                Szerkesztés
-              </button>
-              <button className="btn-delete" onClick={() => handleDelete(event.id)}>
-                Törlés
-              </button>
+              <button className="btn-edit" onClick={() => handleEdit(event)}>Szerkesztés</button>
+              <button className="btn-delete" onClick={() => handleDelete(event.id)}>Törlés</button>
             </div>
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={deleteDialog.open}
+        title="Rendezvény törlése"
+        message="Biztosan törlöd ezt a rendezvényt?"
+        confirmText="Törlés"
+        onClose={() => setDeleteDialog({ open: false, id: null })}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
 
 export default Events;
+

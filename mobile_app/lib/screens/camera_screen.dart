@@ -1,7 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -11,224 +11,102 @@ class CameraScreen extends StatefulWidget {
 }
 
 class _CameraScreenState extends State<CameraScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  
-  MobileScannerController? _scannerController;
-  bool _isProcessing = false;
-  List<Map<String, dynamic>> _completedStations = [];
+  final MobileScannerController _scannerController = MobileScannerController();
 
-  @override
-  void initState() {
-    super.initState();
-    _scannerController = MobileScannerController();
-    _loadCompletedStations();
-  }
+  final List<Map<String, dynamic>> _scannedLocations = [];
+  final Set<String> _seenCodes = <String>{};
+
+  bool _isProcessing = false;
+  String? _lastCode;
+  DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  static const Duration _scanCooldown = Duration(milliseconds: 1500);
+
+  final Map<String, Map<String, dynamic>> _stationMap = {
+    'nagyvazsony_kastely': {'name': 'Nagyvázsony Kastély', 'points': 15},
+    'var_etterem': {'name': 'Vár Étterem', 'points': 10},
+    'kinizsi_var': {'name': 'Kinizsi-vár', 'points': 20},
+  };
 
   @override
   void dispose() {
-    _scannerController?.dispose();
+    _scannerController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadCompletedStations() async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      debugPrint('⚠️ Nincs bejelentkezett felhasználó');
+  int get _totalScannedPoints =>
+      _scannedLocations.fold<int>(0, (sum, item) => sum + (item['points'] as int));
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_isProcessing) return;
+    if (capture.barcodes.isEmpty) return;
+
+    final rawValue = capture.barcodes.first.rawValue?.trim();
+    if (rawValue == null || rawValue.isEmpty) return;
+
+    final now = DateTime.now();
+    final sameAsLast = _lastCode == rawValue;
+    if (sameAsLast && now.difference(_lastScanAt) < _scanCooldown) {
       return;
     }
 
-    try {
-      debugPrint('📸 Felhasználó állomásainak betöltése: ${user.uid}');
-      final snapshot = await _firestore
-          .collection('user_progress')
-          .doc(user.uid)
-          .collection('completed_stations')
-          .orderBy('completedAt', descending: true)
-          .get();
+    _lastCode = rawValue;
+    _lastScanAt = now;
 
-      if (mounted) {
-        setState(() {
-          _completedStations = snapshot.docs.map((doc) {
-            final data = doc.data();
-            return {
-              'id': doc.id,
-              'name': data['stationName'] ?? 'Ismeretlen állomás',
-              'points': data['points'] ?? 10,
-              'date': _formatDate(data['completedAt']),
-            };
-          }).toList();
-        });
-        debugPrint('✅ ${_completedStations.length} állomás betöltve');
-      }
-    } catch (e) {
-      debugPrint('❌ Hiba az állomások betöltése közben: $e');
-    }
+    _processCode(rawValue);
   }
 
-  String _formatDate(dynamic timestamp) {
-    if (timestamp == null) return 'N/A';
-    try {
-      if (timestamp is Timestamp) {
-        final date = timestamp.toDate();
-        return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      }
-      return timestamp.toString();
-    } catch (e) {
-      return 'N/A';
-    }
-  }
-
-  Future<void> _handleQRCode(String qrCode) async {
-    if (_isProcessing) return;
-    
-    setState(() {
-      _isProcessing = true;
-    });
+  Future<void> _processCode(String code) async {
+    setState(() => _isProcessing = true);
 
     try {
-      debugPrint('📸 QR kód beolvasva: $qrCode');
-
-      final user = _auth.currentUser;
-      if (user == null) {
-        _showError('Kérlek jelentkezz be!');
-        setState(() {
-          _isProcessing = false;
-        });
+      final normalized = code.toLowerCase();
+      if (_seenCodes.contains(normalized)) {
+        _showSnack('Ez a QR-kód már be lett olvasva.');
         return;
       }
 
-      // Ellenőrizd, hogy létezik-e ez az állomás
-      final stationQuery = await _firestore
-          .collection('stations')
-          .where('qrCode', isEqualTo: qrCode)
-          .limit(1)
-          .get();
+      final stationData = _stationMap[normalized] ?? {
+        'name': code,
+        'points': 10,
+      };
 
-      if (stationQuery.docs.isEmpty) {
-        // Próbáld ID alapján
-        final stationDoc = await _firestore
-            .collection('stations')
-            .doc(qrCode)
-            .get();
+      _seenCodes.add(normalized);
+      final date = DateTime.now();
+      final formattedDate =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
-        if (!stationDoc.exists) {
-          _showError('Érvénytelen QR kód!');
-          setState(() {
-            _isProcessing = false;
-          });
-          return;
-        }
-      }
-
-      final station = stationQuery.docs.isNotEmpty
-          ? stationQuery.docs.first
-          : await _firestore.collection('stations').doc(qrCode).get();
-
-      final stationData = station.data()!;
-      final stationId = station.id;
-      final stationName = stationData['name'] ?? 'Ismeretlen';
-      final points = stationData['points'] ?? 10;
-
-      // Ellenőrizd, hogy már beolvasta-e
-      final progressDoc = await _firestore
-          .collection('user_progress')
-          .doc(user.uid)
-          .collection('completed_stations')
-          .doc(stationId)
-          .get();
-
-      if (progressDoc.exists) {
-        _showError('Ezt az állomást már beolvastad!');
-        setState(() {
-          _isProcessing = false;
-        });
-        return;
-      }
-
-      // Mentsd el az új állomást
-      await _firestore
-          .collection('user_progress')
-          .doc(user.uid)
-          .collection('completed_stations')
-          .doc(stationId)
-          .set({
-        'stationId': stationId,
-        'stationName': stationName,
-        'points': points,
-        'completedAt': FieldValue.serverTimestamp(),
-      });
-
-      debugPrint('✅ Állomás mentve: $stationName (+$points pont)');
-
-      // Frissítsd a felhasználó összpontszámát
-      await _firestore.collection('user_progress').doc(user.uid).set({
-        'userId': user.uid,
-        'email': user.email,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // Töltsd újra az állomásokat
-      await _loadCompletedStations();
-
-      // Sikeres beolvasás visszajelzés
-      if (mounted) {
-        _showSuccess('$stationName beolvasva! +$points pont');
-        setState(() {
-        });
-      }
-    } catch (e) {
-      debugPrint('❌ Hiba: $e');
-      _showError('Hiba történt a beolvasás közben');
-    } finally {
       setState(() {
-        _isProcessing = false;
+        _scannedLocations.insert(0, {
+          'name': stationData['name'],
+          'points': stationData['points'],
+          'date': formattedDate,
+          'code': code,
+        });
       });
+
+      _showSnack('Sikeres beolvasás: ${stationData['name']} (+${stationData['points']} pont)');
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
-  void _showError(String message) {
+  void _showSnack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
   }
-
-  void _showSuccess(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  int get totalPoints => _completedStations.length * 10;
 
   @override
   Widget build(BuildContext context) {
+    final progress = (_totalScannedPoints / 140).clamp(0.0, 1.0);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR Kód Beolvasó'),
-        elevation: 0,
+        title: const Text('QR-kód Beolvasás'),
         actions: [
           Padding(
             padding: const EdgeInsets.all(16),
@@ -240,17 +118,10 @@ class _CameraScreenState extends State<CameraScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.star, color: Colors.amber, size: 20),
                     const SizedBox(width: 4),
-                    Text(
-                      '$totalPoints pont',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
+                    Text('$_totalScannedPoints pont'),
                   ],
                 ),
               ),
@@ -260,55 +131,39 @@ class _CameraScreenState extends State<CameraScreen> {
       ),
       body: Column(
         children: [
-          // Kamera nézet
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Stack(
               children: [
                 MobileScanner(
                   controller: _scannerController,
-                  onDetect: (capture) {
-                    final List<Barcode> barcodes = capture.barcodes;
-                    if (barcodes.isNotEmpty && !_isProcessing) {
-                      final String? code = barcodes.first.rawValue;
-                      if (code != null && code.isNotEmpty) {
-                        _handleQRCode(code);
-                      }
-                    }
-                  },
+                  onDetect: _onDetect,
                 ),
-                // Overlay
                 Center(
                   child: Container(
-                    width: 250,
-                    height: 250,
+                    width: 260,
+                    height: 260,
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.white, width: 3),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                   ),
                 ),
-                // Utasítás
                 Positioned(
-                  bottom: 20,
-                  left: 0,
-                  right: 0,
+                  left: 16,
+                  right: 16,
+                  bottom: 18,
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.black.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       _isProcessing
                           ? 'Feldolgozás...'
-                          : 'Helyezd a QR kódot a keretbe',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          : 'Irányítsd a QR-kódot a keretbe',
+                      style: const TextStyle(color: Colors.white),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -316,94 +171,48 @@ class _CameraScreenState extends State<CameraScreen> {
               ],
             ),
           ),
-          // Beolvasott állomások lista
           Expanded(
-            flex: 1,
-            child: Container(
-              color: Colors.grey[100],
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Beolvasott állomások',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '${_completedStations.length} db',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
+                  Text(
+                    'Előrehaladás: ${(progress * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 10,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Beolvasási előzmények',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      Text('${_scannedLocations.length} db'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   Expanded(
-                    child: _completedStations.isEmpty
-                        ? const Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.qr_code_scanner, size: 64, color: Colors.grey),
-                                SizedBox(height: 16),
-                                Text(
-                                  'Még nincs beolvasott állomás',
-                                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  'Olvasd be az első QR kódot!',
-                                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                                ),
-                              ],
-                            ),
-                          )
+                    child: _scannedLocations.isEmpty
+                        ? const Center(child: Text('Még nincs beolvasott QR-kód.'))
                         : ListView.builder(
-                            itemCount: _completedStations.length,
+                            itemCount: _scannedLocations.length,
                             itemBuilder: (context, index) {
-                              final station = _completedStations[index];
+                              final item = _scannedLocations[index];
                               return Card(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 4,
-                                ),
                                 child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: Colors.green,
-                                    child: Text(
-                                      '${index + 1}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    station['name'] as String,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  subtitle: Text(station['date'] as String),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.star, color: Colors.amber, size: 20),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '+${station['points']}',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                  leading: const Icon(Icons.qr_code_2),
+                                  title: Text(item['name'] as String),
+                                  subtitle: Text(item['date'] as String),
+                                  trailing: Text('+${item['points']} pont'),
                                 ),
                               );
                             },
@@ -418,4 +227,3 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
-

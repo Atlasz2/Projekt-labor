@@ -9,28 +9,31 @@ function Layout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentUserLabel, setCurrentUserLabel] = useState("Nincs bejelentkezve");
+  const [currentRole, setCurrentRole] = useState((localStorage.getItem("admin_role") || "user").toLowerCase());
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setCurrentUserLabel("Nincs bejelentkezve");
+        setCurrentRole("user");
         return;
       }
 
       const email = user.email || "ismeretlen";
-      let role = localStorage.getItem("admin_role") || "admin";
+      let role = (localStorage.getItem("admin_role") || "user").toLowerCase();
 
       try {
         const directDoc = await getDoc(doc(db, "users", email));
         if (directDoc.exists()) {
           const data = directDoc.data();
-          role = data.role || role;
+          role = (data.role || role).toLowerCase();
         }
       } catch (err) {
         console.error("Felhasználó role lekérdezés hiba:", err);
       }
 
       localStorage.setItem("admin_role", role);
+      setCurrentRole(role);
       setCurrentUserLabel(`${email} (${role})`);
     });
 
@@ -63,77 +66,87 @@ function Layout() {
         <nav>
           <ul className="nav-links">
             <li>
-              <Link to="/">
+              <Link to="/dashboard">
                 <span className="nav-icon">📊</span>
                 <span className="nav-label">Dashboard</span>
               </Link>
             </li>
 
-            <li className="nav-header">Túrák menedzsment</li>
-            <li>
-              <Link to="/trips">
-                <span className="nav-icon">🚶</span>
-                <span className="nav-label">Túrák</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/stations">
-                <span className="nav-icon">📍</span>
-                <span className="nav-label">Állomások</span>
-              </Link>
-            </li>
+            {currentRole === "admin" && (
+              <>
+                <li className="nav-header">Túrák menedzsment</li>
+                <li>
+                  <Link to="/trips">
+                    <span className="nav-icon">🚶</span>
+                    <span className="nav-label">Túrák</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/stations">
+                    <span className="nav-icon">📍</span>
+                    <span className="nav-label">Állomások</span>
+                  </Link>
+                </li>
+
+                <li className="nav-header">Város információ</li>
+                <li>
+                  <Link to="/about">
+                    <span className="nav-icon">🏛️</span>
+                    <span className="nav-label">Nagyvázsony története</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/events">
+                    <span className="nav-icon">🎉</span>
+                    <span className="nav-label">Rendezvények</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/accommodations">
+                    <span className="nav-icon">🏨</span>
+                    <span className="nav-label">Szállások</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/restaurants">
+                    <span className="nav-icon">🍽️</span>
+                    <span className="nav-label">Vendéglátás</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/contact">
+                    <span className="nav-icon">📞</span>
+                    <span className="nav-label">Kapcsolat</span>
+                  </Link>
+                </li>
+              </>
+            )}
+
+            <li className="nav-header">Nézetek</li>
             <li>
               <Link to="/map">
                 <span className="nav-icon">🗺️</span>
                 <span className="nav-label">Térkép</span>
               </Link>
             </li>
-
-            <li className="nav-header">Város információ</li>
-            <li>
-              <Link to="/about">
-                <span className="nav-icon">🏛️</span>
-                <span className="nav-label">Nagyvázsony története</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/events">
-                <span className="nav-icon">🎉</span>
-                <span className="nav-label">Rendezvények</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/accommodations">
-                <span className="nav-icon">🏨</span>
-                <span className="nav-label">Szállások</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/restaurants">
-                <span className="nav-icon">🍽️</span>
-                <span className="nav-label">Vendéglátás</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/contact">
-                <span className="nav-icon">📞</span>
-                <span className="nav-label">Kapcsolat</span>
-              </Link>
-            </li>
-
-            <li className="nav-header">Rendszer</li>
             <li>
               <Link to="/users">
                 <span className="nav-icon">👥</span>
                 <span className="nav-label">Felhasználók</span>
               </Link>
             </li>
-            <li>
-              <Link to="/seed-database">
-                <span className="nav-icon">🗄️</span>
-                <span className="nav-label">Adatbázis Feltöltés</span>
-              </Link>
-            </li>
+
+            {currentRole === "admin" && (
+              <>
+                <li className="nav-header">Rendszer</li>
+                <li>
+                  <Link to="/seed-database">
+                    <span className="nav-icon">🗄️</span>
+                    <span className="nav-label">Adatbázis Feltöltés</span>
+                  </Link>
+                </li>
+              </>
+            )}
           </ul>
         </nav>
 

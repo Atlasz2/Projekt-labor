@@ -1,12 +1,14 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, deleteDoc, getDocs, doc } from "firebase/firestore";
 import "../styles/Content.css";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 function SeedDatabase() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
 
   const seedData = async () => {
     setLoading(true);
@@ -103,10 +105,7 @@ function SeedDatabase() {
   };
 
   const clearDatabase = async () => {
-    if (!window.confirm("Biztosan töröljük az ÖSSZES adatot az adatbázisból?")) {
-      return;
-    }
-
+    setClearDialogOpen(false);
     setLoading(true);
     setMessage("");
     setStats(null);
@@ -143,7 +142,7 @@ function SeedDatabase() {
         <button className="btn-primary" onClick={seedData} disabled={loading}>
           {loading ? "Feldolgozás..." : "📊 Adatbázis Feltöltése"}
         </button>
-        <button className="btn-secondary" onClick={clearDatabase} disabled={loading}>
+        <button className="btn-secondary" onClick={() => setClearDialogOpen(true)} disabled={loading}>
           {loading ? "Feldolgozás..." : "🗑️ Mindent Töröl"}
         </button>
       </div>
@@ -167,8 +166,18 @@ function SeedDatabase() {
           </div>
         </div>
       )}
+          <ConfirmDialog
+        open={clearDialogOpen}
+        title="Teljes adatbázis törlése"
+        message="Biztosan töröljük az ÖSSZES adatot az adatbázisból?"
+        confirmText="Mindent törlök"
+        onClose={() => setClearDialogOpen(false)}
+        onConfirm={clearDatabase}
+      />
     </div>
   );
 }
 
 export default SeedDatabase;
+
+

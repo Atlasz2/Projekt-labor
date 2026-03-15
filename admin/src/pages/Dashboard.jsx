@@ -9,6 +9,7 @@ function Dashboard() {
     trips: 0,
     stations: 0,
     users: 0,
+    trackedUsers: 0,
     activeTrips: 0
   });
   const [loading, setLoading] = useState(true);
@@ -20,24 +21,26 @@ function Dashboard() {
         setLoading(true);
         setError(null);
 
-        const tripsSnapshot = await getDocs(collection(db, 'trips'));
-        const tripsCount = tripsSnapshot.size;
-
-        const activeTripsQuery = query(collection(db, 'trips'), where('isActive', '==', true));
-        const activeTripsSnapshot = await getDocs(activeTripsQuery);
-        const activeTripsCount = activeTripsSnapshot.size;
-
-        const stationsSnapshot = await getDocs(collection(db, 'stations'));
-        const stationsCount = stationsSnapshot.size;
-
-        const usersSnapshot = await getDocs(collection(db, 'user_progress'));
-        const usersCount = usersSnapshot.size;
+        const [
+          tripsSnapshot,
+          activeTripsSnapshot,
+          stationsSnapshot,
+          usersSnapshot,
+          userProgressSnapshot,
+        ] = await Promise.all([
+          getDocs(collection(db, 'trips')),
+          getDocs(query(collection(db, 'trips'), where('isActive', '==', true))),
+          getDocs(collection(db, 'stations')),
+          getDocs(collection(db, 'users')),
+          getDocs(collection(db, 'user_progress')),
+        ]);
 
         setStats({
-          trips: tripsCount,
-          stations: stationsCount,
-          users: usersCount,
-          activeTrips: activeTripsCount
+          trips: tripsSnapshot.size,
+          stations: stationsSnapshot.size,
+          users: usersSnapshot.size,
+          trackedUsers: userProgressSnapshot.size,
+          activeTrips: activeTripsSnapshot.size,
         });
       } catch (err) {
         console.error('Hiba a betolteskor:', err);
@@ -53,7 +56,7 @@ function Dashboard() {
   const statItems = [
     { key: 'trips', label: 'Osszes tura', value: stats.trips, hint: 'Letrehozott utak', tone: 'mint', badge: 'T' },
     { key: 'stations', label: 'Allomasok', value: stats.stations, hint: 'Pontok a terkepen', tone: 'sky', badge: 'A' },
-    { key: 'users', label: 'Felhasznalok', value: stats.users, hint: 'Aktiv kovetes', tone: 'sand', badge: 'F' },
+    { key: 'users', label: 'Felhasznalok', value: stats.users, hint: 'users collection', tone: 'sand', badge: 'F' },
     { key: 'activeTrips', label: 'Aktiv turak', value: stats.activeTrips, hint: 'Most fut', tone: 'sun', badge: 'V' }
   ];
 
@@ -157,7 +160,11 @@ function Dashboard() {
               </div>
               <div className="activity-row">
                 <span className="activity-dot"></span>
-                <p>{stats.users === 0 ? 'Nincs aktiv felhasznalo a naplo szerint.' : `${stats.users} felhasznalo kovet.`}</p>
+                <p>{stats.users === 0 ? 'Nincs user rekord.' : `${stats.users} felhasznalo a users collectionben.`}</p>
+              </div>
+              <div className="activity-row">
+                <span className="activity-dot"></span>
+                <p>{stats.trackedUsers === 0 ? 'Nincs haladasi rekord.' : `${stats.trackedUsers} user_progress rekord.`}</p>
               </div>
             </div>
           </section>
@@ -168,4 +175,3 @@ function Dashboard() {
 }
 
 export default Dashboard;
-
