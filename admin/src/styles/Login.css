@@ -354,3 +354,45 @@
     display: none;
   }
 }
+
+.account-picker-box {
+  border: 1px solid #e0e6ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.account-picker-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #4b5563;
+  margin-bottom: 8px;
+}
+
+.account-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.account-chip {
+  border: 1px solid #cfd8e3;
+  background: #ffffff;
+  color: #1f2937;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.account-chip:hover:not(:disabled) {
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.account-chip.active {
+  background: #2e7d32;
+  color: #ffffff;
+  border-color: #2e7d32;
+}

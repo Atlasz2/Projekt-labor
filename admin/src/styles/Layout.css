@@ -357,3 +357,15 @@
     margin-bottom: 24px;
   }
 }
+
+.current-user {
+  margin-top: 10px;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.86);
+  word-break: break-word;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 6px 8px;
+}

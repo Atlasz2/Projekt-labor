@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { auth } from "./firebaseConfig";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -28,8 +28,13 @@ function App() {
 
         if (user) {
           localStorage.setItem("demo_logged_in", "true");
+          localStorage.setItem("admin_email", user.email || "");
+          localStorage.setItem("admin_uid", user.uid || "");
         } else {
           localStorage.removeItem("demo_logged_in");
+          localStorage.removeItem("admin_email");
+          localStorage.removeItem("admin_role");
+          localStorage.removeItem("admin_uid");
         }
       });
 
@@ -44,6 +49,9 @@ function App() {
     try {
       await signOut(auth);
       localStorage.removeItem("demo_logged_in");
+      localStorage.removeItem("admin_email");
+      localStorage.removeItem("admin_role");
+      localStorage.removeItem("admin_uid");
       window.location.href = "/";
     } catch (err) {
       console.error("Logout hiba:", err);

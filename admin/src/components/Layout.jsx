@@ -1,10 +1,41 @@
-﻿import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebaseConfig";
 import "../styles/Layout.css";
 
 function Layout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [currentUserLabel, setCurrentUserLabel] = useState("Nincs bejelentkezve");
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setCurrentUserLabel("Nincs bejelentkezve");
+        return;
+      }
+
+      const email = user.email || "ismeretlen";
+      let role = localStorage.getItem("admin_role") || "admin";
+
+      try {
+        const directDoc = await getDoc(doc(db, "users", email));
+        if (directDoc.exists()) {
+          const data = directDoc.data();
+          role = data.role || role;
+        }
+      } catch (err) {
+        console.error("Felhasználó role lekérdezés hiba:", err);
+      }
+
+      localStorage.setItem("admin_role", role);
+      setCurrentUserLabel(`${email} (${role})`);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = () => {
     window.handleDemoLogout();
@@ -18,6 +49,7 @@ function Layout() {
           <div className="header-content">
             <h2>Admin</h2>
             <span className="admin-badge">Nagyvázsonyi</span>
+            <div className="current-user">{currentUserLabel}</div>
           </div>
           <button
             className="sidebar-close-btn"

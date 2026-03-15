@@ -61,7 +61,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
 
       setState(() {
@@ -76,7 +76,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         );
       });
     } catch (e) {
-      print('Error getting location: $e');
+      debugPrint('Error getting location: $e');
       setState(() {
         userLocation = const LatLng(47.1200, 17.8000);
       });
@@ -104,7 +104,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       final snapshot = await FirebaseFirestore.instance.collection('trips').get();
       
       if (snapshot.docs.isEmpty) {
-        print('No trips found in Firestore');
+        debugPrint('No trips found in Firestore');
         return;
       }
 
@@ -159,13 +159,13 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                 );
               }
             } catch (e) {
-              print('Error parsing route points for trip $i: $e');
+              debugPrint('Error parsing route points for trip $i: $e');
             }
           }
         }
       });
     } catch (e) {
-      print('Error loading trips from Firestore: $e');
+      debugPrint('Error loading trips from Firestore: $e');
     }
   }
 
@@ -197,3 +197,4 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     super.dispose();
   }
 }
+

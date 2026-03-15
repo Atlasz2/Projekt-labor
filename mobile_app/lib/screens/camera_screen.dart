@@ -16,7 +16,6 @@ class _CameraScreenState extends State<CameraScreen> {
   
   MobileScannerController? _scannerController;
   bool _isProcessing = false;
-  bool _isScanned = false;
   List<Map<String, dynamic>> _completedStations = [];
 
   @override
@@ -35,12 +34,12 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _loadCompletedStations() async {
     final user = _auth.currentUser;
     if (user == null) {
-      print('⚠️ Nincs bejelentkezett felhasználó');
+      debugPrint('⚠️ Nincs bejelentkezett felhasználó');
       return;
     }
 
     try {
-      print('📸 Felhasználó állomásainak betöltése: ${user.uid}');
+      debugPrint('📸 Felhasználó állomásainak betöltése: ${user.uid}');
       final snapshot = await _firestore
           .collection('user_progress')
           .doc(user.uid)
@@ -60,10 +59,10 @@ class _CameraScreenState extends State<CameraScreen> {
             };
           }).toList();
         });
-        print('✅ ${_completedStations.length} állomás betöltve');
+        debugPrint('✅ ${_completedStations.length} állomás betöltve');
       }
     } catch (e) {
-      print('❌ Hiba az állomások betöltése közben: $e');
+      debugPrint('❌ Hiba az állomások betöltése közben: $e');
     }
   }
 
@@ -88,7 +87,7 @@ class _CameraScreenState extends State<CameraScreen> {
     });
 
     try {
-      print('📸 QR kód beolvasva: $qrCode');
+      debugPrint('📸 QR kód beolvasva: $qrCode');
 
       final user = _auth.currentUser;
       if (user == null) {
@@ -160,7 +159,7 @@ class _CameraScreenState extends State<CameraScreen> {
         'completedAt': FieldValue.serverTimestamp(),
       });
 
-      print('✅ Állomás mentve: $stationName (+$points pont)');
+      debugPrint('✅ Állomás mentve: $stationName (+$points pont)');
 
       // Frissítsd a felhasználó összpontszámát
       await _firestore.collection('user_progress').doc(user.uid).set({
@@ -176,11 +175,10 @@ class _CameraScreenState extends State<CameraScreen> {
       if (mounted) {
         _showSuccess('$stationName beolvasva! +$points pont');
         setState(() {
-          _isScanned = false; // Vissza a kamera nézethez
         });
       }
     } catch (e) {
-      print('❌ Hiba: $e');
+      debugPrint('❌ Hiba: $e');
       _showError('Hiba történt a beolvasás közben');
     } finally {
       setState(() {
@@ -238,7 +236,7 @@ class _CameraScreenState extends State<CameraScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.2),
+                  color: Colors.amber.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -299,7 +297,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -420,3 +418,4 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
+

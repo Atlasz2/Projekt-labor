@@ -216,7 +216,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: _allUsers.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                separatorBuilder: (_, _) => const Divider(height: 1),
                                 itemBuilder: (context, index) {
                                   final user = _allUsers[index];
                                   final isCurrentUser = user["id"] == _userData?["id"];
@@ -318,3 +318,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
+

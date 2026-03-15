@@ -19,7 +19,7 @@ void main() async {
     }
   } catch (e) {
     // Firebase már inicializálva van (hot reload esetén)
-    print('Firebase init error (expected on hot reload): $e');
+    debugPrint('Firebase init error (expected on hot reload): $e');
   }
   runApp(const MyApp());
 }
@@ -178,5 +178,6 @@ class _MenuCard extends StatelessWidget {
     );
   }
 }
+
 
 

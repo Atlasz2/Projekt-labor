@@ -31,25 +31,25 @@ class _ContactScreenState extends State<ContactScreen> {
   Future<void> _loadContactData() async {
     try {
       setState(() => _isLoading = true);
-      print("📞 Kapcsolat adatok betöltése...");
+      debugPrint("📞 Kapcsolat adatok betöltése...");
       
       final snapshot = await _firestore.collection("contact").limit(1).get();
       
       if (snapshot.docs.isNotEmpty) {
-        print("✅ Firestore adat betöltve");
+        debugPrint("✅ Firestore adat betöltve");
         setState(() {
           _contactData = snapshot.docs.first.data();
           _isLoading = false;
         });
       } else {
-        print("⚠️ Nincs Firestore adat, demo adatok használata");
+        debugPrint("⚠️ Nincs Firestore adat, demo adatok használata");
         setState(() {
           _contactData = _demoData;
           _isLoading = false;
         });
       }
     } catch (e) {
-      print("❌ Hiba: $e - Demo adatok használata");
+      debugPrint("❌ Hiba: $e - Demo adatok használata");
       setState(() {
         _contactData = _demoData;
         _error = null;
@@ -159,3 +159,4 @@ class _ContactScreenState extends State<ContactScreen> {
     );
   }
 }
+
