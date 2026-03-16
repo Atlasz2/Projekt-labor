@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -66,18 +66,21 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-  Future<void> _ensureProgressDoc(User user) async {
-    final userDoc = await _firestore.collection('users').doc(user.uid).get();
-    final userData = userDoc.data() ?? {};
-
-    await _firestore.collection('user_progress').doc(user.uid).set({
-      'name': userData['displayName'] ?? userData['name'] ?? 'Felhasználó',
-      'email': user.email ?? userData['email'] ?? '',
-      'completedStations': userData['visitedStations'] ?? <String>[],
-      'totalPoints': userData['points'] ?? 0,
-      'currentTrip': 'Nincs túra',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+Future<void> _ensureProgressDoc(User user) async {
+    final progressRef = _firestore.collection('user_progress').doc(user.uid);
+    final progressDoc = await progressRef.get();
+    if (!progressDoc.exists) {
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      final userData = userDoc.data() ?? {};
+      await progressRef.set({
+        'name': userData['displayName'] ?? userData['name'] ?? 'Felhasználó',
+        'email': user.email ?? userData['email'] ?? '',
+        'completedStations': <String>[],
+        'totalPoints': 0,
+        'currentTrip': 'Nincs túra',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   Future<void> _loadProgress(String userId) async {

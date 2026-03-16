@@ -1,288 +1,433 @@
+﻿import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-class MapTripsScreen extends StatelessWidget {
+class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
 
-  String _safeString(dynamic value, {String fallback = ''}) {
-    if (value == null) return fallback;
-    final text = value.toString().trim();
-    return text.isEmpty ? fallback : text;
+  @override
+  State<MapTripsScreen> createState() => _MapTripsScreenState();
+}
+
+class _MapTripsScreenState extends State<MapTripsScreen> {
+  final Completer<GoogleMapController> _controllerCompleter =
+      Completer<GoogleMapController>();
+
+  static const LatLng _nagyvazsony = LatLng(47.0587, 17.7139);
+
+  List<Map<String, dynamic>> _trips = [];
+  List<Map<String, dynamic>> _stations = [];
+  String? _selectedTripId;
+  Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
   }
 
-  String _formatDistance(dynamic value) {
-    if (value == null) return 'N/A';
-    if (value is num) return '${value.toStringAsFixed(1)} km';
-    return _safeString(value, fallback: 'N/A');
-  }
+  Future<void> _loadData() async {
+    try {
+      final tripSnap =
+          await FirebaseFirestore.instance.collection('trips').get();
+      final stationSnap =
+          await FirebaseFirestore.instance.collection('stations').get();
 
-  String _formatDuration(dynamic value) {
-    if (value == null) return 'N/A';
-    if (value is num) {
-      final minutes = value.round();
-      final hours = minutes ~/ 60;
-      final rest = minutes % 60;
-      if (hours == 0) return '$minutes perc';
-      return '$hours ó $rest perc';
+      final trips = tripSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      final stations =
+          stationSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+
+      setState(() {
+        _trips = trips;
+        _stations = stations;
+        _isLoading = false;
+      });
+
+      final firstActive = trips.firstWhere(
+        (t) => t['isActive'] == true,
+        orElse: () => trips.isNotEmpty ? trips.first : <String, dynamic>{},
+      );
+      if (firstActive.isNotEmpty) {
+        _selectTrip(firstActive['id'] as String);
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Hiba az adatok betöltésekor: $e';
+      });
     }
-    return _safeString(value, fallback: 'N/A');
   }
 
-  Future<void> _showTripDetails(
-    BuildContext context,
-    Map<String, dynamic> trip,
-    List<Map<String, dynamic>> stations,
-  ) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  trip['name'] as String,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+  void _selectTrip(String tripId) {
+    setState(() => _selectedTripId = tripId);
+    _buildMapOverlays(tripId);
+  }
+
+  Future<void> _buildMapOverlays(String tripId) async {
+    final tripStations = _stations.where((s) => s['tripId'] == tripId).toList()
+      ..sort((a, b) {
+        final oa = a['order'] is num ? (a['order'] as num).toInt() : 9999;
+        final ob = b['order'] is num ? (b['order'] as num).toInt() : 9999;
+        return oa.compareTo(ob);
+      });
+
+    final markers = <Marker>{};
+    final points = <LatLng>[];
+
+    for (var i = 0; i < tripStations.length; i++) {
+      final s = tripStations[i];
+      final lat = s['latitude'];
+      final lng = s['longitude'];
+      if (lat == null || lng == null) continue;
+
+      final pos = LatLng((lat as num).toDouble(), (lng as num).toDouble());
+      points.add(pos);
+
+      markers.add(Marker(
+        markerId: MarkerId(s['id'] as String),
+        position: pos,
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          i == 0 ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueAzure,
+        ),
+        infoWindow: InfoWindow(
+          title: s['name']?.toString() ?? 'Állomás ${i + 1}',
+          snippet: '${s['points'] ?? 0} pont',
+        ),
+      ));
+    }
+
+    final polylines = <Polyline>{};
+    if (points.length >= 2) {
+      polylines.add(Polyline(
+        polylineId: const PolylineId('route'),
+        color: const Color(0xFF667EEA),
+        width: 4,
+        points: points,
+        patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+      ));
+    }
+
+    setState(() {
+      _markers = markers;
+      _polylines = polylines;
+    });
+
+    if (points.isNotEmpty) {
+      final ctrl = await _controllerCompleter.future;
+      if (points.length == 1) {
+        ctrl.animateCamera(CameraUpdate.newLatLngZoom(points.first, 15));
+      } else {
+        final minLat =
+            points.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
+        final maxLat =
+            points.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
+        final minLng =
+            points.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
+        final maxLng =
+            points.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+        ctrl.animateCamera(CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(minLat - 0.003, minLng - 0.003),
+            northeast: LatLng(maxLat + 0.003, maxLng + 0.003),
+          ),
+          64,
+        ));
+      }
+    }
+  }
+
+  Future<void> _goToMyLocation() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Helymeghatározás engedélyezése szükséges.')),
+          );
+        }
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      final ctrl = await _controllerCompleter.future;
+      ctrl.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 15),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Nem sikerült a helymeghatározás: $e')),
+        );
+      }
+    }
+  }
+
+  String _safeString(dynamic v, {String fallback = ''}) {
+    if (v == null) return fallback;
+    final s = v.toString().trim();
+    return s.isEmpty ? fallback : s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _buildError()
+              : _buildMapView(),
+      floatingActionButton: FloatingActionButton.small(
+        onPressed: _goToMyLocation,
+        tooltip: 'Saját helyzet',
+        child: const Icon(Icons.my_location),
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
+                _loadData();
+              },
+              child: const Text('Újra'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMapView() {
+    return Stack(
+      children: [
+        GoogleMap(
+          initialCameraPosition:
+              const CameraPosition(target: _nagyvazsony, zoom: 13),
+          markers: _markers,
+          polylines: _polylines,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: false,
+          zoomControlsEnabled: false,
+          mapToolbarEnabled: false,
+          onMapCreated: (ctrl) {
+            if (!_controllerCompleter.isCompleted) {
+              _controllerCompleter.complete(ctrl);
+            }
+          },
+        ),
+        _buildTripPanel(),
+      ],
+    );
+  }
+
+  Widget _buildTripPanel() {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.28,
+      minChildSize: 0.12,
+      maxChildSize: 0.65,
+      snap: true,
+      builder: (ctx, scrollCtrl) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 12,
+                offset: const Offset(0, -4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  trip['description'] as String,
-                  style: TextStyle(color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
                   children: [
-                    _MetaChip(icon: Icons.route, label: _formatDistance(trip['distanceKm'] ?? trip['distance'])),
-                    _MetaChip(icon: Icons.schedule, label: _formatDuration(trip['durationMinutes'] ?? trip['duration'])),
-                    _MetaChip(icon: Icons.place, label: '${stations.length} állomás'),
-                    _MetaChip(
-                      icon: Icons.flag,
-                      label: trip['isActive'] == true ? 'Aktív' : 'Inaktív',
+                    const Icon(Icons.route, color: Color(0xFF667EEA)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Túraútvonalak',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${_trips.length} túra',
+                      style: TextStyle(color: Colors.grey.shade600),
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Állomások',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                if (stations.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text('Ehhez a túrához még nincsenek állomások rendelve.'),
-                  )
-                else
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: stations.length,
-                      separatorBuilder: (_, _) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final station = stations[index];
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.indigo.withValues(alpha: 0.12),
-                            child: Text('${index + 1}'),
-                          ),
-                          title: Text(_safeString(station['name'], fallback: 'Ismeretlen állomás')),
-                          subtitle: Text(
-                            _safeString(station['description'], fallback: 'Nincs leírás'),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Text('${station['points'] ?? 0} pont'),
-                        );
-                      },
-                    ),
+              ),
+              const SizedBox(height: 8),
+              if (_trips.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Nincsenek elérhető túrák.',
+                      style: TextStyle(color: Colors.grey)),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollCtrl,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    itemCount: _trips.length,
+                    itemBuilder: (_, i) => _buildTripCard(_trips[i]),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         );
       },
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Térkép és túrák')),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('trips').snapshots(),
-        builder: (context, tripSnapshot) {
-          if (tripSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+  Widget _buildTripCard(Map<String, dynamic> trip) {
+    final id = trip['id'] as String;
+    final isSelected = id == _selectedTripId;
+    final name = _safeString(trip['name'], fallback: 'Névtelen túra');
+    final desc = _safeString(trip['description'], fallback: '');
+    final stationCount =
+        _stations.where((s) => s['tripId'] == id).length;
+    final distance = trip['distance'];
+    final duration = trip['duration'];
 
-          if (tripSnapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text('Hiba a túrák betöltésekor: ${tripSnapshot.error}'),
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      elevation: isSelected ? 4 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: isSelected
+            ? const BorderSide(color: Color(0xFF667EEA), width: 2)
+            : BorderSide.none,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _selectTrip(id),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFF667EEA)
+                      : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.hiking,
+                  color: isSelected ? Colors.white : Colors.grey.shade600,
+                  size: 22,
+                ),
               ),
-            );
-          }
-
-          final tripDocs = tripSnapshot.data?.docs ?? [];
-          if (tripDocs.isEmpty) {
-            return const Center(child: Text('Még nincs feltöltött túra.'));
-          }
-
-          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance.collection('stations').snapshots(),
-            builder: (context, stationSnapshot) {
-              final stationDocs = stationSnapshot.data?.docs ?? [];
-              final stationsByTrip = <String, List<Map<String, dynamic>>>{};
-
-              for (final stationDoc in stationDocs) {
-                final stationData = stationDoc.data();
-                final tripId = _safeString(stationData['tripId']);
-                if (tripId.isEmpty) continue;
-                stationsByTrip.putIfAbsent(tripId, () => []);
-                stationsByTrip[tripId]!.add({
-                  'id': stationDoc.id,
-                  ...stationData,
-                });
-              }
-
-              for (final entry in stationsByTrip.entries) {
-                entry.value.sort((a, b) {
-                  final orderA = a['order'] is num ? (a['order'] as num).toInt() : 9999;
-                  final orderB = b['order'] is num ? (b['order'] as num).toInt() : 9999;
-                  return orderA.compareTo(orderB);
-                });
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: tripDocs.length,
-                itemBuilder: (context, index) {
-                  final doc = tripDocs[index];
-                  final trip = doc.data();
-                  final stations = stationsByTrip[doc.id] ?? const [];
-                  final isActive = trip['isActive'] == true;
-                  final totalTripPoints = stations.fold<int>(
-                    0,
-                    (total, item) => total + ((item['points'] is num) ? (item['points'] as num).toInt() : 0),
-                  );
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            height: 138,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  const Color(0xFF667EEA).withValues(alpha: 0.18),
-                                  (isActive ? const Color(0xFF4CAF50) : const Color(0xFF94A3B8)).withValues(alpha: 0.16),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.map_outlined, size: 56, color: Color(0xFF334155)),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _safeString(trip['name'], fallback: 'Névtelen túra'),
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              Chip(
-                                label: Text(isActive ? 'Aktív' : 'Inaktív'),
-                                backgroundColor: isActive ? Colors.green.shade100 : Colors.grey.shade200,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _safeString(trip['description'], fallback: 'Nincs leírás ehhez a túrához.'),
-                            style: TextStyle(color: Colors.grey.shade700),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _MetaChip(icon: Icons.route, label: _formatDistance(trip['distanceKm'] ?? trip['distance'])),
-                              _MetaChip(icon: Icons.schedule, label: _formatDuration(trip['durationMinutes'] ?? trip['duration'])),
-                              _MetaChip(icon: Icons.place, label: '${stations.length} állomás'),
-                              _MetaChip(icon: Icons.star, label: '$totalTripPoints pont'),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _showTripDetails(
-                                context,
-                                {
-                                  'id': doc.id,
-                                  ...trip,
-                                },
-                                stations,
-                              ),
-                              icon: const Icon(Icons.info_outline),
-                              label: const Text('Túra részletei'),
-                            ),
-                          ),
-                        ],
-                      ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  );
-                },
-              );
-            },
-          );
-        },
+                    if (desc.isNotEmpty)
+                      Text(
+                        desc,
+                        style: TextStyle(
+                            color: Colors.grey.shade600, fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        _chip(Icons.place_outlined, '$stationCount állomás'),
+                        if (distance != null)
+                          _chip(Icons.straighten,
+                              '${(distance as num).toStringAsFixed(1)} km'),
+                        if (duration != null)
+                          _chip(Icons.timer_outlined,
+                              _fmtDuration(duration)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.check_circle,
+                    color: Color(0xFF667EEA), size: 20),
+              ]
+            ],
+          ),
+        ),
       ),
     );
   }
-}
 
-class _MetaChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _MetaChip({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.grey.shade700),
-          const SizedBox(width: 6),
-          Text(label),
-        ],
-      ),
+  Widget _chip(IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: Colors.grey.shade500),
+        const SizedBox(width: 2),
+        Text(label,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+      ],
     );
+  }
+
+  String _fmtDuration(dynamic value) {
+    if (value is num) {
+      final mins = value.round();
+      final h = mins ~/ 60;
+      final m = mins % 60;
+      return h == 0 ? '$mins perc' : '$h ó $m perc';
+    }
+    return value.toString();
   }
 }
