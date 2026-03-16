@@ -4,12 +4,12 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyCxsLcEZymxThZP7SxN2QGTqlfHik2Ma3g',
-  authDomain: 'projekt-labor-a4b1c.firebaseapp.com',
-  projectId: 'projekt-labor-a4b1c',
-  storageBucket: 'projekt-labor-a4b1c.firebasestorage.app',
-  messagingSenderId: '1062295539229',
-  appId: '1:1062295539229:web:5fa4b0696c8670797840f4'
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);

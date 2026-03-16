@@ -1,5 +1,6 @@
-import "package:flutter/material.dart";
-import "package:cloud_firestore/cloud_firestore.dart";
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -10,7 +11,9 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  Map<String, dynamic>? _userData;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Map<String, dynamic>? _currentUserData;
   List<Map<String, dynamic>> _allUsers = [];
   bool _isLoading = true;
   String? _error;
@@ -24,266 +27,213 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserData() async {
     try {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
 
-      // Load all users and sort by points
-      final snapshot = await _firestore.collection("user_progress").get();
-      
-      final users = snapshot.docs.map((doc) {
+      final snapshot = await _firestore.collection('user_progress').get();
+      final List<Map<String, dynamic>> users = snapshot.docs.map((doc) {
         final data = doc.data();
-        final completedStations = (data["completedStations"] as List?)?.length ?? 0;
+        final completedStations = (data['completedStations'] as List?)?.length ?? 0;
         final points = completedStations * 10;
-        
+
         return {
-          "id": doc.id,
-          "name": data["name"]?.toString() ?? "Ismeretlen",
-          "email": data["email"]?.toString() ?? "",
-          "completedStations": completedStations,
-          "points": points,
-          "currentTrip": data["currentTrip"]?.toString() ?? "Nincs túra",
+          'id': doc.id,
+          'name': data['name']?.toString() ?? 'Ismeretlen',
+          'email': data['email']?.toString() ?? '',
+          'completedStations': completedStations,
+          'points': points,
+          'currentTrip': data['currentTrip']?.toString() ?? 'Nincs túra',
         };
       }).toList();
 
-      // Sort by points descending
-      users.sort((a, b) => (b["points"] as int).compareTo(a["points"] as int));
+      users.sort((a, b) => (b['points'] as int).compareTo(a['points'] as int));
 
-      // Get current user (first one for demo)
-      final currentUser = users.isNotEmpty ? users.first : null;
-      final userRank = users.isNotEmpty ? (users.map((u) => u["id"]).toList().indexOf(currentUser?["id"] ?? "") + 1) : 0;
+      final currentUid = _auth.currentUser?.uid;
+      Map<String, dynamic>? current =
+          users.cast<Map<String, dynamic>?>().firstWhere(
+                (item) => item?['id'] == currentUid,
+                orElse: () => null,
+              );
+
+      if (current == null) {
+        final userDoc = await _firestore.collection('users').doc(currentUid).get();
+        final data = userDoc.data() ?? {};
+        current = {
+          'id': currentUid ?? 'unknown',
+          'name': data['displayName']?.toString() ?? data['name']?.toString() ?? 'Felhasználó',
+          'email': data['email']?.toString() ?? _auth.currentUser?.email ?? '',
+          'completedStations': 0,
+          'points': data['points'] ?? 0,
+          'currentTrip': 'Nincs túra',
+        };
+        users.add(Map<String, dynamic>.from(current));
+      }
+
+      users.sort((a, b) => (b['points'] as int).compareTo(a['points'] as int));
+      final userRank = users.indexWhere((item) => item['id'] == current?['id']) + 1;
 
       setState(() {
-        _userData = currentUser;
+        _currentUserData = current;
         _allUsers = users;
-        _userRank = userRank;
+        _userRank = userRank > 0 ? userRank : 0;
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
-        _error = "Hiba az adatok betöltésekor: $e";
+        _error = 'Hiba az adatok betöltésekor: $e';
         _isLoading = false;
       });
     }
   }
 
   String _getRankMedal(int rank) {
-    if (rank == 1) return "🥇";
-    if (rank == 2) return "🥈";
-    if (rank == 3) return "🥉";
-    return "#$rank";
+    if (rank == 1) return '🥇';
+    if (rank == 2) return '🥈';
+    if (rank == 3) return '🥉';
+    return '#$rank';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Fiókom"),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Fiókom')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                      const SizedBox(height: 16),
-                      Text(_error!),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadUserData,
-                        child: const Text("Újrapróbálás"),
-                      ),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+                        const SizedBox(height: 12),
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        FilledButton(onPressed: _loadUserData, child: const Text('Újrapróbálás')),
+                      ],
+                    ),
                   ),
                 )
-              : SingleChildScrollView(
-                  child: Column(
+              : RefreshIndicator(
+                  onRefresh: _loadUserData,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
                     children: [
-                      // Profile Header
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.blue.shade400, Colors.blue.shade600],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            const CircleAvatar(
-                              radius: 50,
-                              backgroundColor: Colors.white,
-                              child: Icon(Icons.person, size: 60, color: Colors.blue),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _userData?["name"] ?? "Ismeretlen",
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "Rang: ${_getRankMedal(_userRank)}",
-                              style: const TextStyle(
-                                fontSize: 16,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
+                      _buildProfileHeader(),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          _buildStatCard('Pontok', (_currentUserData?['points'] ?? 0).toString(), Icons.star, Colors.amber),
+                          const SizedBox(width: 12),
+                          _buildStatCard('Állomások', (_currentUserData?['completedStations'] ?? 0).toString(), Icons.place, Colors.blue),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Card(
+                        child: ListTile(
+                          leading: Icon(Icons.map, color: Colors.blue.shade400),
+                          title: const Text('Jelenlegi túra'),
+                          subtitle: Text(_currentUserData?['currentTrip'] ?? 'Nincs túra'),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      const Text('Rangsor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Card(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _allUsers.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final user = _allUsers[index];
+                            final isCurrentUser = user['id'] == _currentUserData?['id'];
 
-                      // Stats Cards
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            _buildStatCard(
-                              "Pontok",
-                              (_userData?["points"] ?? 0).toString(),
-                              Icons.star,
-                              Colors.amber,
-                            ),
-                            const SizedBox(width: 12),
-                            _buildStatCard(
-                              "Állomások",
-                              (_userData?["completedStations"] ?? 0).toString(),
-                              Icons.location_on,
-                              Colors.blue,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Current Trip
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Icon(Icons.map, color: Colors.blue.shade400, size: 28),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        "Jelenlegi túra",
-                                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                                      ),
-                                      Text(
-                                        _userData?["currentTrip"] ?? "Nincs túra",
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Rankings
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "Rangsor",
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Card(
-                              child: ListView.separated(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: _allUsers.length,
-                                separatorBuilder: (_, _) => const Divider(height: 1),
-                                itemBuilder: (context, index) {
-                                  final user = _allUsers[index];
-                                  final isCurrentUser = user["id"] == _userData?["id"];
-                                  
-                                  return Container(
-                                    color: isCurrentUser
-                                        ? Colors.blue.shade50
-                                        : Colors.transparent,
-                                    padding: const EdgeInsets.all(12),
-                                    child: Row(
+                            return Container(
+                              color: isCurrentUser ? Colors.blue.shade50 : Colors.transparent,
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Text(_getRankMedal(index + 1), style: const TextStyle(fontSize: 20)),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
+                                        Text(user['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                                         Text(
-                                          _getRankMedal(index + 1),
-                                          style: const TextStyle(fontSize: 20),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                user["name"],
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                              Text(
-                                                "${user["completedStations"]} állomás",
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Colors.grey[600],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 4,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.amber.shade100,
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            "${user["points"]} pont",
-                                            style: TextStyle(
-                                              color: Colors.amber.shade900,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                          ),
+                                          '${user['completedStations']} állomás',
+                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                                         ),
                                       ],
                                     ),
-                                  );
-                                },
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '${user['points']} pont',
+                                      style: TextStyle(
+                                        color: Colors.amber.shade900,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildProfileHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade400, Colors.blue.shade600],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          const CircleAvatar(
+            radius: 40,
+            backgroundColor: Colors.white,
+            child: Icon(Icons.person, size: 48, color: Colors.blue),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _currentUserData?['name'] ?? 'Felhasználó',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _currentUserData?['email'] ?? '',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Rang: ${_getRankMedal(_userRank)}',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ],
+      ),
     );
   }
 
@@ -294,23 +244,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Icon(icon, color: color, size: 32),
+              Icon(icon, color: color, size: 30),
               const SizedBox(height: 8),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
+              Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
             ],
           ),
         ),

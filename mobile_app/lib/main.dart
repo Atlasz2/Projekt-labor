@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
-import 'screens/map_trips_screen.dart';
-import 'screens/camera_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
-import 'screens/events_screen.dart';
-import 'screens/history_screen.dart';
-import 'screens/contact_screen.dart';
-import 'screens/accommodation_screen.dart';
-import 'screens/profile_screen.dart';
 
-void main() async {
+import 'firebase_options.dart';
+import 'screens/auth_gate.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     if (Firebase.apps.isEmpty) {
@@ -18,9 +13,9 @@ void main() async {
       );
     }
   } catch (e) {
-    // Firebase már inicializálva van (hot reload esetén)
-    debugPrint('Firebase init error (expected on hot reload): $e');
+    debugPrint('Firebase init error (hot reload esetén elvárt lehet): $e');
   }
+
   runApp(const MyApp());
 }
 
@@ -29,155 +24,28 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.fromSeed(seedColor: const Color(0xFF667EEA));
+
     return MaterialApp(
       title: 'Nagyvázsony',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF667EEA)),
         useMaterial3: true,
-        textTheme: const TextTheme(
-          titleLarge: TextStyle(fontWeight: FontWeight.bold),
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          foregroundColor: Color(0xFF1E293B),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 1,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
       ),
-      home: const MainMenuScreen(),
+      home: const AuthGate(),
     );
   }
 }
-
-class MainMenuScreen extends StatelessWidget {
-  const MainMenuScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      _MenuItem(
-        title: 'Térkép / Túrák',
-        icon: Icons.map_outlined,
-        color: const Color(0xFF667EEA),
-        page: const MapTripsScreen(),
-      ),
-      _MenuItem(
-        title: 'Kamera',
-        icon: Icons.qr_code_scanner,
-        color: const Color(0xFF4CAF50),
-        page: const CameraScreen(),
-      ),
-      _MenuItem(
-        title: 'Rendezvények',
-        icon: Icons.celebration_outlined,
-        color: const Color(0xFFFF9800),
-        page: const EventsScreen(),
-      ),
-      _MenuItem(
-        title: 'Nagyvázsony története',
-        icon: Icons.history_edu_outlined,
-        color: const Color(0xFF8E44AD),
-        page: const HistoryScreen(),
-      ),
-      _MenuItem(
-        title: 'Kapcsolat',
-        icon: Icons.call_outlined,
-        color: const Color(0xFF0097A7),
-        page: const ContactScreen(),
-      ),
-      _MenuItem(
-        title: 'Fiókom',
-        icon: Icons.person_outlined,
-        color: const Color(0xFF2196F3),
-        page: const ProfileScreen(),
-      ),
-      _MenuItem(
-        title: 'Szállások & Vendéglátás',
-        icon: Icons.hotel_outlined,
-        color: const Color(0xFFE91E63),
-        page: const AccommodationScreen(),
-      ),
-    ];
-
-    final width = MediaQuery.of(context).size.width;
-    final crossAxisCount = width < 420 ? 2 : 3;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nagyvázsony'),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: GridView.builder(
-          itemCount: items.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.95,
-          ),
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return _MenuCard(item: item);
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _MenuItem {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final Widget page;
-
-  _MenuItem({
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.page,
-  });
-}
-
-class _MenuCard extends StatelessWidget {
-  final _MenuItem item;
-  const _MenuCard({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => item.page),
-        );
-      },
-      child: Ink(
-        decoration: BoxDecoration(
-          color: item.color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: item.color.withValues(alpha: 0.2)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: item.color,
-                child: Icon(item.icon, color: Colors.white),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                item.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-

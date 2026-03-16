@@ -2,6 +2,7 @@ import React, { Suspense, lazy, useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { auth } from "./firebaseConfig";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import { resolveUserRole } from "./utils/resolveUserRole";
 
 const Layout = lazy(() => import("./components/Layout"));
 const Login = lazy(() => import("./pages/Login"));
@@ -19,15 +20,7 @@ const SeedDatabase = lazy(() => import("./pages/SeedDatabase"));
 
 function FullPageLoader() {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        fontSize: "16px",
-      }}
-    >
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", fontSize: "16px" }}>
       <p>Betöltés...</p>
     </div>
   );
@@ -35,28 +28,33 @@ function FullPageLoader() {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userRole, setUserRole] = useState(localStorage.getItem("admin_role") || "user");
+  const [userRole, setUserRole] = useState("user");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     try {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setIsLoggedIn(!!user);
-        setLoading(false);
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        setLoading(true);
 
         if (user) {
+          setIsLoggedIn(true);
           localStorage.setItem("demo_logged_in", "true");
           localStorage.setItem("admin_email", user.email || "");
           localStorage.setItem("admin_uid", user.uid || "");
-          const role = (localStorage.getItem("admin_role") || "user").toLowerCase();
+
+          const role = await resolveUserRole(user);
           setUserRole(role);
+          localStorage.setItem("admin_role", role);
         } else {
+          setIsLoggedIn(false);
+          setUserRole("user");
           localStorage.removeItem("demo_logged_in");
           localStorage.removeItem("admin_email");
           localStorage.removeItem("admin_role");
           localStorage.removeItem("admin_uid");
-          setUserRole("user");
         }
+
+        setLoading(false);
       });
 
       return () => unsubscribe();
@@ -79,9 +77,7 @@ function App() {
     }
   };
 
-  if (loading) {
-    return <FullPageLoader />;
-  }
+  if (loading) return <FullPageLoader />;
 
   const adminOnly = (element) =>
     userRole === "admin" ? element : <Navigate to="/dashboard" replace />;
@@ -90,10 +86,7 @@ function App() {
     <BrowserRouter>
       <Suspense fallback={<FullPageLoader />}>
         <Routes>
-          <Route
-            path="/"
-            element={isLoggedIn ? <Navigate to="/dashboard" /> : <Login />}
-          />
+          <Route path="/" element={isLoggedIn ? <Navigate to="/dashboard" /> : <Login />} />
 
           {isLoggedIn ? (
             <Route path="/" element={<Layout />}>

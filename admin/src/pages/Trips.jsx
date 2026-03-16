@@ -19,6 +19,8 @@ import {
 import { jsPDF } from "jspdf";
 import "../styles/Trips.css";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 
@@ -172,6 +174,8 @@ function Trips() {
   const [routeCoordinates, setRouteCoordinates] = useState({});
   const [tripMetrics, setTripMetrics] = useState({});
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
+  const [snack, setSnack] = useState({ open: false, msg: "", severity: "error" });
+  const showMsg = (msg, severity = "error") => setSnack({ open: true, msg, severity });
   const cleanupRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -395,7 +399,7 @@ function Trips() {
       docPdf.save(fileName);
     } catch (error) {
       console.error("PDF letoltes hiba:", error);
-      alert("Hiba a PDF letoltese kozben");
+      showMsg("Hiba a PDF letoltese kozben");
     }
   };
 
@@ -595,7 +599,7 @@ function Trips() {
                                     <p>{station.description}</p>
                                   </div>
                                   <div className="station-qr">
-                                    <img src={qrUrl} alt={`QR ${station.name}`} />
+                                    <img src={qrUrl} alt={`QR ${station.name}`} loading="lazy" />
                                     <button
                                       className="btn-qr-download"
                                       onClick={() =>
@@ -638,7 +642,17 @@ function Trips() {
           </div>
         )}
       </div>
-          <ConfirmDialog
+          <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack(s => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity={snack.severity} onClose={() => setSnack(s => ({ ...s, open: false }))}>
+          {snack.msg}
+        </Alert>
+      </Snackbar>
+      <ConfirmDialog
         open={deleteDialog.open}
         title="Túra törlése"
         message="Biztosan torolni szeretned ezt a turat?"

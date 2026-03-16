@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'map_trips_screen.dart';
+import 'camera_screen.dart';
+import 'events_screen.dart';
+import 'history_screen.dart';
+import 'contact_screen.dart';
+import 'accommodation_screen.dart';
+import 'profile_screen.dart';
+
 class MainMenuScreen extends StatelessWidget {
   const MainMenuScreen({super.key});
 
@@ -13,11 +21,11 @@ class MainMenuScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Nem'),
+            child: const Text('Mégse'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Igen'),
+            child: const Text('Kijelentkezés'),
           ),
         ],
       ),
@@ -25,102 +33,132 @@ class MainMenuScreen extends StatelessWidget {
 
     if (confirmed == true) {
       await FirebaseAuth.instance.signOut();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sikeresen kijelentkeztél!')),
-        );
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = [
+    final items = <_MenuItem>[
       _MenuItem(
-        title: 'Térkép / Túrák',
+        title: 'Térkép és túrák',
+        subtitle: 'Útvonalak és aktív túrák',
         icon: Icons.map_outlined,
         color: const Color(0xFF667EEA),
-        page: const SimplePage(
-          title: 'Térkép / Túrák',
-          body: 'Itt lesz a túrák térképes listája és útvonalak.',
-        ),
+        page: const MapTripsScreen(),
       ),
       _MenuItem(
-        title: 'Kamera',
+        title: 'QR beolvasás',
+        subtitle: 'Pontgyűjtés állomásokkal',
         icon: Icons.qr_code_scanner,
         color: const Color(0xFF4CAF50),
-        page: const SimplePage(
-          title: 'Kamera',
-          body: 'Itt lesz a QR-kód beolvasás.',
-        ),
+        page: const CameraScreen(),
       ),
       _MenuItem(
         title: 'Rendezvények',
+        subtitle: 'Közelgő események',
         icon: Icons.celebration_outlined,
         color: const Color(0xFFFF9800),
-        page: const SimplePage(
-          title: 'Rendezvények',
-          body: 'Itt lesznek az aktív programok és események.',
-        ),
+        page: const EventsScreen(),
       ),
       _MenuItem(
-        title: 'Nagyvázsony története',
+        title: 'Történelem',
+        subtitle: 'Nagyvázsony múltja',
         icon: Icons.history_edu_outlined,
         color: const Color(0xFF8E44AD),
-        page: const SimplePage(
-          title: 'Nagyvázsony története',
-          body: 'Itt lesz a történeti tartalom és leírások.',
-        ),
+        page: const HistoryScreen(),
       ),
       _MenuItem(
         title: 'Kapcsolat',
+        subtitle: 'Elérhetőségek és iroda',
         icon: Icons.call_outlined,
         color: const Color(0xFF0097A7),
-        page: const SimplePage(
-          title: 'Kapcsolat',
-          body: 'Itt lesznek elérhetőségek, cím, email, telefon.',
-        ),
+        page: const ContactScreen(),
       ),
       _MenuItem(
-        title: 'Szállások & Vendéglátás',
+        title: 'Szállás és étterem',
+        subtitle: 'Szállások, vendéglátás',
         icon: Icons.hotel_outlined,
         color: const Color(0xFFE91E63),
-        page: const SimplePage(
-          title: 'Szállások & Vendéglátás',
-          body: 'Itt lesznek szállások, éttermek, vendéglátó helyek.',
-        ),
+        page: const AccommodationScreen(),
+      ),
+      _MenuItem(
+        title: 'Fiókom',
+        subtitle: 'Profil és ranglista',
+        icon: Icons.person_outline,
+        color: const Color(0xFF2196F3),
+        page: const ProfileScreen(),
       ),
     ];
 
     final width = MediaQuery.of(context).size.width;
-    final crossAxisCount = width < 420 ? 2 : 3;
+    final crossAxisCount = width < 420 ? 1 : (width < 900 ? 2 : 3);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nagyvázsony'),
-        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_outlined),
             tooltip: 'Kijelentkezés',
             onPressed: () => _handleLogout(context),
           ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: GridView.builder(
-          itemCount: items.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.95,
-          ),
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return _MenuCard(item: item);
-          },
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF667EEA),
+                    const Color(0xFF667EEA).withValues(alpha: 0.82),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Fedezd fel Nagyvázsonyt',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'Válassz egy menüpontot a túrákhoz, rendezvényekhez vagy a profilodhoz.',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: GridView.builder(
+                itemCount: items.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: width < 420 ? 2.45 : 1.2,
+                ),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return _MenuCard(item: item);
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -129,12 +167,14 @@ class MainMenuScreen extends StatelessWidget {
 
 class _MenuItem {
   final String title;
+  final String subtitle;
   final IconData icon;
   final Color color;
   final Widget page;
 
   _MenuItem({
     required this.title,
+    required this.subtitle,
     required this.icon,
     required this.color,
     required this.page,
@@ -150,61 +190,55 @@ class _MenuCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => item.page),
-        );
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.page));
       },
       child: Ink(
         decoration: BoxDecoration(
-          color: item.color.withValues(alpha: 0.12),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: item.color.withValues(alpha: 0.2)),
+          border: Border.all(color: item.color.withValues(alpha: 0.24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
             children: [
               CircleAvatar(
-                radius: 26,
-                backgroundColor: item.color,
-                child: Icon(item.icon, color: Colors.white),
+                radius: 23,
+                backgroundColor: item.color.withValues(alpha: 0.14),
+                child: Icon(item.icon, color: item.color),
               ),
-              const SizedBox(height: 12),
-              Text(
-                item.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              Icon(Icons.chevron_right, color: Colors.grey.shade400),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class SimplePage extends StatelessWidget {
-  final String title;
-  final String body;
-
-  const SimplePage({
-    super.key,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            body,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 16),
           ),
         ),
       ),

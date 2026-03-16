@@ -6,6 +6,8 @@ import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
 import { jsPDF } from 'jspdf';
 import '../styles/Stations.css';
 import ConfirmDialog from '../components/ConfirmDialog';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: '220px', width: '100%' };
@@ -60,6 +62,8 @@ export default function Stations() {
   const [showModal, setShowModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
+  const [snack, setSnack] = useState({ open: false, msg: '', severity: 'error' });
+  const showMsg = (msg, severity = 'error') => setSnack({ open: true, msg, severity });
   const [formData, setFormData] = useState({
     name: '',
     latitude: null,
@@ -89,7 +93,7 @@ export default function Stations() {
       setStations(data);
     } catch (error) {
       console.error('Allomasok betoltese sikertelen:', error);
-      alert('Hiba az allomasok betoltese kozben');
+      showMsg('Hiba az allomasok betoltese kozben');
     } finally {
       setLoading(false);
     }
@@ -134,7 +138,7 @@ export default function Stations() {
       setFormData(prev => ({ ...prev, imageUrl: url }));
     } catch (error) {
       console.error('Kep feltoltes sikertelen:', error);
-      alert('Hiba a kep feltoltese kozben');
+      showMsg('Hiba a kep feltoltese kozben');
     } finally {
       setUploading(false);
     }
@@ -142,7 +146,7 @@ export default function Stations() {
 
   const handleSave = async () => {
     if (!formData.name || formData.latitude == null || formData.longitude == null) {
-      alert('Kerdek add nevet es jelolj ki koordinatat a terkepen!');
+      showMsg('Kerdek add nevet es jelolj ki koordinatat a terkepen!', 'warning');
       return;
     }
 
@@ -167,7 +171,7 @@ export default function Stations() {
       fetchStations();
     } catch (error) {
       console.error('Mentes sikertelen:', error);
-      alert('Hiba a mentes kozben');
+      showMsg('Hiba a mentes kozben');
     }
   };
 
@@ -183,7 +187,7 @@ export default function Stations() {
       fetchStations();
     } catch (error) {
       console.error('Torles sikertelen:', error);
-      alert('Hiba a torles kozben');
+      showMsg('Hiba a torles kozben');
       setDeleteDialog({ open: false, id: null });
     }
   };
@@ -235,7 +239,7 @@ export default function Stations() {
       docPdf.save(fileName);
     } catch (error) {
       console.error('PDF letoltes hiba:', error);
-      alert('Hiba a PDF letoltese kozben');
+      showMsg('Hiba a PDF letoltese kozben');
     }
   };
 
@@ -262,7 +266,7 @@ export default function Stations() {
             <div key={station.id} className="station-card">
               <div className="station-media">
                 {station.imageUrl ? (
-                  <img src={station.imageUrl} alt={station.name} />
+                  <img src={station.imageUrl} alt={station.name} loading="lazy" />
                 ) : (
                   <div className="station-placeholder">Nincs kep</div>
                 )}
@@ -344,7 +348,7 @@ export default function Stations() {
               />
               {uploading && <p className="upload-note">Feltoltes...</p>}
               {formData.imageUrl && !uploading && (
-                <img className="image-preview" src={formData.imageUrl} alt="Elonezet" />
+                <img className="image-preview" src={formData.imageUrl} alt="Elonezet" loading="lazy" />
               )}
             </div>
             <div className="form-group">
@@ -363,6 +367,24 @@ export default function Stations() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        title="Allomas torlese"
+        message="Biztosan torold ezt az allomastt?"
+        confirmText="Torles"
+        onClose={() => setDeleteDialog({ open: false, id: null })}
+        onConfirm={confirmDelete}
+      />
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack(s => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={snack.severity} onClose={() => setSnack(s => ({ ...s, open: false }))}>
+          {snack.msg}
+        </Alert>
+      </Snackbar>
     </div>
   );
 }

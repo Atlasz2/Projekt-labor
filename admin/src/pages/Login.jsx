@@ -3,6 +3,7 @@ import { auth, db } from '../firebaseConfig';
 import { browserLocalPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import '../styles/Login.css';
+import { resolveUserRole } from '../utils/resolveUserRole';
 
 function Login() {
   const [email, setEmail] = useState(localStorage.getItem('last_admin_email') || '');
@@ -73,13 +74,11 @@ function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
       console.log('✅ Firebase Auth sikeres', userCredential.user.uid);
 
-      const userDoc = await getUserDocByEmail(normalizedEmail);
-      const userData = userDoc?.data?.() || {};
-      const role = (userData.role || 'user').toLowerCase();
+      const resolvedRole = await resolveUserRole(userCredential.user);
 
       localStorage.setItem('demo_logged_in', 'true');
       localStorage.setItem('admin_email', normalizedEmail);
-      localStorage.setItem('admin_role', role);
+      localStorage.setItem('admin_role', resolvedRole);
       localStorage.setItem('last_admin_email', normalizedEmail);
 
       if (!userDoc) {
@@ -223,4 +222,5 @@ function Login() {
 }
 
 export default Login;
+
 

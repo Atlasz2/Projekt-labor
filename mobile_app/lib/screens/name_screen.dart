@@ -34,23 +34,31 @@ class _NameScreenState extends State<NameScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Sign in anonymously
       final userCredential = await FirebaseAuth.instance.signInAnonymously();
       final user = userCredential.user!;
+      final email = _emailController.text.trim();
 
-      // Create Firestore document
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'displayName': displayName,
-        'email': _emailController.text.trim().isEmpty
-            ? null
-            : _emailController.text.trim(),
-        'isAdmin': false,
+        'name': displayName,
+        'email': email.isEmpty ? null : email,
+        'role': 'user',
         'createdAt': FieldValue.serverTimestamp(),
         'points': 0,
         'completedTrips': 0,
-        'visitedStations': [],
-        'achievements': [],
-      });
+        'visitedStations': <String>[],
+        'achievements': <String>[],
+      }, SetOptions(merge: true));
+
+      await FirebaseFirestore.instance.collection('user_progress').doc(user.uid).set({
+        'name': displayName,
+        'email': email,
+        'completedStations': <String>[],
+        'totalPoints': 0,
+        'currentTrip': 'Nincs túra',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
