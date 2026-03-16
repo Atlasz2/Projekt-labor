@@ -36,14 +36,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final List<Map<String, dynamic>> users = snapshot.docs.map((doc) {
         final data = doc.data();
         final completedStations = (data['completedStations'] as List?)?.length ?? 0;
-        final points = completedStations * 10;
+        final totalPoints = data['totalPoints'] is num
+            ? (data['totalPoints'] as num).toInt()
+            : int.tryParse('${data['totalPoints']}') ?? 0;
 
         return {
           'id': doc.id,
           'name': data['name']?.toString() ?? 'Ismeretlen',
           'email': data['email']?.toString() ?? '',
           'completedStations': completedStations,
-          'points': points,
+          'points': totalPoints,
           'currentTrip': data['currentTrip']?.toString() ?? 'Nincs túra',
         };
       }).toList();
@@ -51,11 +53,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       users.sort((a, b) => (b['points'] as int).compareTo(a['points'] as int));
 
       final currentUid = _auth.currentUser?.uid;
-      Map<String, dynamic>? current =
-          users.cast<Map<String, dynamic>?>().firstWhere(
-                (item) => item?['id'] == currentUid,
-                orElse: () => null,
-              );
+      Map<String, dynamic>? current = users.cast<Map<String, dynamic>?>().firstWhere(
+            (item) => item?['id'] == currentUid,
+            orElse: () => null,
+          );
 
       if (current == null) {
         final userDoc = await _firestore.collection('users').doc(currentUid).get();
@@ -64,8 +65,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'id': currentUid ?? 'unknown',
           'name': data['displayName']?.toString() ?? data['name']?.toString() ?? 'Felhasználó',
           'email': data['email']?.toString() ?? _auth.currentUser?.email ?? '',
-          'completedStations': 0,
-          'points': data['points'] ?? 0,
+          'completedStations': (data['visitedStations'] as List?)?.length ?? 0,
+          'points': data['points'] is num ? (data['points'] as num).toInt() : 0,
           'currentTrip': 'Nincs túra',
         };
         users.add(Map<String, dynamic>.from(current));
@@ -97,6 +98,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentPoints = (_currentUserData?['points'] ?? 0) as int;
+    final progressToReward = (currentPoints / 140).clamp(0.0, 1.0);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Fiókom')),
       body: _isLoading
@@ -126,10 +130,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          _buildStatCard('Pontok', (_currentUserData?['points'] ?? 0).toString(), Icons.star, Colors.amber),
+                          _buildStatCard('Pontok', currentPoints.toString(), Icons.star, Colors.amber),
                           const SizedBox(width: 12),
                           _buildStatCard('Állomások', (_currentUserData?['completedStations'] ?? 0).toString(), Icons.place, Colors.blue),
                         ],
+                      ),
+                      const SizedBox(height: 12),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Jutalom előrehaladás', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(
+                                value: progressToReward,
+                                minHeight: 10,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('$currentPoints / 140 pont'),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Card(
@@ -256,4 +280,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
