@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/material.dart';
 
 class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
@@ -13,17 +12,20 @@ class MapTripsScreen extends StatefulWidget {
 }
 
 class _MapTripsScreenState extends State<MapTripsScreen> {
-  final Completer<GoogleMapController> _controllerCompleter = Completer<GoogleMapController>();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final Completer<GoogleMapController> _controller = Completer<GoogleMapController>();
 
-  static const LatLng _nagyvazsony = LatLng(47.0587, 17.7139);
+  bool _isLoading = true;
+  String? _error;
 
   List<Map<String, dynamic>> _trips = [];
   List<Map<String, dynamic>> _stations = [];
   String? _selectedTripId;
+
   Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
-  bool _isLoading = true;
-  String? _error;
+
+  static const LatLng _center = LatLng(47.0587, 17.7139);
 
   @override
   void initState() {
@@ -31,34 +33,37 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     _loadData();
   }
 
-  String _safeString(dynamic value, {String fallback = ''}) {
-    if (value == null) return fallback;
-    final text = value.toString().trim();
-    return text.isEmpty ? fallback : text;
+  double? _toDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse('$v');
   }
 
-  double? _safeDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    return double.tryParse('$value');
-  }
-
-  int _safeInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse('$value') ?? 0;
-  }
-
-  List<String> _safeStringList(dynamic value) {
-    if (value is List) {
-      return value.map((e) => e.toString()).toList();
-    }
+  List<String> _toStringList(dynamic v) {
+    if (v is List) return v.map((e) => e.toString()).toList();
     return const [];
+  }
+
+  List<LatLng> _parsePolyline(dynamic raw) {
+    if (raw is! List) return const [];
+    final out = <LatLng>[];
+    for (final item in raw) {
+      if (item is List && item.length >= 2) {
+        final lat = _toDouble(item[0]);
+        final lng = _toDouble(item[1]);
+        if (lat != null && lng != null) out.add(LatLng(lat, lng));
+      } else if (item is Map) {
+        final lat = _toDouble(item['lat'] ?? item['latitude']);
+        final lng = _toDouble(item['lng'] ?? item['longitude']);
+        if (lat != null && lng != null) out.add(LatLng(lat, lng));
+      }
+    }
+    return out;
   }
 
   Future<void> _loadData() async {
     try {
-      final tripSnap = await FirebaseFirestore.instance.collection('trips').get();
-      final stationSnap = await FirebaseFirestore.instance.collection('stations').get();
+      final tripSnap = await _firestore.collection('trips').get();
+      final stationSnap = await _firestore.collection('stations').get();
 
       final trips = tripSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
       final stations = stationSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
@@ -69,394 +74,174 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         _isLoading = false;
       });
 
-      final firstActive = trips.cast<Map<String, dynamic>?>().firstWhere(
-            (t) => t?['isActive'] == true,
-            orElse: () => trips.isNotEmpty ? trips.first : <String, dynamic>{},
-          );
-      if (firstActive != null && firstActive.isNotEmpty) {
-        _selectTrip(firstActive['id'] as String, animate: false);
+      if (trips.isNotEmpty) {
+        _selectTrip(trips.first['id'].toString(), animate: false);
       }
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _error = 'Hiba az adatok betöltésekor: $e';
+        _error = 'Hiba a térképadatok betöltésekor: $e';
       });
     }
   }
 
-  List<Map<String, dynamic>> _getTripStations(Map<String, dynamic> trip) {
-    final tripId = trip['id']?.toString();
-    final stationIds = _safeStringList(trip['stationIds']);
-
-    final byTripField = _stations.where((station) => station['tripId'] == tripId).toList();
-    if (byTripField.isNotEmpty) {
-      byTripField.sort((a, b) => _safeInt(a['orderIndex']).compareTo(_safeInt(b['orderIndex'])));
-      return byTripField;
-    }
+  List<Map<String, dynamic>> _tripStations(Map<String, dynamic> trip) {
+    final tripId = trip['id']?.toString() ?? '';
+    final stationIds = _toStringList(trip['stationIds']);
 
     if (stationIds.isNotEmpty) {
-      final indexed = <Map<String, dynamic>>[];
-      for (final stationId in stationIds) {
-        final match = _stations.cast<Map<String, dynamic>?>().firstWhere(
-              (station) => station?['id'] == stationId,
+      final byId = <Map<String, dynamic>>[];
+      for (final id in stationIds) {
+        final found = _stations.cast<Map<String, dynamic>?>().firstWhere(
+              (s) => s?['id']?.toString() == id,
               orElse: () => null,
             );
-        if (match != null) indexed.add(match);
+        if (found != null) byId.add(found);
       }
-      return indexed;
+      if (byId.isNotEmpty) return byId;
     }
 
-    return const [];
+    final byTripField = _stations.where((s) => s['tripId']?.toString() == tripId).toList();
+    byTripField.sort((a, b) => (a['orderIndex'] ?? 0).toString().compareTo((b['orderIndex'] ?? 0).toString()));
+    return byTripField;
   }
 
-  List<LatLng> _getTripPath(Map<String, dynamic> trip, List<Map<String, dynamic>> tripStations) {
-    final rawPolyline = trip['polyline'];
-    if (rawPolyline is List && rawPolyline.isNotEmpty) {
-      final points = <LatLng>[];
-      for (final item in rawPolyline) {
-        if (item is Map) {
-          final lat = _safeDouble(item['latitude'] ?? item['lat']);
-          final lng = _safeDouble(item['longitude'] ?? item['lng']);
-          if (lat != null && lng != null) {
-            points.add(LatLng(lat, lng));
-          }
-        }
-      }
-      if (points.isNotEmpty) return points;
-    }
+  List<LatLng> _routePoints(Map<String, dynamic> trip, List<Map<String, dynamic>> stations) {
+    final poly = _parsePolyline(trip['polyline']);
+    if (poly.length >= 2) return poly;
 
-    return tripStations.map((s) {
-      final lat = _safeDouble(s['latitude']);
-      final lng = _safeDouble(s['longitude']);
-      if (lat == null || lng == null) return null;
-      return LatLng(lat, lng);
-    }).whereType<LatLng>().toList();
+    final byStations = stations
+        .map((s) {
+          final lat = _toDouble(s['latitude'] ?? s['lat']);
+          final lng = _toDouble(s['longitude'] ?? s['lng']);
+          if (lat == null || lng == null) return null;
+          return LatLng(lat, lng);
+        })
+        .whereType<LatLng>()
+        .toList();
+
+    return byStations;
   }
 
-  Future<void> _selectTrip(String tripId, {bool animate = true}) async {
+  Future<void> _selectTrip(String id, {bool animate = true}) async {
     final trip = _trips.cast<Map<String, dynamic>?>().firstWhere(
-          (t) => t?['id'] == tripId,
+          (t) => t?['id']?.toString() == id,
           orElse: () => null,
         );
     if (trip == null) return;
 
-    final tripStations = _getTripStations(trip);
-    final routePoints = _getTripPath(trip, tripStations);
+    final stations = _tripStations(trip);
+    final points = _routePoints(trip, stations);
 
     final markers = <Marker>{};
-    for (var i = 0; i < tripStations.length; i++) {
-      final station = tripStations[i];
-      final lat = _safeDouble(station['latitude']);
-      final lng = _safeDouble(station['longitude']);
+    for (final s in stations) {
+      final lat = _toDouble(s['latitude'] ?? s['lat']);
+      final lng = _toDouble(s['longitude'] ?? s['lng']);
       if (lat == null || lng == null) continue;
-
       markers.add(
         Marker(
-          markerId: MarkerId(station['id'].toString()),
+          markerId: MarkerId(s['id'].toString()),
           position: LatLng(lat, lng),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            i == 0 ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueAzure,
-          ),
           infoWindow: InfoWindow(
-            title: _safeString(station['name'], fallback: 'Állomás'),
-            snippet: '${_safeInt(station['points'])} pont',
+            title: (s['name'] ?? 'Állomás').toString(),
+            snippet: '${(s['points'] ?? 0)} pont',
           ),
         ),
       );
     }
 
     final polylines = <Polyline>{};
-    if (routePoints.length >= 2) {
+    if (points.length >= 2) {
       polylines.add(
         Polyline(
-          polylineId: const PolylineId('route'),
-          color: const Color(0xFF667EEA),
-          width: 5,
-          points: routePoints,
+          polylineId: const PolylineId('trip-route'),
+          points: points,
+          width: 6,
+          color: const Color(0xFF4F46E5),
         ),
       );
     }
 
     setState(() {
-      _selectedTripId = tripId;
+      _selectedTripId = id;
       _markers = markers;
       _polylines = polylines;
     });
 
-    if (!animate || !_controllerCompleter.isCompleted || routePoints.isEmpty) return;
-    final ctrl = await _controllerCompleter.future;
-    if (routePoints.length == 1) {
-      await ctrl.animateCamera(CameraUpdate.newLatLngZoom(routePoints.first, 15));
+    if (!animate || points.isEmpty || !_controller.isCompleted) return;
+    final c = await _controller.future;
+    if (points.length == 1) {
+      await c.animateCamera(CameraUpdate.newLatLngZoom(points.first, 15));
       return;
     }
 
-    final minLat = routePoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
-    final maxLat = routePoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
-    final minLng = routePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
-    final maxLng = routePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+    final minLat = points.map((e) => e.latitude).reduce((a, b) => a < b ? a : b);
+    final maxLat = points.map((e) => e.latitude).reduce((a, b) => a > b ? a : b);
+    final minLng = points.map((e) => e.longitude).reduce((a, b) => a < b ? a : b);
+    final maxLng = points.map((e) => e.longitude).reduce((a, b) => a > b ? a : b);
 
     try {
-      await ctrl.animateCamera(
+      await c.animateCamera(
         CameraUpdate.newLatLngBounds(
           LatLngBounds(
             southwest: LatLng(minLat - 0.003, minLng - 0.003),
             northeast: LatLng(maxLat + 0.003, maxLng + 0.003),
           ),
-          72,
+          64,
         ),
       );
     } catch (_) {
-      await ctrl.animateCamera(CameraUpdate.newLatLngZoom(routePoints.first, 14));
-    }
-  }
-
-  Future<void> _goToMyLocation() async {
-    try {
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Helymeghatározás engedélyezése szükséges.')),
-          );
-        }
-        return;
-      }
-
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-      if (!_controllerCompleter.isCompleted) return;
-      final ctrl = await _controllerCompleter.future;
-      await ctrl.animateCamera(
-        CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 15),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Nem sikerült a helymeghatározás: $e')),
-        );
-      }
+      await c.animateCamera(CameraUpdate.newLatLngZoom(points.first, 14));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_error != null) {
+      return Scaffold(body: Center(child: Text(_error!)));
+    }
+
     return Scaffold(
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildError()
-              : _buildMapView(),
-      floatingActionButton: FloatingActionButton.small(
-        onPressed: _goToMyLocation,
-        tooltip: 'Saját helyzet',
-        child: const Icon(Icons.my_location),
-      ),
-    );
-  }
-
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(_error!, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _isLoading = true;
-                  _error = null;
-                });
-                _loadData();
+      appBar: AppBar(title: const Text('Térkép és túrák')),
+      body: Column(
+        children: [
+          SizedBox(
+            height: 320,
+            child: GoogleMap(
+              initialCameraPosition: const CameraPosition(target: _center, zoom: 13),
+              myLocationButtonEnabled: true,
+              myLocationEnabled: true,
+              markers: _markers,
+              polylines: _polylines,
+              onMapCreated: (c) {
+                if (!_controller.isCompleted) _controller.complete(c);
               },
-              child: const Text('Újra'),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMapView() {
-    return Stack(
-      children: [
-        GoogleMap(
-          initialCameraPosition: const CameraPosition(target: _nagyvazsony, zoom: 13),
-          markers: _markers,
-          polylines: _polylines,
-          myLocationEnabled: true,
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          mapToolbarEnabled: false,
-          onMapCreated: (ctrl) async {
-            if (!_controllerCompleter.isCompleted) {
-              _controllerCompleter.complete(ctrl);
-            }
-            final selectedId = _selectedTripId;
-            if (selectedId != null) {
-              await _selectTrip(selectedId, animate: true);
-            }
-          },
-        ),
-        _buildTripPanel(),
-      ],
-    );
-  }
-
-  Widget _buildTripPanel() {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.30,
-      minChildSize: 0.12,
-      maxChildSize: 0.66,
-      snap: true,
-      builder: (ctx, scrollCtrl) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.96),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.15),
-                blurRadius: 12,
-                offset: const Offset(0, -4),
-              ),
-            ],
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade400,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    const Icon(Icons.route, color: Color(0xFF667EEA)),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Túraútvonalak',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    const Spacer(),
-                    Text('${_trips.length} túra', style: TextStyle(color: Colors.grey.shade600)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: _trips.isEmpty
-                    ? const Center(child: Text('Nincsenek elérhető túrák.'))
-                    : ListView.builder(
-                        controller: scrollCtrl,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        itemCount: _trips.length,
-                        itemBuilder: (_, i) => _buildTripCard(_trips[i]),
-                      ),
-              ),
-            ],
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: _trips.length,
+              itemBuilder: (context, i) {
+                final t = _trips[i];
+                final selected = _selectedTripId == t['id'];
+                return Card(
+                  color: selected ? const Color(0xFFEFF2FF) : Colors.white,
+                  child: ListTile(
+                    title: Text((t['name'] ?? 'Névtelen túra').toString()),
+                    subtitle: Text('Állomások: ${_tripStations(t).length}'),
+                    trailing: const Icon(Icons.route),
+                    onTap: () => _selectTrip(t['id'].toString()),
+                  ),
+                );
+              },
+            ),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTripCard(Map<String, dynamic> trip) {
-    final id = trip['id'].toString();
-    final isSelected = id == _selectedTripId;
-    final tripStations = _getTripStations(trip);
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 5),
-      elevation: isSelected ? 4 : 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: isSelected ? const BorderSide(color: Color(0xFF667EEA), width: 2) : BorderSide.none,
+        ],
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => _selectTrip(id),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF667EEA) : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.hiking,
-                  color: isSelected ? Colors.white : Colors.grey.shade600,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _safeString(trip['name'], fallback: 'Névtelen túra'),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _safeString(trip['description']),
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 5),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        _miniChip(Icons.place_outlined, '${tripStations.length} állomás'),
-                        if (_safeString(trip['distance']).isNotEmpty || trip['distance'] is num)
-                          _miniChip(Icons.straighten, '${trip['distance']} km'),
-                        if (_safeString(trip['duration']).isNotEmpty)
-                          _miniChip(Icons.timer_outlined, trip['duration'].toString()),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (isSelected) const Icon(Icons.check_circle, color: Color(0xFF667EEA)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _miniChip(IconData icon, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: Colors.grey.shade500),
-        const SizedBox(width: 2),
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
-      ],
     );
   }
 }
-

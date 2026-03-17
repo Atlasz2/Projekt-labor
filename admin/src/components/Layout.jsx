@@ -69,6 +69,7 @@ function Layout() {
             )}
 
             <li className="nav-header">Nézetek</li>
+            <li><Link to='/achievements'><span className='nav-icon'>🏆</span><span className='nav-label'>Achievementek</span></Link></li>
             <li><Link to="/map"><span className="nav-icon">🗺️</span><span className="nav-label">Térkép</span></Link></li>
             <li><Link to="/users"><span className="nav-icon">👥</span><span className="nav-label">Felhasználók</span></Link></li>
 
@@ -99,3 +100,5 @@ function Layout() {
 }
 
 export default Layout;
+
+

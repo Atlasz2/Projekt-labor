@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -19,20 +22,56 @@ class MainMenuScreen extends StatefulWidget {
 class _MainMenuScreenState extends State<MainMenuScreen> {
   static double _lastOffset = 0;
   late final ScrollController _scrollController;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  bool _showTopAchievementBanner = false;
+  String _bannerTitle = '';
+  String _bannerSubtitle = '';
+  Timer? _bannerTimer;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController(initialScrollOffset: _lastOffset)
-      ..addListener(() {
-        _lastOffset = _scrollController.offset;
-      });
+      ..addListener(() => _lastOffset = _scrollController.offset);
+    _loadPendingAchievementBanner();
   }
 
   @override
   void dispose() {
+    _bannerTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPendingAchievementBanner() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final ref = _firestore.collection('user_progress').doc(uid);
+    final doc = await ref.get();
+    final data = doc.data();
+    final banner = data?['pendingAchievementBanner'];
+    if (banner is! Map) return;
+
+    final title = (banner['title'] ?? '').toString();
+    final subtitle = (banner['subtitle'] ?? '').toString();
+    if (title.isEmpty) return;
+
+    if (!mounted) return;
+    setState(() {
+      _bannerTitle = title;
+      _bannerSubtitle = subtitle;
+      _showTopAchievementBanner = true;
+    });
+
+    await ref.set({'pendingAchievementBanner': FieldValue.delete()}, SetOptions(merge: true));
+
+    _bannerTimer?.cancel();
+    _bannerTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      setState(() => _showTopAchievementBanner = false);
+    });
   }
 
   Future<void> _handleLogout(BuildContext context) async {
@@ -42,75 +81,24 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         title: const Text('Kijelentkezés'),
         content: const Text('Biztosan kijelentkezel?'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Mégse'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Kijelentkezés'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Mégse')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Kijelentkezés')),
         ],
       ),
     );
-
-    if (confirmed == true) {
-      await FirebaseAuth.instance.signOut();
-    }
+    if (confirmed == true) await FirebaseAuth.instance.signOut();
   }
 
   @override
   Widget build(BuildContext context) {
     final items = <_MenuItem>[
-      _MenuItem(
-        title: 'Térkép és túrák',
-        subtitle: 'GPS, útvonal és állomások',
-        icon: Icons.map_outlined,
-        color: const Color(0xFF667EEA),
-        page: const MapTripsScreen(),
-      ),
-      _MenuItem(
-        title: 'QR beolvasás',
-        subtitle: 'Pontok és esemény pecsétek',
-        icon: Icons.qr_code_scanner,
-        color: const Color(0xFF4CAF50),
-        page: const CameraScreen(),
-      ),
-      _MenuItem(
-        title: 'Rendezvények',
-        subtitle: 'Képek, részletek, pecsétvadászat',
-        icon: Icons.celebration_outlined,
-        color: const Color(0xFFFF9800),
-        page: const EventsScreen(),
-      ),
-      _MenuItem(
-        title: 'Nagyvázsony története',
-        subtitle: 'Idővonal és helytörténet',
-        icon: Icons.history_edu_outlined,
-        color: const Color(0xFF8E44AD),
-        page: const HistoryScreen(),
-      ),
-      _MenuItem(
-        title: 'Kapcsolat',
-        subtitle: 'Elérhetőségek és iroda',
-        icon: Icons.call_outlined,
-        color: const Color(0xFF0097A7),
-        page: const ContactScreen(),
-      ),
-      _MenuItem(
-        title: 'Szállás és étterem',
-        subtitle: 'Képek, linkek, hívás',
-        icon: Icons.hotel_outlined,
-        color: const Color(0xFFE91E63),
-        page: const AccommodationScreen(),
-      ),
-      _MenuItem(
-        title: 'Fiókom',
-        subtitle: 'Ranglista és achievementek',
-        icon: Icons.person_outline,
-        color: const Color(0xFF2196F3),
-        page: const ProfileScreen(),
-      ),
+      _MenuItem('Térkép és túrák', 'GPS, útvonal és állomások', Icons.map_outlined, const Color(0xFF667EEA), const MapTripsScreen()),
+      _MenuItem('QR beolvasás', 'Pontok és esemény pecsétek', Icons.qr_code_scanner, const Color(0xFF4CAF50), const CameraScreen()),
+      _MenuItem('Rendezvények', 'Képek, részletek, pecsétvadászat', Icons.celebration_outlined, const Color(0xFFFF9800), const EventsScreen()),
+      _MenuItem('Nagyvázsony története', 'Idővonal és helytörténet', Icons.history_edu_outlined, const Color(0xFF8E44AD), const HistoryScreen()),
+      _MenuItem('Kapcsolat', 'Elérhetőségek és iroda', Icons.call_outlined, const Color(0xFF0097A7), const ContactScreen()),
+      _MenuItem('Szállás és étterem', 'Képek, linkek, hívás', Icons.hotel_outlined, const Color(0xFFE91E63), const AccommodationScreen()),
+      _MenuItem('Fiókom', 'Ranglista és achievementek', Icons.person_outline, const Color(0xFF2196F3), const ProfileScreen()),
     ];
 
     final width = MediaQuery.of(context).size.width;
@@ -120,33 +108,15 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       appBar: AppBar(
         title: const Text('Nagyvázsony'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_outlined),
-            tooltip: 'Kijelentkezés',
-            onPressed: () => _handleLogout(context),
-          ),
+          IconButton(icon: const Icon(Icons.logout_outlined), onPressed: () => _handleLogout(context)),
         ],
       ),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/var.jpg',
-              fit: BoxFit.cover,
-            ),
-          ),
+          Positioned.fill(child: Image.asset('assets/var.jpg', fit: BoxFit.cover)),
           Positioned.fill(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFFF2EBDD).withValues(alpha: 0.96),
-                    const Color(0xFFE7DDC9).withValues(alpha: 0.92),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
+              color: const Color(0xFFF2EBDD).withValues(alpha: 0.97),
             ),
           ),
           SafeArea(
@@ -155,57 +125,41 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_showTopAchievementBanner)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF7C3AED), Color(0xFFEC4899)]),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [BoxShadow(color: Colors.pink.withValues(alpha: 0.35), blurRadius: 14)],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.emoji_events, color: Colors.amberAccent),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_bannerTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                Text(_bannerSubtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                              ],
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.93),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 16, offset: const Offset(0, 8))],
                     ),
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: Image.asset(
-                            'assets/logo.png',
-                            width: 56,
-                            height: 56,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Fedezd fel Nagyvázsonyt',
-                                style: TextStyle(
-                                  color: Color(0xFF1F2937),
-                                  fontSize: 21,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                'Túrák, események, történetek és helyi élmények egy alkalmazásban.',
-                                style: TextStyle(
-                                  color: Color(0xFF475569),
-                                  height: 1.35,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: const Text('Fedezd fel Nagyvázsonyt', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Color(0xFF1F2937))),
                   ),
                   const SizedBox(height: 14),
                   Expanded(
@@ -219,10 +173,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                         mainAxisSpacing: 12,
                         childAspectRatio: width < 420 ? 2.45 : 1.2,
                       ),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return _MenuCard(item: item);
-                      },
+                      itemBuilder: (_, index) => _MenuCard(item: items[index]),
                     ),
                   ),
                 ],
@@ -241,14 +192,7 @@ class _MenuItem {
   final IconData icon;
   final Color color;
   final Widget page;
-
-  _MenuItem({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.page,
-  });
+  _MenuItem(this.title, this.subtitle, this.icon, this.color, this.page);
 }
 
 class _MenuCard extends StatelessWidget {
@@ -259,55 +203,32 @@ class _MenuCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: () {
-        Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.page));
-      },
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.page)),
       child: Ink(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.98),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: item.color.withValues(alpha: 0.42), width: 1.4),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          border: Border.all(color: item.color.withValues(alpha: 0.75), width: 1.5),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 26, offset: const Offset(0, 8))],
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: item.color.withValues(alpha: 0.14),
-                child: Icon(item.icon, color: item.color),
-              ),
+              CircleAvatar(radius: 24, backgroundColor: item.color.withValues(alpha: 0.14), child: Icon(item.icon, color: item.color)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
+                    Text(item.title, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF111827))),
                     const SizedBox(height: 4),
-                    Text(
-                      item.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
+                    Text(item.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Color(0xFF374151))),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.grey.shade500),
+              const Icon(Icons.chevron_right, color: Color(0xFF374151)),
             ],
           ),
         ),
@@ -315,4 +236,3 @@ class _MenuCard extends StatelessWidget {
     );
   }
 }
-
