@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { db } from "../firebaseConfig";
 import {
-  collection, deleteDoc, doc,
+  addDoc, collection, deleteDoc, doc,
   getDocs, serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
 import "../styles/Achievements.css";
@@ -67,7 +67,7 @@ export default function Achievements() {
       if (editing) {
         await updateDoc(doc(db, "achievements", editing), payload);
       } else {
-        await setDoc(doc(db, "achievements", crypto.randomUUID()), {
+        await addDoc(collection(db, "achievements"), {
           ...payload, unlockedCount: 0, createdAt: serverTimestamp(),
         });
       }
