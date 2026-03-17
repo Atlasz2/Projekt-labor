@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'achievement_progress_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -303,6 +304,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             spacing: 10,
                             runSpacing: 10,
                             children: achievements.map((a) => _AchievementChip(achievement: a)).toList(),
+                          ),
+                          const SizedBox(height: 10),
+                          Card(
+                            child: ListTile(
+                              leading: const Icon(Icons.track_changes_outlined),
+                              title: const Text('Reszletes achievement haladas'),
+                              subtitle: const Text('Feltetelek, allapotok, pontos elorehaladas'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const AchievementProgressScreen()),
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 16),
                           const Text('Rangsor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
