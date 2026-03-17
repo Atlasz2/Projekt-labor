@@ -206,10 +206,14 @@ class _MenuCard extends StatelessWidget {
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.page)),
       child: Ink(
         decoration: BoxDecoration(
-          color: Colors.white,
+          gradient: LinearGradient(
+            colors: [Colors.white, item.color.withValues(alpha: 0.09)],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: item.color.withValues(alpha: 0.75), width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.22), blurRadius: 26, offset: const Offset(0, 8))],
+          border: Border.all(color: item.color.withValues(alpha: 0.80), width: 1.8),
+          boxShadow: [BoxShadow(color: item.color.withValues(alpha: 0.18), blurRadius: 22, offset: const Offset(0, 6))],
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),

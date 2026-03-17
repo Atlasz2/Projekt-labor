@@ -29,31 +29,26 @@ const fetchDataUrl = async (url) => {
 };
 
 function MapPicker({ value, onChange }) {
-  const markerPosition =
-    value?.lat != null && value?.lon != null
-      ? { lat: value.lat, lng: value.lon }
-      : null;
+  const markerPosition = value?.lat != null && value?.lon != null ? { lat: value.lat, lng: value.lon } : null;
   const center = markerPosition || DEFAULT_CENTER;
-
   return (
     <GoogleMap
       mapContainerStyle={MAP_CONTAINER_STYLE}
       center={center}
       zoom={13}
-      onClick={(e) => {
-        if (!e.latLng) return;
-        onChange({ lat: e.latLng.lat(), lon: e.latLng.lng() });
-      }}
-      options={{
-        streetViewControl: false,
-        mapTypeControl: false,
-        fullscreenControl: false,
-      }}
+      onClick={(e) => { if (!e.latLng) return; onChange({ lat: e.latLng.lat(), lon: e.latLng.lng() }); }}
+      options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
     >
       {markerPosition ? <Marker position={markerPosition} /> : null}
     </GoogleMap>
   );
 }
+
+const EMPTY_FORM = {
+  name: '', latitude: null, longitude: null, description: '',
+  points: 10, imageUrl: '', qrCode: '', tripId: '',
+  funFact: '', unlockContent: '', extraInfo: '',
+};
 
 export default function Stations() {
   const [stations, setStations] = useState([]);
@@ -64,90 +59,52 @@ export default function Stations() {
   const [uploading, setUploading] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [snack, setSnack] = useState({ open: false, msg: '', severity: 'error' });
+  const [formData, setFormData] = useState(EMPTY_FORM);
+  const [activeSection, setActiveSection] = useState(0);
 
-  const showMsg = (msg, severity = 'error') =>
-    setSnack({ open: true, msg, severity });
+  const showMsg = (msg, severity = 'error') => setSnack({ open: true, msg, severity });
 
-  const [formData, setFormData] = useState({
-    name: '',
-    latitude: null,
-    longitude: null,
-    description: '',
-    points: 0,
-    imageUrl: '',
-    qrCode: '',
-    tripId: '',
-  });
+  const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY });
 
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-  });
-
-  useEffect(() => {
-    fetchStations();
-    fetchTrips();
-  }, []);
+  useEffect(() => { fetchStations(); fetchTrips(); }, []);
 
   const fetchStations = async () => {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, 'stations'));
-      const data = snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
-      setStations(data);
-    } catch (error) {
-      console.error('Allomasok betoltese sikertelen:', error);
-      showMsg('Hiba az allomasok betoltese kozben');
-    } finally {
-      setLoading(false);
-    }
+      setStations(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch { showMsg('Hiba az állomások betöltésekor'); }
+    finally { setLoading(false); }
   };
 
   const fetchTrips = async () => {
     try {
       const snapshot = await getDocs(collection(db, 'trips'));
-      const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      setTrips(data);
-    } catch (error) {
-      console.error('Turak betoltese sikertelen:', error);
-    }
+      setTrips(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch { /* silent */ }
   };
 
   const getTripName = (tripId) => {
-    if (!tripId) return 'Nincs turahoz rendelve';
-    const trip = trips.find((item) => item.id === tripId);
-    return trip?.name || 'Ismeretlen tura';
+    if (!tripId) return null;
+    return trips.find((t) => t.id === tripId)?.name || 'Ismeretlen túra';
   };
 
   const handleEdit = (station) => {
     setEditingId(station.id);
     setFormData({
-      name: station.name || '',
-      latitude: station.latitude ?? null,
-      longitude: station.longitude ?? null,
-      description: station.description || '',
-      points: station.points || 0,
-      imageUrl: station.imageUrl || '',
-      qrCode: station.qrCode || '',
-      tripId: station.tripId || '',
+      name: station.name || '', latitude: station.latitude ?? null, longitude: station.longitude ?? null,
+      description: station.description || '', points: station.points || 10,
+      imageUrl: station.imageUrl || '', qrCode: station.qrCode || '', tripId: station.tripId || '',
+      funFact: station.funFact || '', unlockContent: station.unlockContent || '', extraInfo: station.extraInfo || '',
     });
+    setActiveSection(0);
     setShowModal(true);
   };
 
   const handleAdd = () => {
     setEditingId(null);
-    setFormData({
-      name: '',
-      latitude: null,
-      longitude: null,
-      description: '',
-      points: 0,
-      imageUrl: '',
-      qrCode: '',
-      tripId: '',
-    });
+    setFormData(EMPTY_FORM);
+    setActiveSection(0);
     setShowModal(true);
   };
 
@@ -160,48 +117,27 @@ export default function Stations() {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       setFormData((prev) => ({ ...prev, imageUrl: url }));
-    } catch (error) {
-      console.error('Kep feltoltes sikertelen:', error);
-      showMsg('Hiba a kep feltoltese kozben');
-    } finally {
-      setUploading(false);
-    }
+    } catch { showMsg('Hiba a kép feltöltésekor'); }
+    finally { setUploading(false); }
   };
 
   const handleSave = async () => {
-    if (!formData.name || formData.latitude == null || formData.longitude == null) {
-      showMsg('Kerdek add nevet es jelolj ki koordinatat a terkepen!', 'warning');
-      return;
-    }
-
+    if (!formData.name.trim()) { showMsg('Add meg az állomás nevét!', 'warning'); return; }
+    if (formData.latitude == null || formData.longitude == null) { showMsg('Jelöld ki a helyszínt a térképen!', 'warning'); return; }
     try {
       const payload = {
-        name: formData.name,
-        latitude: Number(formData.latitude),
-        longitude: Number(formData.longitude),
-        description: formData.description || '',
-        points: parseInt(formData.points, 10) || 0,
-        imageUrl: formData.imageUrl || '',
-        qrCode: formData.qrCode || '',
-        tripId: formData.tripId || '',
+        name: formData.name.trim(), latitude: Number(formData.latitude), longitude: Number(formData.longitude),
+        description: formData.description.trim(), points: parseInt(formData.points, 10) || 10,
+        imageUrl: formData.imageUrl || '', qrCode: formData.qrCode.trim() || '',
+        tripId: formData.tripId || '', funFact: formData.funFact.trim(),
+        unlockContent: formData.unlockContent.trim(), extraInfo: formData.extraInfo.trim(),
       };
-
-      if (editingId) {
-        await updateDoc(doc(db, 'stations', editingId), payload);
-      } else {
-        await addDoc(collection(db, 'stations'), payload);
-      }
-
+      if (editingId) { await updateDoc(doc(db, 'stations', editingId), payload); }
+      else { await addDoc(collection(db, 'stations'), payload); }
       setShowModal(false);
+      showMsg('Állomás mentve!', 'success');
       fetchStations();
-    } catch (error) {
-      console.error('Mentes sikertelen:', error);
-      showMsg('Hiba a mentes kozben');
-    }
-  };
-
-  const handleDelete = (id) => {
-    setDeleteDialog({ open: true, id });
+    } catch { showMsg('Hiba mentés közben'); }
   };
 
   const confirmDelete = async () => {
@@ -210,218 +146,210 @@ export default function Stations() {
       await deleteDoc(doc(db, 'stations', deleteDialog.id));
       setDeleteDialog({ open: false, id: null });
       fetchStations();
-    } catch (error) {
-      console.error('Torles sikertelen:', error);
-      showMsg('Hiba a torles kozben');
-      setDeleteDialog({ open: false, id: null });
-    }
-  };
-
-  const handleMapPick = (coords) => {
-    setFormData((prev) => ({
-      ...prev,
-      latitude: coords.lat,
-      longitude: coords.lon,
-    }));
+    } catch { showMsg('Hiba törlés közben'); setDeleteDialog({ open: false, id: null }); }
   };
 
   const handleDownloadPdf = async (station) => {
     try {
       const docPdf = new jsPDF({ unit: 'mm', format: 'a4' });
       const qrValue = getQrValue(station);
-      const qrUrl = getQrImageUrl(qrValue, 220);
-      const qrData = await fetchDataUrl(qrUrl);
-
+      const qrData = await fetchDataUrl(getQrImageUrl(qrValue, 220));
       docPdf.setFont('helvetica', 'bold');
       docPdf.setFontSize(18);
-      docPdf.text(station.name || 'Allomas', 20, 20);
-
+      docPdf.text(station.name || 'Állomás', 20, 20);
       docPdf.setFont('helvetica', 'normal');
       docPdf.setFontSize(12);
-      const coordText = `Koordinata: ${station.latitude?.toFixed(5)}, ${station.longitude?.toFixed(5)}`;
-      docPdf.text(coordText, 20, 30);
-      docPdf.text(`Tura: ${getTripName(station.tripId)}`, 20, 38);
-
-      if (station.description) {
-        docPdf.setFontSize(11);
-        const lines = docPdf.splitTextToSize(station.description, 170);
-        docPdf.text(lines, 20, 48);
-      }
-
+      docPdf.text(`Koordináta: ${station.latitude?.toFixed(5)}, ${station.longitude?.toFixed(5)}`, 20, 30);
+      docPdf.text(`Túra: ${getTripName(station.tripId) || 'Nincs'}`, 20, 38);
+      if (station.description) { const lines = docPdf.splitTextToSize(station.description, 170); docPdf.text(lines, 20, 48); }
       docPdf.addImage(qrData, 'PNG', 20, 78, 60, 60);
       docPdf.setFontSize(10);
       docPdf.text(`QR: ${qrValue}`, 20, 143);
-
       if (station.imageUrl) {
-        try {
-          const imageData = await fetchDataUrl(station.imageUrl);
-          docPdf.addImage(imageData, 'JPEG', 100, 78, 90, 60);
-        } catch (err) {
-          console.error('Kep PDF-be tetele sikertelen:', err);
-        }
+        try { const imgData = await fetchDataUrl(station.imageUrl); docPdf.addImage(imgData, 'JPEG', 100, 78, 90, 60); } catch {}
       }
-
-      const fileName = `${(station.name || 'allomas').replace(/\s+/g, '_')}_QR.pdf`;
-      docPdf.save(fileName);
-    } catch (error) {
-      console.error('PDF letoltes hiba:', error);
-      showMsg('Hiba a PDF letoltese kozben');
-    }
+      docPdf.save(`${(station.name || 'allomas').replace(/\s+/g, '_')}_QR.pdf`);
+    } catch { showMsg('Hiba PDF letöltésekor'); }
   };
 
-  if (loading) {
-    return (
-      <div className="stations-shell">
-        <p className="empty-state">Betoltes...</p>
-      </div>
-    );
-  }
+  const sections = ['🏷️ Alap adatok', '📍 Helyszín', '📖 Tartalom', '🔓 Feloldható info', '🖼️ Média'];
+
+  if (loading) return <div className="stations-shell"><p className="empty-state">Betöltés...</p></div>;
 
   return (
     <div className="stations-shell">
       <div className="stations-hero">
         <div className="hero-copy">
-          <p className="hero-kicker">Allomas studio</p>
-          <h1>Allomasok</h1>
-          <p className="hero-subtitle">Helyszinek, leirasok es QR kodok egy helyen.</p>
+          <p className="hero-kicker">Állomás studio</p>
+          <h1>Állomások</h1>
+          <p className="hero-subtitle">Helyszínek, leírások és QR kódok egy helyen.</p>
         </div>
         <div className="hero-actions">
-          <button onClick={handleAdd} className="btn-primary">+ Uj allomas</button>
+          <button onClick={handleAdd} className="btn-primary">+ Új állomás</button>
         </div>
       </div>
 
       <div className="stations-grid">
         {stations.map((station) => {
           const qrValue = getQrValue(station);
-          const qrUrl = getQrImageUrl(qrValue);
+          const tripName = getTripName(station.tripId);
           return (
             <div key={station.id} className="station-card">
               <div className="station-media">
-                {station.imageUrl ? (
-                  <img src={station.imageUrl} alt={station.name} loading="lazy" />
-                ) : (
-                  <div className="station-placeholder">Nincs kep</div>
-                )}
+                {station.imageUrl ? <img src={station.imageUrl} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
                 <span className="station-points">⭐ {station.points} pont</span>
               </div>
               <div className="station-body">
                 <div className="station-title">
                   <h3>{station.name}</h3>
-                  <span className="station-coords">📍 {station.latitude?.toFixed(4)}, {station.longitude?.toFixed(4)}</span>
+                  {tripName && <span className="trip-badge">🗺️ {tripName}</span>}
                 </div>
-                <p className="station-desc">{station.description || 'Nincs leiras megadva.'}</p>
-                <p className="station-desc"><strong>Tura:</strong> {getTripName(station.tripId)}</p>
+                <p className="station-desc">{station.description || 'Nincs leírás megadva.'}</p>
+                {station.funFact && <p className="station-fun-fact">💡 {station.funFact}</p>}
                 <div className="station-qr">
                   <div className="qr-meta">
-                    <span className="qr-label">QR: {qrValue}</span>
-                    <button className="qr-print" type="button" onClick={() => handleDownloadPdf(station)}>Nyomtatas</button>
+                    <span className="qr-label">QR: {qrValue.substring(0, 16)}{qrValue.length > 16 ? '…' : ''}</span>
+                    <button className="qr-print" type="button" onClick={() => handleDownloadPdf(station)}>🖨️ Nyomtatás</button>
                   </div>
-                  <img src={qrUrl} alt={`QR ${station.name}`} />
+                  <img src={getQrImageUrl(qrValue)} alt={`QR ${station.name}`} />
                 </div>
                 <div className="station-actions">
-                  <button onClick={() => handleEdit(station)} className="btn-edit">Szerkesztes</button>
-                  <button onClick={() => handleDelete(station.id)} className="btn-delete">Torles</button>
+                  <button onClick={() => handleEdit(station)} className="btn-edit">✏️ Szerkesztés</button>
+                  <button onClick={() => setDeleteDialog({ open: true, id: station.id })} className="btn-delete">🗑️ Törlés</button>
                 </div>
               </div>
             </div>
           );
         })}
+        {stations.length === 0 && <p className="empty-state">Még nincsenek állomások. Adj hozzá egyet!</p>}
       </div>
 
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2>{editingId ? 'Allomas szerkesztese' : 'Uj allomas'}</h2>
-
-            <div className="form-group">
-              <label>Nev *</label>
-              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
+          <div className="modal station-modal">
+            <div className="modal-header">
+              <h2>{editingId ? '✏️ Állomás szerkesztése' : '➕ Új állomás'}</h2>
+              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
             </div>
 
-            <div className="form-group">
-              <label>Leiras</label>
-              <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+            <div className="section-tabs">
+              {sections.map((sec, i) => (
+                <button key={i} className={`section-tab${activeSection === i ? ' active' : ''}`} onClick={() => setActiveSection(i)}>{sec}</button>
+              ))}
             </div>
 
-            <div className="form-group">
-              <label>Koordinata (terkepen valaszd ki)</label>
-              <div className="map-picker">
-                {loadError ? (
-                  <div className="map-hint">Google Maps hiba. Ellenorizd az API kulcsot.</div>
-                ) : !isLoaded ? (
-                  <div className="map-hint">Terkep betoltese...</div>
-                ) : (
-                  <MapPicker value={{ lat: formData.latitude, lon: formData.longitude }} onChange={handleMapPick} />
-                )}
+            <div className="modal-body">
+              {activeSection === 0 && (
+                <div className="form-section">
+                  <div className="field-group">
+                    <label>📌 Állomás neve <span className="required">*</span></label>
+                    <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="pl. Kinizsi vár kapuja" />
+                  </div>
+                  <div className="field-row">
+                    <div className="field-group">
+                      <label>⭐ Pont érték</label>
+                      <input type="number" min="1" max="100" value={formData.points} onChange={(e) => setFormData({ ...formData, points: e.target.value })} />
+                      <span className="field-hint">Az állomás beolvasásával szerzett pontok</span>
+                    </div>
+                    <div className="field-group">
+                      <label>🗺️ Túrához rendelés</label>
+                      <select value={formData.tripId || ''} onChange={(e) => setFormData({ ...formData, tripId: e.target.value })}>
+                        <option value="">— Nincs túrához rendelve —</option>
+                        {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.name || trip.id}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="field-group">
+                    <label>🔑 QR kód (egyedi azonosító)</label>
+                    <input type="text" value={formData.qrCode} onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })} placeholder="Ha üres, az állomás ID lesz használva" />
+                    <span className="field-hint">Az állomásnál kihelyezett QR kódon lévő szöveg</span>
+                  </div>
+                </div>
+              )}
+
+              {activeSection === 1 && (
+                <div className="form-section">
+                  <div className="field-group">
+                    <label>🗺️ Helyszín kijelölése <span className="required">*</span></label>
+                    <p className="field-hint map-hint-top">Kattints a térképen az állomás pontos helyére</p>
+                    {loadError ? <div className="map-error">Google Maps hiba – ellenőrizd az API kulcsot.</div>
+                      : !isLoaded ? <div className="map-loading">Térkép betöltése...</div>
+                      : <MapPicker value={{ lat: formData.latitude, lon: formData.longitude }} onChange={(c) => setFormData({ ...formData, latitude: c.lat, longitude: c.lon })} />}
+                    {formData.latitude && formData.longitude
+                      ? <p className="coords-display">✅ Kiválasztva: {formData.latitude.toFixed(5)}, {formData.longitude.toFixed(5)}</p>
+                      : <p className="coords-display warn">⚠️ Még nincs koordináta kiválasztva</p>}
+                  </div>
+                </div>
+              )}
+
+              {activeSection === 2 && (
+                <div className="form-section">
+                  <div className="field-group">
+                    <label>📝 Rövid leírás</label>
+                    <textarea rows="3" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Rövid bemutatás az állomásról..." />
+                    <span className="field-hint">Ez jelenik meg az állomást listázó nézetekben</span>
+                  </div>
+                  <div className="field-group">
+                    <label>💡 Érdekesség</label>
+                    <textarea rows="2" value={formData.funFact} onChange={(e) => setFormData({ ...formData, funFact: e.target.value })} placeholder="Egy érdekes ténye az állomásról..." />
+                    <span className="field-hint">Egy soros "did you know" jellegű mondat</span>
+                  </div>
+                </div>
+              )}
+
+              {activeSection === 3 && (
+                <div className="form-section">
+                  <div className="unlock-info-box">
+                    <span className="unlock-icon">🔓</span>
+                    <div>
+                      <strong>Feloldható tartalom</strong>
+                      <p>Ezt az információt a látogató csak akkor látja, ha beolvassa az állomás QR kódját!</p>
+                    </div>
+                  </div>
+                  <div className="field-group">
+                    <label>📖 Feloldott szöveg / történet</label>
+                    <textarea rows="5" value={formData.unlockContent} onChange={(e) => setFormData({ ...formData, unlockContent: e.target.value })} placeholder="Az állomás részletes leírása, helytörténet, érdekességek – ami beolvasáskor jelenik meg..." />
+                    <span className="field-hint">Hosszabb szöveg, ami a QR beolvasása után jelenik meg a telefonon</span>
+                  </div>
+                  <div className="field-group">
+                    <label>ℹ️ Extra információ</label>
+                    <textarea rows="2" value={formData.extraInfo} onChange={(e) => setFormData({ ...formData, extraInfo: e.target.value })} placeholder="Nyitvatartás, belépési díj, megközelítés..." />
+                  </div>
+                </div>
+              )}
+
+              {activeSection === 4 && (
+                <div className="form-section">
+                  <div className="field-group">
+                    <label>🖼️ Borítókép feltöltése</label>
+                    <div className="upload-zone">
+                      <input type="file" id="img-upload" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} style={{ display: 'none' }} />
+                      <label htmlFor="img-upload" className="upload-btn">{uploading ? '⏳ Feltöltés...' : '📁 Kép kiválasztása'}</label>
+                      {formData.imageUrl && !uploading && <img className="image-preview" src={formData.imageUrl} alt="Előnézet" loading="lazy" />}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <div className="section-nav">
+                {activeSection > 0 && <button className="btn-nav" onClick={() => setActiveSection(activeSection - 1)}>← Előző</button>}
+                {activeSection < sections.length - 1 && <button className="btn-nav primary" onClick={() => setActiveSection(activeSection + 1)}>Következő →</button>}
               </div>
-              <p className="map-hint">
-                {formData.latitude && formData.longitude
-                  ? `Kivalasztva: ${formData.latitude.toFixed(5)}, ${formData.longitude.toFixed(5)}`
-                  : 'Kattints a terkepre a koordinata beallitashoz.'}
-              </p>
-            </div>
-
-            <div className="form-group">
-              <label>Turahoz rendeles</label>
-              <select
-                value={formData.tripId || ''}
-                onChange={(e) => setFormData({ ...formData, tripId: e.target.value })}
-              >
-                <option value="">Nincs turahoz rendelve</option>
-                {trips.map((trip) => (
-                  <option key={trip.id} value={trip.id}>{trip.name || trip.id}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label>Pontok</label>
-              <input type="number" value={formData.points} onChange={(e) => setFormData({ ...formData, points: e.target.value })} />
-            </div>
-
-            <div className="form-group">
-              <label>Kep feltoltese (opcionalis)</label>
-              <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} />
-              {uploading && <p className="upload-note">Feltoltes...</p>}
-              {formData.imageUrl && !uploading && <img className="image-preview" src={formData.imageUrl} alt="Elonezet" loading="lazy" />}
-            </div>
-
-            <div className="form-group">
-              <label>QR kod (opcionalis)</label>
-              <input
-                type="text"
-                value={formData.qrCode}
-                onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })}
-                placeholder="Ha ures, az allomas ID lesz hasznalva"
-              />
-            </div>
-
-            <div className="modal-actions">
-              <button onClick={handleSave} className="btn-save">Mentes</button>
-              <button onClick={() => setShowModal(false)} className="btn-cancel">Megsem</button>
+              <div className="footer-actions">
+                <button onClick={() => setShowModal(false)} className="btn-cancel">Mégse</button>
+                <button onClick={handleSave} className="btn-save">💾 Mentés</button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      <ConfirmDialog
-        open={deleteDialog.open}
-        title="Allomas torlese"
-        message="Biztosan torold ezt az allomast?"
-        confirmText="Torles"
-        onClose={() => setDeleteDialog({ open: false, id: null })}
-        onConfirm={confirmDelete}
-      />
-
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={4000}
-        onClose={() => setSnack((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))}>
-          {snack.msg}
-        </Alert>
+      <ConfirmDialog open={deleteDialog.open} title="Állomás törlése" message="Biztosan törlöd ezt az állomást?" confirmText="Törlés"
+        onClose={() => setDeleteDialog({ open: false, id: null })} onConfirm={confirmDelete} />
+      <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack((s) => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))}>{snack.msg}</Alert>
       </Snackbar>
     </div>
   );

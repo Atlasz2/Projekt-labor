@@ -371,6 +371,24 @@ function Trips() {
     });
   };
 
+  const handleMoveStation = async (station, tripStations, idx, dir) => {
+    const swapWith = tripStations[idx + dir];
+    if (!swapWith) return;
+    const aIdx = station.orderIndex ?? idx;
+    const bIdx = swapWith.orderIndex ?? (idx + dir);
+    try {
+      await Promise.all([
+        updateDoc(doc(db, "stations", station.id), { orderIndex: bIdx }),
+        updateDoc(doc(db, "stations", swapWith.id), { orderIndex: aIdx }),
+      ]);
+      showMsg("Sorrend frissítve!", "success");
+      await fetchData();
+    } catch (err) {
+      showMsg("Hiba a sorrend mentésekor");
+      console.error(err);
+    }
+  };
+
   const handleDownloadPdf = async (station, tripName) => {
     try {
       const docPdf = new jsPDF({ unit: "mm", format: "a4" });
@@ -593,6 +611,20 @@ function Trips() {
                               const qrUrl = getQrImageUrl(qrValue);
                               return (
                                 <li key={station.id} className="station-item">
+                                  <div className="station-order-btns">
+                                    <button
+                                      className="btn-order"
+                                      disabled={idx === 0}
+                                      onClick={() => handleMoveStation(station, tripStations, idx, -1)}
+                                      title="Feljebb"
+                                    >▲</button>
+                                    <button
+                                      className="btn-order"
+                                      disabled={idx === tripStations.length - 1}
+                                      onClick={() => handleMoveStation(station, tripStations, idx, 1)}
+                                      title="Lejjebb"
+                                    >▼</button>
+                                  </div>
                                   <div className="station-number">{idx + 1}</div>
                                   <div className="station-info">
                                     <strong>{station.name}</strong>

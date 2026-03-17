@@ -235,6 +235,10 @@ class _CameraScreenState extends State<CameraScreen> {
           'name': (data['name'] ?? 'Ismeretlen ├íllom├ís').toString(),
           'points': _safeInt(data['points'], fallback: 10),
           'tripId': (data['tripId'] ?? '').toString(),
+          'description': (data['description'] ?? '').toString(),
+          'funFact': (data['funFact'] ?? '').toString(),
+          'unlockContent': (data['unlockContent'] ?? '').toString(),
+          'extraInfo': (data['extraInfo'] ?? '').toString(),
         };
       }
     }
@@ -249,6 +253,10 @@ class _CameraScreenState extends State<CameraScreen> {
           'name': (data['name'] ?? 'Ismeretlen ├íllom├ís').toString(),
           'points': _safeInt(data['points'], fallback: 10),
           'tripId': (data['tripId'] ?? '').toString(),
+          'description': (data['description'] ?? '').toString(),
+          'funFact': (data['funFact'] ?? '').toString(),
+          'unlockContent': (data['unlockContent'] ?? '').toString(),
+          'extraInfo': (data['extraInfo'] ?? '').toString(),
         };
       }
     }
@@ -396,6 +404,24 @@ class _CameraScreenState extends State<CameraScreen> {
         subtitle: name,
         points: points,
       );
+
+      // Show unlocked station content after overlay closes
+      if (kind == 'station') {
+        final unlockContent = (target['unlockContent'] ?? '') as String;
+        final funFact = (target['funFact'] ?? '') as String;
+        final stationDesc = (target['description'] ?? '') as String;
+        if (unlockContent.isNotEmpty || funFact.isNotEmpty || stationDesc.isNotEmpty) {
+          Future.delayed(const Duration(milliseconds: 1700), () {
+            if (!mounted) return;
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => _UnlockSheet(target: target),
+            );
+          });
+        }
+      }
 
       final afterStations = kind == 'station' ? beforeStations + 1 : beforeStations;
       final afterEvents = kind == 'event' ? beforeEvents + 1 : beforeEvents;
@@ -762,3 +788,221 @@ class _CameraScreenState extends State<CameraScreen> {
 }
 
 
+
+
+class _UnlockSheet extends StatelessWidget {
+  final Map<String, dynamic> target;
+  const _UnlockSheet({required this.target});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (target['name'] ?? '') as String;
+    final pts = target['points'] as int? ?? 0;
+    final desc = (target['description'] ?? '') as String;
+    final funFact = (target['funFact'] ?? '') as String;
+    final unlockContent = (target['unlockContent'] ?? '') as String;
+    final extraInfo = (target['extraInfo'] ?? '') as String;
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (_, sc) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 2),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 16, 14, 16),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF4f46e5), Color(0xFF7c3aed)],
+                ),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Row(
+                children: [
+                  const Text('\u{1F513}', style: TextStyle(fontSize: 26)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Feloldott tartalom!',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '+$pts pont',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                controller: sc,
+                padding: const EdgeInsets.all(20),
+                children: [
+                  if (desc.isNotEmpty) ...[
+                    const Text(
+                      '\u{1F4D6} Le\u00EDr\u00E1s',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      desc,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF4b5563),
+                        height: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (funFact.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFeff6ff),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF93c5fd)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('\u{1F4A1}', style: TextStyle(fontSize: 20)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  '\u00C9rdekess\u00E9g',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1d4ed8),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  funFact,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF1e40af),
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (unlockContent.isNotEmpty) ...[
+                    const Text(
+                      '\u{1F3DB} R\u00E9szletes t\u00F6rt\u00E9net',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      unlockContent,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF4b5563),
+                        height: 1.7,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (extraInfo.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFf0fdf4),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF86efac)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text('\u2139\uFE0F', style: TextStyle(fontSize: 18)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              extraInfo,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF166534),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4f46e5),
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Bez\u00E1r\u00E1s'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
