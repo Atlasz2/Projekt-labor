@@ -374,12 +374,17 @@ function Trips() {
   const handleMoveStation = async (station, tripStations, idx, dir) => {
     const swapWith = tripStations[idx + dir];
     if (!swapWith) return;
-    const aIdx = station.orderIndex ?? idx;
-    const bIdx = swapWith.orderIndex ?? (idx + dir);
     try {
+      // First normalise every station in this trip to sequential orderIndex values
+      // so we always work with clean integers, not nulls
+      const normUpdates = tripStations.map((s, i) =>
+        updateDoc(doc(db, "stations", s.id), { orderIndex: i })
+      );
+      await Promise.all(normUpdates);
+      // Now swap the two target stations
       await Promise.all([
-        updateDoc(doc(db, "stations", station.id), { orderIndex: bIdx }),
-        updateDoc(doc(db, "stations", swapWith.id), { orderIndex: aIdx }),
+        updateDoc(doc(db, "stations", station.id), { orderIndex: idx + dir }),
+        updateDoc(doc(db, "stations", swapWith.id), { orderIndex: idx }),
       ]);
       showMsg("Sorrend frissítve!", "success");
       await fetchData();

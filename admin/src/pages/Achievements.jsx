@@ -1,215 +1,191 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { db } from "../firebaseConfig";
 import {
-  collection, collectionGroup, deleteDoc, doc,
+  collection, deleteDoc, doc,
   getDocs, serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
 import "../styles/Achievements.css";
 
 const DEFAULTS = [
-  { id: "first_steps",   name: "Első lépések",   desc: "Olvass be 1 QR-kódot",              icon: "👣", color: "#22c55e" },
-  { id: "explorer",      name: "Felfedező",       desc: "Látogass meg 3 állomást",            icon: "🧭", color: "#3b82f6" },
-  { id: "trail_hero",    name: "Túrahős",          desc: "Gyűjts össze 140 pontot",            icon: "🏃", color: "#f97316" },
-  { id: "event_hunter",  name: "Eseményvadász",    desc: "Vegyél részt 1 eseményen",           icon: "🎉", color: "#ec4899" },
-  { id: "local_legend",  name: "Helyi legenda",    desc: "Teljesíts egy teljes túrát",         icon: "👑", color: "#a855f7" },
+  { id: "first_steps",  name: "Elso lepesek",  description: "Olvass be 1 QR-kodot",         icon: "👣", color: "#22c55e" },
+  { id: "explorer",     name: "Felfedezo",      description: "Latogass meg 3 allomast",       icon: "🧭", color: "#3b82f6" },
+  { id: "trail_hero",   name: "Turahos",        description: "Gyujts ossze 140 pontot",       icon: "🏃", color: "#f97316" },
+  { id: "event_hunter", name: "Esemenyivadasz", description: "Vegyel reszt 1 esemeryen",      icon: "🎉", color: "#ec4899" },
+  { id: "local_legend", name: "Helyi legenda",  description: "Teljesits egy teljes turat",    icon: "👑", color: "#a855f7" },
 ];
 
-const EMPTY_FORM = { name: "", desc: "", condition: "", icon: "🏆", color: "#667EEA" };
+const EMPTY = { name: "", description: "", icon: "🏆", color: "#667EEA" };
+const ICON_PRESETS = ["🏆","🥇","👣","🧭","🏃","🎉","👑","⭐","🔥","💎","🌟","🎯","🗺️","🏅","🎖️"];
+const COLOR_PRESETS = ["#22c55e","#3b82f6","#f97316","#ec4899","#a855f7","#667EEA","#06b6d4","#eab308","#ef4444","#14b8a6"];
 
 export default function Achievements() {
   const [loading, setLoading] = useState(true);
   const [achievements, setAchievements] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [unlockedByUser, setUnlockedByUser] = useState(new Map());
-  const [userFilter, setUserFilter] = useState("");
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(EMPTY);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [achSnap, userSnap, unlockedSnap] = await Promise.all([
-        getDocs(collection(db, "achievements")),
-        getDocs(collection(db, "users")),
-        getDocs(collectionGroup(db, "unlocked_achievements")),
-      ]);
-
-      let achList = achSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      if (achList.length === 0) {
-        await Promise.all(DEFAULTS.map((r) => setDoc(doc(db, "achievements", r.id), {
-          name: r.name, description: r.desc, condition: "", icon: r.icon, color: r.color,
-          unlockedCount: 0, createdAt: serverTimestamp(),
-        })));
+      const snap = await getDocs(collection(db, "achievements"));
+      let list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (list.length === 0) {
+        await Promise.all(DEFAULTS.map((r) =>
+          setDoc(doc(db, "achievements", r.id), {
+            name: r.name, description: r.description, icon: r.icon, color: r.color,
+            unlockedCount: 0, createdAt: serverTimestamp(),
+          })
+        ));
         const reload = await getDocs(collection(db, "achievements"));
-        achList = reload.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list = reload.docs.map((d) => ({ id: d.id, ...d.data() }));
       }
-
-      const map = new Map();
-      unlockedSnap.docs.forEach((d) => {
-        const uid = d.ref.path.split("/")[1];
-        if (!map.has(uid)) map.set(uid, new Set());
-        map.get(uid).add(d.id);
-      });
-
-      setAchievements(achList);
-      setUsers(userSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setUnlockedByUser(map);
+      setAchievements(list);
     } finally { setLoading(false); }
   };
 
-  const totalUnlocks = useMemo(() => [...unlockedByUser.values()].reduce((s, set) => s + set.size, 0), [unlockedByUser]);
-  const activeUsers = useMemo(() => [...unlockedByUser.values()].filter((s) => s.size > 0).length, [unlockedByUser]);
+  const openCreate = () => { setEditing(null); setForm(EMPTY); setShowForm(true); };
+  const openEdit = (a) => {
+    setEditing(a.id);
+    setForm({ name: a.name || "", description: a.description || "", icon: a.icon || "🏆", color: a.color || "#667EEA" });
+    setShowForm(true);
+  };
 
-  const leaderboard = useMemo(() =>
-    users.map((u) => ({ id: u.id, name: u.displayName || u.name || u.email || "Ismeretlen", count: unlockedByUser.get(u.id)?.size || 0 }))
-      .filter((u) => u.count > 0).sort((a, b) => b.count - a.count).slice(0, 10),
-  [users, unlockedByUser]);
-
-  const filteredUsers = useMemo(() => {
-    const q = userFilter.trim().toLowerCase();
-    if (!q) return [];
-    return users.filter((u) => (u.displayName || u.name || "").toLowerCase().includes(q) || (u.email || "").toLowerCase().includes(q));
-  }, [users, userFilter]);
-
-  const openCreate = () => { setEditing(null); setForm(EMPTY_FORM); setShowForm(true); };
-  const openEdit = (a) => { setEditing(a.id); setForm({ name: a.name || "", desc: a.description || "", condition: a.condition || "", icon: a.icon || "🏆", color: a.color || "#667EEA" }); setShowForm(true); };
-
-  const saveAch = async () => {
+  const handleSave = async () => {
     if (!form.name.trim()) return;
-    const payload = { name: form.name.trim(), description: form.desc.trim(), condition: form.condition.trim(), icon: form.icon || "🏆", color: form.color || "#667EEA" };
-    if (editing) { await updateDoc(doc(db, "achievements", editing), payload); }
-    else { await setDoc(doc(db, "achievements", crypto.randomUUID()), { ...payload, unlockedCount: 0, createdAt: serverTimestamp() }); }
-    setShowForm(false);
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        icon: form.icon || "🏆",
+        color: form.color || "#667EEA",
+      };
+      if (editing) {
+        await updateDoc(doc(db, "achievements", editing), payload);
+      } else {
+        await setDoc(doc(db, "achievements", crypto.randomUUID()), {
+          ...payload, unlockedCount: 0, createdAt: serverTimestamp(),
+        });
+      }
+      setShowForm(false);
+      await loadAll();
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Biztosan torolni szeretned ezt az achievementet?")) return;
+    await deleteDoc(doc(db, "achievements", id));
     await loadAll();
   };
 
-  const deleteAch = async (id) => { if (window.confirm("Törlöd ezt az achievementet?")) { await deleteDoc(doc(db, "achievements", id)); await loadAll(); } };
+  const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
-  if (loading) return <div className="ach-page"><div className="ach-loading">⏳ Betöltés...</div></div>;
+  if (loading) return <div className="ach-wrap"><div className="ach-loading">Betoltes...</div></div>;
 
   return (
-    <div className="ach-page">
-      <div className="ach-hero">
+    <div className="ach-wrap">
+      <div className="ach-header">
         <div>
-          <h1>🏆 Achievement rendszer</h1>
-          <p>Feloldott jutalmak kezelése és áttekintése</p>
+          <h1>🏆 Jutalmak</h1>
+          <p className="ach-header-sub">A latogatoknak automatikusan jelenik meg, ha teljesitik a feltetelt.</p>
         </div>
-        <button className="ach-btn-add" onClick={openCreate}>+ Új achievement</button>
+        <button className="ach-add-btn" onClick={openCreate}>+ Uj jutalom</button>
       </div>
 
-      {/* Stats row */}
-      <div className="ach-stats">
-        <div className="ach-stat"><span className="stat-num">{achievements.length}</span><span className="stat-lbl">Achievement típus</span></div>
-        <div className="ach-stat"><span className="stat-num">{totalUnlocks}</span><span className="stat-lbl">Összes feloldás</span></div>
-        <div className="ach-stat"><span className="stat-num">{activeUsers}</span><span className="stat-lbl">Aktív játékos</span></div>
-        <div className="ach-stat"><span className="stat-num">{users.length}</span><span className="stat-lbl">Összes felhasználó</span></div>
-      </div>
-
-      {/* Achievement cards */}
-      <section className="ach-section">
-        <h2>🎖️ Achievement típusok</h2>
-        <div className="ach-cards">
-          {achievements.map((a) => {
-            const unlockCount = [...unlockedByUser.values()].filter((s) => s.has(a.id)).length;
-            const pct = users.length > 0 ? Math.round((unlockCount / users.length) * 100) : 0;
-            return (
-              <div key={a.id} className="ach-card" style={{ "--ach-color": a.color || "#667EEA" }}>
-                <div className="ach-card-top">
-                  <span className="ach-card-icon">{a.icon || "🏆"}</span>
-                  <div className="ach-card-actions">
-                    <button className="ach-btn-sm edit" onClick={() => openEdit(a)}>✏️</button>
-                    <button className="ach-btn-sm del" onClick={() => deleteAch(a.id)}>🗑️</button>
-                  </div>
-                </div>
-                <h3 className="ach-card-name">{a.name}</h3>
-                <p className="ach-card-desc">{a.description}</p>
-                {a.condition && <p className="ach-card-cond">📋 {a.condition}</p>}
-                <div className="ach-progress">
-                  <div className="ach-progress-bar" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="ach-unlock-lbl">{unlockCount} felhasználó feloldotta ({pct}%)</span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Leaderboard */}
-      <section className="ach-section">
-        <h2>🥇 Top játékosok</h2>
-        {leaderboard.length === 0 ? <p className="ach-empty">Még senki nem oldott fel achievementet.</p> : (
-          <div className="ach-leaderboard">
-            {leaderboard.map((row, i) => (
-              <div key={row.id} className="ach-lb-item">
-                <span className={`ach-rank rank-${i + 1}`}>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}</span>
-                <span className="ach-lb-name">{row.name}</span>
-                <div className="ach-lb-badges">
-                  {achievements.map((a) => (
-                    <span key={a.id} className={`ach-badge${unlockedByUser.get(row.id)?.has(a.id) ? " unlocked" : " locked"}`} title={a.name} style={{ "--ach-color": a.color }}>
-                      {a.icon}
-                    </span>
-                  ))}
-                </div>
-                <span className="ach-lb-count">{row.count}/{achievements.length}</span>
-              </div>
-            ))}
+      <div className="ach-list">
+        {achievements.length === 0 && (
+          <div className="ach-empty-state">
+            <div className="ach-empty-icon">🏆</div>
+            <p>Meg nincsenek jutalmak. Adj hozza az elsoket!</p>
           </div>
         )}
-      </section>
-
-      {/* User search */}
-      <section className="ach-section">
-        <h2>🔍 Felhasználó keresése</h2>
-        <input className="ach-search" value={userFilter} onChange={(e) => setUserFilter(e.target.value)} placeholder="Keresés névben vagy emailben..." />
-        {userFilter && filteredUsers.length === 0 && <p className="ach-empty">Nincs találat.</p>}
-        {filteredUsers.map((u) => {
-          const set = unlockedByUser.get(u.id) || new Set();
-          return (
-            <div key={u.id} className="ach-user-row">
-              <div className="ach-user-info">
-                <strong>{u.displayName || u.name || "Ismeretlen"}</strong>
-                <span>{u.email}</span>
-              </div>
-              <div className="ach-lb-badges">
-                {achievements.map((a) => (
-                  <span key={a.id} className={`ach-badge${set.has(a.id) ? " unlocked" : " locked"}`} title={a.name} style={{ "--ach-color": a.color }}>{a.icon}</span>
-                ))}
-              </div>
-              <span className="ach-lb-count">{set.size}/{achievements.length}</span>
+        {achievements.map((a) => (
+          <div key={a.id} className="ach-row" style={{ "--ac": a.color || "#667EEA" }}>
+            <div className="ach-row-icon">{a.icon || "🏆"}</div>
+            <div className="ach-row-body">
+              <span className="ach-row-name">{a.name}</span>
+              <span className="ach-row-desc">{a.description}</span>
             </div>
-          );
-        })}
-      </section>
+            <div className="ach-row-actions">
+              <button className="ach-row-btn edit" onClick={() => openEdit(a)} title="Szerkesztes">✏️ Szerkesztes</button>
+              <button className="ach-row-btn del" onClick={() => handleDelete(a.id)} title="Torles">🗑️</button>
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {/* Form modal */}
       {showForm && (
-        <div className="ach-modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowForm(false)}>
+        <div className="ach-overlay" onClick={(e) => e.target === e.currentTarget && setShowForm(false)}>
           <div className="ach-modal">
             <div className="ach-modal-header">
-              <h3>{editing ? "Achievement szerkesztése" : "Új achievement hozzáadása"}</h3>
-              <button className="ach-modal-close" onClick={() => setShowForm(false)}>✕</button>
+              <h2>{editing ? "Jutalom szerkesztese" : "Uj jutalom hozzaadasa"}</h2>
+              <button className="ach-modal-x" onClick={() => setShowForm(false)}>✕</button>
             </div>
+
             <div className="ach-modal-body">
-              <label>Ikon (emoji)</label>
-              <input value={form.icon} onChange={(e) => setForm((p) => ({ ...p, icon: e.target.value }))} placeholder="🏆" />
-              <label>Megnevezés *</label>
-              <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="pl. Felfedező" />
-              <label>Leírás</label>
-              <textarea rows="2" value={form.desc} onChange={(e) => setForm((p) => ({ ...p, desc: e.target.value }))} placeholder="Mit kell teljesíteni?" />
-              <label>Feltétel (technikai)</label>
-              <input value={form.condition} onChange={(e) => setForm((p) => ({ ...p, condition: e.target.value }))} placeholder="pl. stations >= 3" />
-              <label>Szín</label>
-              <div className="color-row">
-                <input type="color" value={form.color} onChange={(e) => setForm((p) => ({ ...p, color: e.target.value }))} />
-                <input type="text" value={form.color} onChange={(e) => setForm((p) => ({ ...p, color: e.target.value }))} placeholder="#667EEA" />
+              <label className="ach-label">Megnevezes *</label>
+              <input
+                className="ach-input"
+                value={form.name}
+                onChange={(e) => setField("name", e.target.value)}
+                placeholder="pl. Felfedezo"
+              />
+
+              <label className="ach-label">Mire kap a latogato ezt a jutalmot?</label>
+              <input
+                className="ach-input"
+                value={form.description}
+                onChange={(e) => setField("description", e.target.value)}
+                placeholder="pl. Beolvasott 3 QR-kodot"
+              />
+
+              <label className="ach-label">Ikon</label>
+              <div className="ach-icon-row">
+                {ICON_PRESETS.map((ic) => (
+                  <button
+                    key={ic}
+                    className={`ach-icon-btn${form.icon === ic ? " active" : ""}`}
+                    onClick={() => setField("icon", ic)}
+                    type="button"
+                  >{ic}</button>
+                ))}
+              </div>
+
+              <label className="ach-label">Szin</label>
+              <div className="ach-color-row">
+                {COLOR_PRESETS.map((c) => (
+                  <button
+                    key={c}
+                    className={`ach-color-btn${form.color === c ? " active" : ""}`}
+                    style={{ background: c }}
+                    onClick={() => setField("color", c)}
+                    type="button"
+                  />
+                ))}
+                <input
+                  type="color"
+                  className="ach-color-picker"
+                  value={form.color}
+                  onChange={(e) => setField("color", e.target.value)}
+                  title="Egyedi szin"
+                />
+              </div>
+
+              <div className="ach-preview">
+                <span className="ach-preview-icon" style={{ background: form.color }}>{form.icon}</span>
+                <span className="ach-preview-name">{form.name || "Jutalom neve"}</span>
               </div>
             </div>
+
             <div className="ach-modal-footer">
-              <button className="ach-btn-cancel" onClick={() => setShowForm(false)}>Mégse</button>
-              <button className="ach-btn-save" onClick={saveAch}>💾 Mentés</button>
+              <button className="ach-cancel-btn" onClick={() => setShowForm(false)}>Megse</button>
+              <button className="ach-save-btn" onClick={handleSave} disabled={saving || !form.name.trim()}>
+                {saving ? "Mentés..." : editing ? "Mentés" : "Hozzáadás"}
+              </button>
             </div>
           </div>
         </div>

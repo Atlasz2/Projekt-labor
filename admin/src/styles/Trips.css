@@ -484,16 +484,17 @@
 .station-item {
   display: flex;
   gap: 15px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border-left: 4px solid #3498db;
-  transition: all 0.2s ease;
+  padding: 16px 18px;
+  background: #ffffff;
+  border-radius: 12px;
+  border-left: 4px solid #3b82f6;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .station-item:hover {
-  background: #ecf0f1;
-  transform: translateX(5px);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.18);
+  transform: translateX(3px);
 }
 
 .station-number {
