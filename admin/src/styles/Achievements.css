@@ -356,3 +356,28 @@
 
 .ach-save-btn:hover:not(:disabled) { background: #4338ca; }
 .ach-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+
+/* condition badge on achievement row */
+.ach-row-cond {
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 2px 10px;
+  display: inline-block;
+  margin-top: 3px;
+  width: fit-content;
+}
+.ach-row-cond strong { color: #3b82f6; }
+
+/* select styling */
+.ach-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%236b7280' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
+}

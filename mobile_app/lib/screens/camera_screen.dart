@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,6 +20,9 @@ class _CameraScreenState extends State<CameraScreen> {
   final List<Map<String, dynamic>> _scanHistory = [];
   final Set<String> _completedStationIds = <String>{};
   final Set<String> _completedEventIds = <String>{};
+  List<Map<String, dynamic>> _achievements = [];
+  Set<String> _unlockedAchievementIds = <String>{};
+  Set<String> _completedTripIds = <String>{};
 
   bool _isLoading = true;
   bool _isProcessing = false;
@@ -169,6 +172,20 @@ class _CameraScreenState extends State<CameraScreen> {
       return bd.compareTo(ad);
     });
 
+    final achSnap = await _firestore.collection('achievements').get();
+    final achievements = achSnap.docs
+        .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
+        .toList();
+    final unlockedSnap = await _firestore
+        .collection('user_progress')
+        .doc(userId)
+        .collection('unlocked_achievements')
+        .get();
+    final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
+    final completedTripIds =
+        ((progressData['completedTripIds'] as List<dynamic>?) ?? [])
+            .map((e) => e.toString())
+            .toSet();
     setState(() {
       _completedStationIds
         ..clear()
@@ -180,6 +197,9 @@ class _CameraScreenState extends State<CameraScreen> {
         ..clear()
         ..addAll(history);
       _totalPoints = _safeInt(progressData['totalPoints']);
+      _achievements = achievements;
+      _unlockedAchievementIds = unlockedIds;
+      _completedTripIds = completedTripIds;
     });
   }
 
@@ -411,29 +431,16 @@ class _CameraScreenState extends State<CameraScreen> {
       final afterStations = kind == 'station' ? beforeStations + 1 : beforeStations;
       final afterEvents = kind == 'event' ? beforeEvents + 1 : beforeEvents;
       final afterPoints = beforePoints + points;
-      final unlocked = <Map<String, String>>[];
-      if (beforeStations < 1 && afterStations >= 1) unlocked.add({'title': 'Achievement: Elso lepesek', 'subtitle': 'Megszerezted az elso QR beolvasast!'});
-      if (beforeStations < 3 && afterStations >= 3) unlocked.add({'title': 'Achievement: Felfedezo', 'subtitle': 'Legalabb 3 allomast bejartal!'});
-      if (beforeEvents < 1 && afterEvents >= 1) unlocked.add({'title': 'Achievement: Esemenyvadasz', 'subtitle': 'Megvan az elso esemeny pecset!'});
-      if (beforePoints < 140 && afterPoints >= 140) unlocked.add({'title': 'Achievement: Turahos', 'subtitle': 'Elerte a 140 pontot!'});
       if (kind == 'station' && tripId.isNotEmpty) {
-        final tripCompletion = await _checkTripCompletion(tripId);
-        if (tripCompletion != null) {
-          unlocked.add({'title': 'Achievement: Tura teljesitve', 'subtitle': tripCompletion});
-        }
+        await _checkAndMarkTripComplete(tripId, user.uid);
       }
-      if (unlocked.isNotEmpty) {
-        final first = unlocked.first;
-        _showAchievement(first['title']!, first['subtitle']!);
-        await userProgressRef.set({
-          'pendingAchievementBanner': {
-            'title': first['title'],
-            'subtitle': first['subtitle'],
-            'createdAt': FieldValue.serverTimestamp(),
-          }
-        }, SetOptions(merge: true));
-      }
-      _showSnack(kind == 'event'
+      await _checkAndUnlockAchievements(
+        stations: afterStations,
+        events: afterEvents,
+        points: afterPoints,
+        uid: user.uid,
+      );
+            _showSnack(kind == 'event'
           ? 'Esemeny pecset megszerezve: $name (+$points pont)'
           : 'Sikeres beolvasas: $name (+$points pont)');
     } catch (e) {
@@ -505,28 +512,92 @@ class _CameraScreenState extends State<CameraScreen> {
     _lastScanAt = DateTime.now();
     _nextAllowedScanAt = DateTime.now().add(const Duration(milliseconds: 1200));
   }
-  Future<String?> _checkTripCompletion(String tripId) async {
+  Future<void> _checkAndMarkTripComplete(String tripId, String uid) async {
+    if (_completedTripIds.contains(tripId)) return;
     try {
-      final tripDoc = await _firestore.collection('trips').doc(tripId).get();
-      final tripData = tripDoc.data() ?? {};
-      final tripName = (tripData['name'] ?? 'Ismeretlen tura').toString();
+      await _firestore.collection('trips').doc(tripId).get();
 
       final stationsSnapshot = await _firestore
           .collection('stations')
           .where('tripId', isEqualTo: tripId)
           .get();
       final stationIds = stationsSnapshot.docs.map((d) => d.id).toSet();
-      if (stationIds.isEmpty) return null;
-
-      final completed = _completedStationIds;
-      final doneCount = stationIds.where((id) => completed.contains(id)).length;
+      if (stationIds.isEmpty) return;
+      final doneCount =
+          stationIds.where((id) => _completedStationIds.contains(id)).length;
       if (doneCount >= stationIds.length) {
-        return '$tripName utvonal teljesitve!';
+        _completedTripIds.add(tripId);
+        await _firestore.collection('user_progress').doc(uid).set({
+          'completedTripIds': FieldValue.arrayUnion([tripId]),
+        }, SetOptions(merge: true));
       }
-      return null;
-    } catch (_) {
-      return null;
+    } catch (_) {}
+  }
+
+  Future<void> _checkAndUnlockAchievements({
+    required int stations,
+    required int events,
+    required int points,
+    required String uid,
+  }) async {
+    final newlyUnlocked = <Map<String, String>>[];
+    for (final ach in _achievements) {
+      final id = (ach['id'] ?? '').toString();
+      if (id.isEmpty || _unlockedAchievementIds.contains(id)) continue;
+      final conditionType = (ach['conditionType'] ?? '').toString();
+      final conditionValue = ((ach['conditionValue'] as num?)?.toInt()) ?? 1;
+      final name = (ach['name'] ?? 'Achievement').toString();
+      final icon = (ach['icon'] ?? '').toString();
+      bool met = false;
+      String subtitle = '';
+      if (conditionType == 'station_count') {
+        met = stations >= conditionValue;
+        subtitle = '$conditionValue allomast latogatal meg!';
+      } else if (conditionType == 'event_count') {
+        met = events >= conditionValue;
+        subtitle = '$conditionValue esemeryen reszt vettel!';
+      } else if (conditionType == 'qr_count') {
+        met = (stations + events) >= conditionValue;
+        subtitle = 'Beolvastal $conditionValue QR-kodot!';
+      } else if (conditionType == 'points_threshold') {
+        met = points >= conditionValue;
+        subtitle = 'Elerte a $conditionValue pontot!';
+      } else if (conditionType == 'trip_complete') {
+        met = _completedTripIds.length >= conditionValue;
+        subtitle = '$conditionValue turat teljesitett!';
+      } else if (conditionType == 'top_n') {
+        try {
+          final snap = await _firestore
+              .collection('user_progress')
+              .orderBy('totalPoints', descending: true)
+              .limit(conditionValue)
+              .get();
+          met = snap.docs.any((d) => d.id == uid);
+          subtitle = 'Bekerultel a top $conditionValue-be!';
+        } catch (_) {}
+      }
+      if (met) {
+        newlyUnlocked.add({'id': id, 'title': '$icon $name', 'subtitle': subtitle});
+      }
     }
+    if (newlyUnlocked.isEmpty) return;
+    final userProgressRef = _firestore.collection('user_progress').doc(uid);
+    for (final ach in newlyUnlocked) {
+      _unlockedAchievementIds.add(ach['id']!);
+      await userProgressRef
+          .collection('unlocked_achievements')
+          .doc(ach['id'])
+          .set({'unlockedAt': FieldValue.serverTimestamp(), 'name': ach['title']});
+    }
+    final first = newlyUnlocked.first;
+    _showAchievement(first['title']!, first['subtitle']!);
+    await userProgressRef.set({
+      'pendingAchievementBanner': {
+        'title': first['title'],
+        'subtitle': first['subtitle'],
+        'createdAt': FieldValue.serverTimestamp(),
+      }
+    }, SetOptions(merge: true));
   }
 
   void _showAchievement(String title, String subtitle) {

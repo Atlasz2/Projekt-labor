@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { db } from "../firebaseConfig";
 import {
   addDoc, collection, deleteDoc, doc,
@@ -6,15 +6,27 @@ import {
 } from "firebase/firestore";
 import "../styles/Achievements.css";
 
-const DEFAULTS = [
-  { id: "first_steps",  name: "Elso lepesek",  description: "Olvass be 1 QR-kodot",         icon: "👣", color: "#22c55e" },
-  { id: "explorer",     name: "Felfedezo",      description: "Latogass meg 3 allomast",       icon: "🧭", color: "#3b82f6" },
-  { id: "trail_hero",   name: "Turahos",        description: "Gyujts ossze 140 pontot",       icon: "🏃", color: "#f97316" },
-  { id: "event_hunter", name: "Esemenyivadasz", description: "Vegyel reszt 1 esemeryen",      icon: "🎉", color: "#ec4899" },
-  { id: "local_legend", name: "Helyi legenda",  description: "Teljesits egy teljes turat",    icon: "👑", color: "#a855f7" },
+const CONDITION_TYPES = [
+  { value: "station_count",    label: "Allomast latogasson meg (>= N db)" },
+  { value: "event_count",      label: "Esemeryen vegyen reszt (>= N db)" },
+  { value: "qr_count",         label: "QR-kodot olvasson be ossz. (>= N db)" },
+  { value: "points_threshold", label: "Pontot gyujtson ossze (>= N pont)" },
+  { value: "trip_complete",    label: "Teljes turat teljesitsen (>= N tura)" },
+  { value: "top_n",            label: "Legyen top N a ranglistán" },
+  { value: "manual",           label: "Manualis (admin adja at)" },
 ];
 
-const EMPTY = { name: "", description: "", icon: "🏆", color: "#667EEA" };
+const CONDITION_LABELS = Object.fromEntries(CONDITION_TYPES.map((c) => [c.value, c.label]));
+
+const DEFAULTS = [
+  { id: "first_steps",  name: "Elso lepesek",  description: "Olvass be 1 QR-kodot",         icon: "👣", color: "#22c55e", conditionType: "qr_count",        conditionValue: 1   },
+  { id: "explorer",     name: "Felfedezo",      description: "Latogass meg 3 allomast",       icon: "🧭", color: "#3b82f6", conditionType: "station_count",    conditionValue: 3   },
+  { id: "trail_hero",   name: "Turahos",        description: "Gyujts ossze 140 pontot",       icon: "🏃", color: "#f97316", conditionType: "points_threshold", conditionValue: 140 },
+  { id: "event_hunter", name: "Esemenyivadasz", description: "Vegyel reszt 1 esemeryen",      icon: "🎉", color: "#ec4899", conditionType: "event_count",      conditionValue: 1   },
+  { id: "local_legend", name: "Helyi legenda",  description: "Teljesits egy teljes turat",    icon: "👑", color: "#a855f7", conditionType: "trip_complete",    conditionValue: 1   },
+];
+
+const EMPTY = { name: "", description: "", icon: "🏆", color: "#667EEA", conditionType: "station_count", conditionValue: 1 };
 const ICON_PRESETS = ["🏆","🥇","👣","🧭","🏃","🎉","👑","⭐","🔥","💎","🌟","🎯","🗺️","🏅","🎖️"];
 const COLOR_PRESETS = ["#22c55e","#3b82f6","#f97316","#ec4899","#a855f7","#667EEA","#06b6d4","#eab308","#ef4444","#14b8a6"];
 
@@ -38,6 +50,7 @@ export default function Achievements() {
         await Promise.all(DEFAULTS.map((r) =>
           setDoc(doc(db, "achievements", r.id), {
             name: r.name, description: r.description, icon: r.icon, color: r.color,
+            conditionType: r.conditionType, conditionValue: r.conditionValue,
             unlockedCount: 0, createdAt: serverTimestamp(),
           })
         ));
@@ -51,7 +64,14 @@ export default function Achievements() {
   const openCreate = () => { setEditing(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (a) => {
     setEditing(a.id);
-    setForm({ name: a.name || "", description: a.description || "", icon: a.icon || "🏆", color: a.color || "#667EEA" });
+    setForm({
+      name: a.name || "",
+      description: a.description || "",
+      icon: a.icon || "🏆",
+      color: a.color || "#667EEA",
+      conditionType: a.conditionType || "station_count",
+      conditionValue: a.conditionValue ?? 1,
+    });
     setShowForm(true);
   };
 
@@ -65,6 +85,8 @@ export default function Achievements() {
         description: form.description.trim(),
         icon: form.icon || "🏆",
         color: form.color || "#667EEA",
+        conditionType: form.conditionType || "station_count",
+        conditionValue: Number(form.conditionValue) || 1,
       };
       if (editing) {
         await updateDoc(doc(db, "achievements", editing), payload);
@@ -114,6 +136,14 @@ export default function Achievements() {
             <div className="ach-row-body">
               <span className="ach-row-name">{a.name}</span>
               <span className="ach-row-desc">{a.description}</span>
+              {a.conditionType && a.conditionType !== "manual" && (
+                <span className="ach-row-cond">
+                  {CONDITION_LABELS[a.conditionType] || a.conditionType}: <strong>{a.conditionValue}</strong>
+                </span>
+              )}
+              {a.conditionType === "manual" && (
+                <span className="ach-row-cond">Manualis (admin adja at)</span>
+              )}
             </div>
             <div className="ach-row-actions">
               <button className="ach-row-btn edit" onClick={() => openEdit(a)} title="Szerkesztes">✏️ Szerkesztes</button>
@@ -147,6 +177,32 @@ export default function Achievements() {
                 onChange={(e) => setField("description", e.target.value)}
                 placeholder="pl. Beolvasott 3 QR-kodot"
               />
+
+              <label className="ach-label">Feltetel tipusa</label>
+              <select
+                className="ach-input ach-select"
+                value={form.conditionType}
+                onChange={(e) => setField("conditionType", e.target.value)}
+              >
+                {CONDITION_TYPES.map((ct) => (
+                  <option key={ct.value} value={ct.value}>{ct.label}</option>
+                ))}
+              </select>
+
+              {form.conditionType !== "manual" && (
+                <>
+                  <label className="ach-label">
+                    Feltetel erteke (N){form.conditionType === "top_n" ? " - top hanyadik" : " - minimum darab/pont"}
+                  </label>
+                  <input
+                    className="ach-input"
+                    type="number"
+                    min="1"
+                    value={form.conditionValue}
+                    onChange={(e) => setField("conditionValue", e.target.value)}
+                  />
+                </>
+              )}
 
               <label className="ach-label">Ikon</label>
               <div className="ach-icon-row">
@@ -190,7 +246,7 @@ export default function Achievements() {
               {saveError && <div style={{color:"#dc2626",fontSize:"0.82rem",flex:1,padding:"0 8px"}}>{saveError}</div>}
               <button className="ach-cancel-btn" onClick={() => setShowForm(false)}>Megse</button>
               <button className="ach-save-btn" onClick={handleSave} disabled={saving || !form.name.trim()}>
-                {saving ? "Mentés..." : editing ? "Mentés" : "Hozzáadás"}
+                {saving ? "Mentes..." : editing ? "Mentes" : "Hozzaadas"}
               </button>
             </div>
           </div>
@@ -199,4 +255,3 @@ export default function Achievements() {
     </div>
   );
 }
-

@@ -39,6 +39,11 @@ service cloud.firestore {
         allow read: if true;
         allow write: if isSignedIn() && request.auth.uid == userId;
       }
+
+      match /unlocked_achievements/{achievementId} {
+        allow read: if true;
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     match /users/{userId} {
