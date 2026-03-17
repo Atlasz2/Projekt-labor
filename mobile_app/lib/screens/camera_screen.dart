@@ -23,17 +23,19 @@ class _CameraScreenState extends State<CameraScreen> {
 
   bool _isLoading = true;
   bool _isProcessing = false;
-  bool _showSuccessOverlay = false;
-  String _successName = '';
-  int _successPoints = 0;
-  String _successKind = 'station';
   String? _error;
   int _totalPoints = 0;
 
+  bool _showFeedbackOverlay = false;
+  bool _feedbackSuccess = true;
+  String _feedbackTitle = '';
+  String _feedbackSubtitle = '';
+  int? _feedbackPoints;
+
   String? _lastCode;
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
-  static const Duration _scanCooldown = Duration(milliseconds: 1500);
-  Timer? _successTimer;
+  static const Duration _scanCooldown = Duration(milliseconds: 1400);
+  Timer? _overlayTimer;
 
   @override
   void initState() {
@@ -43,7 +45,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
-    _successTimer?.cancel();
+    _overlayTimer?.cancel();
     _scannerController.dispose();
     super.dispose();
   }
@@ -67,15 +69,19 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       await _ensureProgressDoc(user);
       await _loadProgress(user.uid);
-      setState(() {
-        _isLoading = false;
-        _error = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = null;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Hiba a QR adatok betöltésekor: $e';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = 'Hiba a QR adatok betöltésekor: $e';
+        });
+      }
     }
   }
 
@@ -171,50 +177,103 @@ class _CameraScreenState extends State<CameraScreen> {
     });
   }
 
-  Future<Map<String, dynamic>?> _findTargetByCode(String code) async {
-    final normalized = code.trim();
+  Set<String> _extractCandidates(String raw) {
+    final candidates = <String>{};
 
-    final qrStationQuery = await _firestore
-        .collection('stations')
-        .where('qrCode', isEqualTo: normalized)
-        .limit(1)
-        .get();
-    if (qrStationQuery.docs.isNotEmpty) {
-      final doc = qrStationQuery.docs.first;
-      final data = doc.data();
-      return {
-        'kind': 'station',
-        'id': doc.id,
-        'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
-        'points': _safeInt(data['points'], fallback: 10),
-      };
+    void add(String? value) {
+      if (value == null) return;
+      final v = value.trim();
+      if (v.isEmpty) return;
+      candidates.add(v);
+      candidates.add(v.toLowerCase());
+      candidates.add(v.toUpperCase());
+      if (v.contains(':')) {
+        final split = v.split(':');
+        if (split.length > 1) {
+          add(split.last);
+        }
+      }
     }
 
-    final stationDoc = await _firestore.collection('stations').doc(normalized).get();
-    if (stationDoc.exists) {
-      final data = stationDoc.data() ?? {};
-      return {
-        'kind': 'station',
-        'id': stationDoc.id,
-        'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
-        'points': _safeInt(data['points'], fallback: 10),
-      };
+    add(raw);
+    add(Uri.decodeComponent(raw));
+
+    final uri = Uri.tryParse(raw);
+    if (uri != null) {
+      if (uri.pathSegments.isNotEmpty) {
+        add(uri.pathSegments.last);
+      }
+      for (final entry in uri.queryParameters.entries) {
+        add(entry.value);
+      }
     }
 
-    final eventQuery = await _firestore
-        .collection('events')
-        .where('qrCode', isEqualTo: normalized)
-        .limit(1)
-        .get();
-    if (eventQuery.docs.isNotEmpty) {
-      final doc = eventQuery.docs.first;
-      final data = doc.data();
-      return {
-        'kind': 'event',
-        'id': doc.id,
-        'name': (data['name'] ?? 'Ismeretlen esemény').toString(),
-        'points': _safeInt(data['points'], fallback: 20),
-      };
+    return candidates;
+  }
+
+  Future<Map<String, dynamic>?> _findTargetByCode(String rawCode) async {
+    final candidates = _extractCandidates(rawCode);
+
+    for (final candidate in candidates) {
+      final stationByQr = await _firestore
+          .collection('stations')
+          .where('qrCode', isEqualTo: candidate)
+          .limit(1)
+          .get();
+      if (stationByQr.docs.isNotEmpty) {
+        final doc = stationByQr.docs.first;
+        final data = doc.data();
+        return {
+          'kind': 'station',
+          'id': doc.id,
+          'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
+          'points': _safeInt(data['points'], fallback: 10),
+        };
+      }
+    }
+
+    for (final candidate in candidates) {
+      final stationDoc = await _firestore.collection('stations').doc(candidate).get();
+      if (stationDoc.exists) {
+        final data = stationDoc.data() ?? {};
+        return {
+          'kind': 'station',
+          'id': stationDoc.id,
+          'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
+          'points': _safeInt(data['points'], fallback: 10),
+        };
+      }
+    }
+
+    for (final candidate in candidates) {
+      final eventByQr = await _firestore
+          .collection('events')
+          .where('qrCode', isEqualTo: candidate)
+          .limit(1)
+          .get();
+      if (eventByQr.docs.isNotEmpty) {
+        final doc = eventByQr.docs.first;
+        final data = doc.data();
+        return {
+          'kind': 'event',
+          'id': doc.id,
+          'name': (data['name'] ?? 'Ismeretlen esemény').toString(),
+          'points': _safeInt(data['points'], fallback: 20),
+        };
+      }
+    }
+
+    for (final candidate in candidates) {
+      final eventDoc = await _firestore.collection('events').doc(candidate).get();
+      if (eventDoc.exists) {
+        final data = eventDoc.data() ?? {};
+        return {
+          'kind': 'event',
+          'id': eventDoc.id,
+          'name': (data['name'] ?? 'Ismeretlen esemény').toString(),
+          'points': _safeInt(data['points'], fallback: 20),
+        };
+      }
     }
 
     return null;
@@ -228,9 +287,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
     final now = DateTime.now();
     final sameAsLast = _lastCode == rawValue;
-    if (sameAsLast && now.difference(_lastScanAt) < _scanCooldown) {
-      return;
-    }
+    if (sameAsLast && now.difference(_lastScanAt) < _scanCooldown) return;
 
     _lastCode = rawValue;
     _lastScanAt = now;
@@ -240,15 +297,17 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _processScan(String code) async {
     final user = _auth.currentUser;
     if (user == null) {
+      _showFeedback(success: false, title: 'Nincs bejelentkezés', subtitle: 'Jelentkezz be az appba.');
       _showSnack('Nincs bejelentkezett felhasználó.');
       return;
     }
 
-    setState(() => _isProcessing = true);
+    _isProcessing = true;
 
     try {
       final target = await _findTargetByCode(code);
       if (target == null) {
+        _showFeedback(success: false, title: 'Ismeretlen QR-kód', subtitle: 'Ezt a kódot nem találtam az adatbázisban.');
         _showSnack('Ismeretlen QR-kód.');
         return;
       }
@@ -257,14 +316,22 @@ class _CameraScreenState extends State<CameraScreen> {
       final kind = target['kind'] as String;
       final name = target['name'] as String;
       final points = target['points'] as int;
+
+      if (kind == 'station' && _completedStationIds.contains(id)) {
+        _showFeedback(success: false, title: 'Már beolvasva', subtitle: '$name már korábban rögzítve lett.');
+        _showSnack('Ez az állomás már be lett olvasva.');
+        return;
+      }
+      if (kind == 'event' && _completedEventIds.contains(id)) {
+        _showFeedback(success: false, title: 'Már beolvasva', subtitle: '$name esemény pecsét már megvan.');
+        _showSnack('Ehhez az eseményhez már megszerezted a pecsétet.');
+        return;
+      }
+
       final userProgressRef = _firestore.collection('user_progress').doc(user.uid);
       final batch = _firestore.batch();
 
       if (kind == 'station') {
-        if (_completedStationIds.contains(id)) {
-          _showSnack('Ez az állomás már be lett olvasva.');
-          return;
-        }
         batch.set(userProgressRef, {
           'completedStations': FieldValue.arrayUnion([id]),
           'totalPoints': FieldValue.increment(points),
@@ -278,10 +345,6 @@ class _CameraScreenState extends State<CameraScreen> {
           'scannedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } else {
-        if (_completedEventIds.contains(id)) {
-          _showSnack('Ehhez az eseményhez már megszerezted a pecsétet.');
-          return;
-        }
         batch.set(userProgressRef, {
           'completedEvents': FieldValue.arrayUnion([id]),
           'totalPoints': FieldValue.increment(points),
@@ -314,17 +377,44 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       });
 
-      _showSuccess(name, points, kind);
+      _showFeedback(
+        success: true,
+        title: 'Sikeres beolvasás!',
+        subtitle: name,
+        points: points,
+      );
       _showSnack(kind == 'event'
           ? 'Esemény pecsét megszerezve: $name (+$points pont)'
           : 'Sikeres beolvasás: $name (+$points pont)');
     } catch (e) {
+      _showFeedback(success: false, title: 'Mentési hiba', subtitle: '$e');
       _showSnack('Hiba a beolvasás mentésekor: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
+      _isProcessing = false;
     }
+  }
+
+  void _showFeedback({
+    required bool success,
+    required String title,
+    required String subtitle,
+    int? points,
+  }) {
+    _overlayTimer?.cancel();
+    if (!mounted) return;
+
+    setState(() {
+      _feedbackSuccess = success;
+      _feedbackTitle = title;
+      _feedbackSubtitle = subtitle;
+      _feedbackPoints = points;
+      _showFeedbackOverlay = true;
+    });
+
+    _overlayTimer = Timer(const Duration(milliseconds: 1450), () {
+      if (!mounted) return;
+      setState(() => _showFeedbackOverlay = false);
+    });
   }
 
   String _formatDate(DateTime? date) {
@@ -342,21 +432,6 @@ class _CameraScreenState extends State<CameraScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
-  }
-
-  void _showSuccess(String name, int points, String kind) {
-    _successTimer?.cancel();
-    setState(() {
-      _showSuccessOverlay = true;
-      _successName = name;
-      _successPoints = points;
-      _successKind = kind;
-    });
-
-    _successTimer = Timer(const Duration(milliseconds: 1300), () {
-      if (!mounted) return;
-      setState(() => _showSuccessOverlay = false);
-    });
   }
 
   @override
@@ -426,11 +501,9 @@ class _CameraScreenState extends State<CameraScreen> {
                                     color: Colors.black.withValues(alpha: 0.6),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: Text(
-                                    _isProcessing
-                                        ? 'Feldolgozás...'
-                                        : 'Irányítsd az állomás vagy esemény QR-kódját a keretbe',
-                                    style: const TextStyle(color: Colors.white),
+                                  child: const Text(
+                                    'Irányítsd az állomás vagy esemény QR-kódját a keretbe',
+                                    style: TextStyle(color: Colors.white),
                                     textAlign: TextAlign.center,
                                   ),
                                 ),
@@ -503,8 +576,8 @@ class _CameraScreenState extends State<CameraScreen> {
                       ],
                     ),
                     AnimatedOpacity(
-                      opacity: _showSuccessOverlay ? 1 : 0,
-                      duration: const Duration(milliseconds: 220),
+                      opacity: _showFeedbackOverlay ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
                       child: IgnorePointer(
                         ignoring: true,
                         child: Center(
@@ -512,34 +585,53 @@ class _CameraScreenState extends State<CameraScreen> {
                             margin: const EdgeInsets.symmetric(horizontal: 26),
                             padding: const EdgeInsets.all(18),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.78),
+                              color: _feedbackSuccess
+                                  ? const Color(0xFF062B15).withValues(alpha: 0.88)
+                                  : const Color(0xFF3A0B0B).withValues(alpha: 0.88),
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
+                              border: Border.all(
+                                color: _feedbackSuccess
+                                    ? Colors.lightGreenAccent.withValues(alpha: 0.45)
+                                    : Colors.redAccent.withValues(alpha: 0.45),
+                              ),
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  _successKind == 'event' ? Icons.celebration : Icons.check_circle,
-                                  color: Colors.lightGreenAccent,
+                                  _feedbackSuccess
+                                      ? (_feedbackPoints != null ? Icons.check_circle : Icons.done)
+                                      : Icons.block,
+                                  color: _feedbackSuccess ? Colors.lightGreenAccent : Colors.redAccent,
                                   size: 54,
                                 ),
                                 const SizedBox(height: 8),
-                                const Text(
-                                  'Sikeres beolvasás!',
-                                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                Text(
+                                  _feedbackTitle,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  _successName,
+                                  _feedbackSubtitle,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(color: Colors.white),
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '+$_successPoints pont',
-                                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 18),
-                                ),
+                                if (_feedbackPoints != null) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '+$_feedbackPoints pont',
+                                    style: const TextStyle(
+                                      color: Colors.amber,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

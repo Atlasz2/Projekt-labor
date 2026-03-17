@@ -74,11 +74,19 @@ function Events() {
         qrCode: safeString(formData.qrCode),
         points: Number(formData.points || 20),
       };
+
       if (editingId) {
-        await updateDoc(doc(db, "events", editingId), cleanData);
+        await updateDoc(doc(db, "events", editingId), {
+          ...cleanData,
+          qrCode: cleanData.qrCode || editingId,
+        });
       } else {
-        await addDoc(collection(db, "events"), cleanData);
+        const created = await addDoc(collection(db, "events"), cleanData);
+        if (!cleanData.qrCode) {
+          await updateDoc(doc(db, "events", created.id), { qrCode: created.id });
+        }
       }
+
       setFormData({
         name: "",
         date: "",
@@ -151,7 +159,7 @@ function Events() {
             <input type="date" name="date" value={formData.date} onChange={handleInputChange} required />
             <input type="text" name="location" placeholder="Helyszín (opcionális)" value={formData.location} onChange={handleInputChange} />
             <input type="text" name="imageUrl" placeholder="Kép URL (opcionális)" value={formData.imageUrl} onChange={handleInputChange} />
-            <input type="text" name="qrCode" placeholder="QR kód (ha üres, doc ID alapján is olvasható)" value={formData.qrCode} onChange={handleInputChange} />
+            <input type="text" name="qrCode" placeholder="QR kód (ha üres, doc ID alapján)" value={formData.qrCode} onChange={handleInputChange} />
             <input type="number" name="points" min="0" placeholder="Pont (default 20)" value={formData.points} onChange={handleInputChange} />
             <textarea name="description" placeholder="Leírás" value={formData.description} onChange={handleInputChange} rows="3" />
             <button type="submit" className="btn-primary">{editingId ? "Frissítés" : "Hozzáadás"}</button>
