@@ -67,7 +67,7 @@ class _CameraScreenState extends State<CameraScreen> {
     if (user == null) {
       setState(() {
         _isLoading = false;
-        _error = 'Nincs bejelentkezett felhaszn├íl├│.';
+        _error = 'Nincs bejelentkezett felhasznalo.';
       });
       return;
     }
@@ -85,7 +85,7 @@ class _CameraScreenState extends State<CameraScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = 'Hiba a QR adatok bet├Âlt├ęsekor: $e';
+          _error = 'Hiba a QR adatok betoltesekor: $e';
         });
       }
     }
@@ -98,12 +98,12 @@ class _CameraScreenState extends State<CameraScreen> {
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       final userData = userDoc.data() ?? {};
       await progressRef.set({
-        'name': userData['displayName'] ?? userData['name'] ?? 'Felhaszn├íl├│',
+        'name': userData['displayName'] ?? userData['name'] ?? 'Felhasznalo',
         'email': user.email ?? userData['email'] ?? '',
         'completedStations': <String>[],
         'completedEvents': <String>[],
         'totalPoints': 0,
-        'currentTrip': 'Nincs t├║ra',
+        'currentTrip': 'Nincs tura',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -142,7 +142,7 @@ class _CameraScreenState extends State<CameraScreen> {
       history.add({
         'id': item.id,
         'type': 'station',
-        'name': (data['stationName'] ?? 'Ismeretlen ├íllom├ís').toString(),
+        'name': (data['stationName'] ?? 'Ismeretlen allomas').toString(),
         'points': _safeInt(data['points']),
         'date': ts is Timestamp ? ts.toDate() : null,
       });
@@ -154,7 +154,7 @@ class _CameraScreenState extends State<CameraScreen> {
       history.add({
         'id': item.id,
         'type': 'event',
-        'name': (data['eventName'] ?? 'Ismeretlen esem├ęny').toString(),
+        'name': (data['eventName'] ?? 'Ismeretlen esemeny').toString(),
         'points': _safeInt(data['points']),
         'date': ts is Timestamp ? ts.toDate() : null,
       });
@@ -232,7 +232,7 @@ class _CameraScreenState extends State<CameraScreen> {
         return {
           'kind': 'station',
           'id': doc.id,
-          'name': (data['name'] ?? 'Ismeretlen ├íllom├ís').toString(),
+          'name': (data['name'] ?? 'Ismeretlen allomas').toString(),
           'points': _safeInt(data['points'], fallback: 10),
           'tripId': (data['tripId'] ?? '').toString(),
           'description': (data['description'] ?? '').toString(),
@@ -250,7 +250,7 @@ class _CameraScreenState extends State<CameraScreen> {
         return {
           'kind': 'station',
           'id': stationDoc.id,
-          'name': (data['name'] ?? 'Ismeretlen ├íllom├ís').toString(),
+          'name': (data['name'] ?? 'Ismeretlen allomas').toString(),
           'points': _safeInt(data['points'], fallback: 10),
           'tripId': (data['tripId'] ?? '').toString(),
           'description': (data['description'] ?? '').toString(),
@@ -273,7 +273,7 @@ class _CameraScreenState extends State<CameraScreen> {
         return {
           'kind': 'event',
           'id': doc.id,
-          'name': (data['name'] ?? 'Ismeretlen esem├ęny').toString(),
+          'name': (data['name'] ?? 'Ismeretlen esemeny').toString(),
           'points': _safeInt(data['points'], fallback: 20),
         };
       }
@@ -286,7 +286,7 @@ class _CameraScreenState extends State<CameraScreen> {
         return {
           'kind': 'event',
           'id': eventDoc.id,
-          'name': (data['name'] ?? 'Ismeretlen esem├ęny').toString(),
+          'name': (data['name'] ?? 'Ismeretlen esemeny').toString(),
           'points': _safeInt(data['points'], fallback: 20),
         };
       }
@@ -314,8 +314,8 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _processScan(String code) async {
     final user = _auth.currentUser;
     if (user == null) {
-      _showFeedback(success: false, title: 'Nincs bejelentkez├ęs', subtitle: 'Jelentkezz be az appba.');
-      _showSnack('Nincs bejelentkezett felhaszn├íl├│.');
+      _showFeedback(success: false, title: 'Nincs bejelentkezes', subtitle: 'Jelentkezz be az appba.');
+      _showSnack('Nincs bejelentkezett felhasznalo.');
       return;
     }
 
@@ -324,8 +324,8 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final target = await _findTargetByCode(code);
       if (target == null) {
-        _showFeedback(success: false, title: 'Ismeretlen QR-k├│d', subtitle: 'Ezt a k├│dot nem tal├íltam az adatb├ízisban.');
-        _showSnack('Ismeretlen QR-k├│d.');
+        _showFeedback(success: false, title: 'Ismeretlen QR-kod', subtitle: 'Ezt a kodot nem talaltam az adatbazisban.');
+        _showSnack('Ismeretlen QR-kod.');
         return;
       }
 
@@ -339,13 +339,13 @@ class _CameraScreenState extends State<CameraScreen> {
       final beforePoints = _totalPoints;
 
       if (kind == 'station' && _completedStationIds.contains(id)) {
-        _showFeedback(success: false, title: 'M├ír beolvasva', subtitle: '$name m├ír kor├íbban r├Âgz├ştve lett.');
-        _showSnack('Ez az ├íllom├ís m├ír be lett olvasva.');
+        _showFeedback(success: false, title: 'Mar beolvasva', subtitle: '$name mar korabban rogzitve lett.');
+        _showSnack('Ez az allomas mar be lett olvasva.');
         return;
       }
       if (kind == 'event' && _completedEventIds.contains(id)) {
-        _showFeedback(success: false, title: 'M├ír beolvasva', subtitle: '$name esem├ęny pecs├ęt m├ír megvan.');
-        _showSnack('Ehhez az esem├ęnyhez m├ír megszerezted a pecs├ętet.');
+        _showFeedback(success: false, title: 'Mar beolvasva', subtitle: '$name esemeny pecset mar megvan.');
+        _showSnack('Ehhez az esemenyhez mar megszerezted a pecsetet.');
         return;
       }
 
@@ -400,41 +400,26 @@ class _CameraScreenState extends State<CameraScreen> {
 
       _showFeedback(
         success: true,
-        title: 'Sikeres beolvas├ís!',
+        title: 'Sikeres beolvasas!',
         subtitle: name,
         points: points,
       );
 
-      // Show unlocked station content after overlay closes
       if (kind == 'station') {
-        final unlockContent = (target['unlockContent'] ?? '') as String;
-        final funFact = (target['funFact'] ?? '') as String;
-        final stationDesc = (target['description'] ?? '') as String;
-        if (unlockContent.isNotEmpty || funFact.isNotEmpty || stationDesc.isNotEmpty) {
-          Future.delayed(const Duration(milliseconds: 1700), () {
-            if (!mounted) return;
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => _UnlockSheet(target: target),
-            );
-          });
-        }
+        await _presentUnlockContent(target);
       }
-
       final afterStations = kind == 'station' ? beforeStations + 1 : beforeStations;
       final afterEvents = kind == 'event' ? beforeEvents + 1 : beforeEvents;
       final afterPoints = beforePoints + points;
       final unlocked = <Map<String, String>>[];
-      if (beforeStations < 1 && afterStations >= 1) unlocked.add({'title': 'Achievement: Els┼Ĺ l├ęp├ęsek', 'subtitle': 'Megszerezted az els┼Ĺ QR beolvas├íst!'});
-      if (beforeStations < 3 && afterStations >= 3) unlocked.add({'title': 'Achievement: Felfedez┼Ĺ', 'subtitle': 'Legal├íbb 3 ├íllom├íst bej├írt├íl!'});
-      if (beforeEvents < 1 && afterEvents >= 1) unlocked.add({'title': 'Achievement: Esem├ęnyvad├ísz', 'subtitle': 'Megvan az els┼Ĺ esem├ęny pecs├ęt!'});
-      if (beforePoints < 140 && afterPoints >= 140) unlocked.add({'title': 'Achievement: T├║rah┼Ĺs', 'subtitle': 'El├ęrted a 140 pontot!'});
+      if (beforeStations < 1 && afterStations >= 1) unlocked.add({'title': 'Achievement: Elso lepesek', 'subtitle': 'Megszerezted az elso QR beolvasast!'});
+      if (beforeStations < 3 && afterStations >= 3) unlocked.add({'title': 'Achievement: Felfedezo', 'subtitle': 'Legalabb 3 allomast bejartal!'});
+      if (beforeEvents < 1 && afterEvents >= 1) unlocked.add({'title': 'Achievement: Esemenyvadasz', 'subtitle': 'Megvan az elso esemeny pecset!'});
+      if (beforePoints < 140 && afterPoints >= 140) unlocked.add({'title': 'Achievement: Turahos', 'subtitle': 'Elerte a 140 pontot!'});
       if (kind == 'station' && tripId.isNotEmpty) {
         final tripCompletion = await _checkTripCompletion(tripId);
         if (tripCompletion != null) {
-          unlocked.add({'title': 'Achievement: T├║ra teljes├ştve', 'subtitle': tripCompletion});
+          unlocked.add({'title': 'Achievement: Tura teljesitve', 'subtitle': tripCompletion});
         }
       }
       if (unlocked.isNotEmpty) {
@@ -449,11 +434,11 @@ class _CameraScreenState extends State<CameraScreen> {
         }, SetOptions(merge: true));
       }
       _showSnack(kind == 'event'
-          ? 'Esem├ęny pecs├ęt megszerezve: $name (+$points pont)'
-          : 'Sikeres beolvas├ís: $name (+$points pont)');
+          ? 'Esemeny pecset megszerezve: $name (+$points pont)'
+          : 'Sikeres beolvasas: $name (+$points pont)');
     } catch (e) {
-      _showFeedback(success: false, title: 'Ment├ęsi hiba', subtitle: '$e');
-      _showSnack('Hiba a beolvas├ís ment├ęsekor: $e');
+      _showFeedback(success: false, title: 'Mentesi hiba', subtitle: '$e');
+      _showSnack('Hiba a beolvasas mentesekor: $e');
     } finally {
       _isProcessing = false;
       _nextAllowedScanAt = DateTime.now().add(const Duration(milliseconds: 900));
@@ -485,11 +470,46 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
 
+  Future<void> _presentUnlockContent(Map<String, dynamic> target) async {
+    final unlockContent = (target['unlockContent'] ?? '').toString().trim();
+    final funFact = (target['funFact'] ?? '').toString().trim();
+    final stationDesc = (target['description'] ?? '').toString().trim();
+    final extraInfo = (target['extraInfo'] ?? '').toString().trim();
+    if (unlockContent.isEmpty && funFact.isEmpty && stationDesc.isEmpty && extraInfo.isEmpty) {
+      return;
+    }
+
+    _nextAllowedScanAt = DateTime.now().add(const Duration(seconds: 4));
+    await Future<void>.delayed(const Duration(milliseconds: 1600));
+    if (!mounted) return;
+
+    try {
+      await _scannerController.stop();
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _UnlockSheet(target: target),
+    );
+
+    if (!mounted) return;
+
+    try {
+      await _scannerController.start();
+    } catch (_) {}
+
+    _lastScanAt = DateTime.now();
+    _nextAllowedScanAt = DateTime.now().add(const Duration(milliseconds: 1200));
+  }
   Future<String?> _checkTripCompletion(String tripId) async {
     try {
       final tripDoc = await _firestore.collection('trips').doc(tripId).get();
       final tripData = tripDoc.data() ?? {};
-      final tripName = (tripData['name'] ?? 'Ismeretlen t├║ra').toString();
+      final tripName = (tripData['name'] ?? 'Ismeretlen tura').toString();
 
       final stationsSnapshot = await _firestore
           .collection('stations')
@@ -501,7 +521,7 @@ class _CameraScreenState extends State<CameraScreen> {
       final completed = _completedStationIds;
       final doneCount = stationIds.where((id) => completed.contains(id)).length;
       if (doneCount >= stationIds.length) {
-        return '$tripName ├║tvonal teljes├ştve!';
+        return '$tripName utvonal teljesitve!';
       }
       return null;
     } catch (_) {
@@ -523,7 +543,7 @@ class _CameraScreenState extends State<CameraScreen> {
     });
   }
   String _formatDate(DateTime? date) {
-    if (date == null) return 'Ismeretlen id┼Ĺpont';
+    if (date == null) return 'Ismeretlen idopont';
     final y = date.year.toString().padLeft(4, '0');
     final m = date.month.toString().padLeft(2, '0');
     final d = date.day.toString().padLeft(2, '0');
@@ -545,7 +565,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR-k├│d beolvas├ís'),
+        title: const Text('QR-kod beolvasas'),
         actions: [
           Padding(
             padding: const EdgeInsets.all(12),
@@ -569,7 +589,7 @@ class _CameraScreenState extends State<CameraScreen> {
                         const SizedBox(height: 12),
                         Text(_error!, textAlign: TextAlign.center),
                         const SizedBox(height: 12),
-                        FilledButton(onPressed: _initData, child: const Text('├Üjrapr├│b├íl├ís')),
+                        FilledButton(onPressed: _initData, child: const Text('Ujraprobalas')),
                       ],
                     ),
                   ),
@@ -607,7 +627,7 @@ class _CameraScreenState extends State<CameraScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: const Text(
-                                    'Ir├íny├ştsd az ├íllom├ís vagy esem├ęny QR-k├│dj├ít a keretbe',
+                                    'Iranyitsd az allomas vagy esemeny QR-kodjat a keretbe',
                                     style: TextStyle(color: Colors.white),
                                     textAlign: TextAlign.center,
                                   ),
@@ -624,7 +644,7 @@ class _CameraScreenState extends State<CameraScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'El┼Ĺrehalad├ís: ${(progress * 100).toStringAsFixed(0)}% (c├ęl: 140 pont)',
+                                  'Elorehaladas: ${(progress * 100).toStringAsFixed(0)}% (cel: 140 pont)',
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 8),
@@ -637,14 +657,14 @@ class _CameraScreenState extends State<CameraScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('Beolvas├ísi el┼Ĺzm├ęnyek', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    const Text('Beolvasasi elozmenyek', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                     Text('${_scanHistory.length} db'),
                                   ],
                                 ),
                                 const SizedBox(height: 8),
                                 Expanded(
                                   child: _scanHistory.isEmpty
-                                      ? const Center(child: Text('M├ęg nincs beolvasott ├íllom├ís vagy esem├ęny.'))
+                                      ? const Center(child: Text('Meg nincs beolvasott allomas vagy esemeny.'))
                                       : ListView.builder(
                                           itemCount: _scanHistory.length,
                                           itemBuilder: (context, index) {
@@ -664,7 +684,7 @@ class _CameraScreenState extends State<CameraScreen> {
                                                   children: [
                                                     Text('+${item['points']} pont'),
                                                     Text(
-                                                      isEvent ? 'esem├ęny' : '├íllom├ís',
+                                                      isEvent ? 'esemeny' : 'allomas',
                                                       style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                                                     ),
                                                   ],
@@ -1006,3 +1026,6 @@ class _UnlockSheet extends StatelessWidget {
     );
   }
 }
+
+
+
