@@ -25,6 +25,7 @@ export default function Achievements() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => { loadAll(); }, []);
 
@@ -57,6 +58,7 @@ export default function Achievements() {
   const handleSave = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
+    setSaveError("");
     try {
       const payload = {
         name: form.name.trim(),
@@ -73,6 +75,9 @@ export default function Achievements() {
       }
       setShowForm(false);
       await loadAll();
+    } catch (err) {
+      console.error("Achievement save error:", err);
+      setSaveError(err.message || "Ismeretlen hiba");
     } finally { setSaving(false); }
   };
 
@@ -182,6 +187,7 @@ export default function Achievements() {
             </div>
 
             <div className="ach-modal-footer">
+              {saveError && <div style={{color:"#dc2626",fontSize:"0.82rem",flex:1,padding:"0 8px"}}>{saveError}</div>}
               <button className="ach-cancel-btn" onClick={() => setShowForm(false)}>Megse</button>
               <button className="ach-save-btn" onClick={handleSave} disabled={saving || !form.name.trim()}>
                 {saving ? "Mentés..." : editing ? "Mentés" : "Hozzáadás"}
