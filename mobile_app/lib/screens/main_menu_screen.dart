@@ -1,16 +1,39 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
-import 'map_trips_screen.dart';
+import 'accommodation_screen.dart';
 import 'camera_screen.dart';
+import 'contact_screen.dart';
 import 'events_screen.dart';
 import 'history_screen.dart';
-import 'contact_screen.dart';
-import 'accommodation_screen.dart';
+import 'map_trips_screen.dart';
 import 'profile_screen.dart';
 
-class MainMenuScreen extends StatelessWidget {
+class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
+
+  @override
+  State<MainMenuScreen> createState() => _MainMenuScreenState();
+}
+
+class _MainMenuScreenState extends State<MainMenuScreen> {
+  static double _lastOffset = 0;
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController(initialScrollOffset: _lastOffset)
+      ..addListener(() {
+        _lastOffset = _scrollController.offset;
+      });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handleLogout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -41,28 +64,28 @@ class MainMenuScreen extends StatelessWidget {
     final items = <_MenuItem>[
       _MenuItem(
         title: 'Térkép és túrák',
-        subtitle: 'Útvonalak és aktív túrák',
+        subtitle: 'GPS, útvonal és állomások',
         icon: Icons.map_outlined,
         color: const Color(0xFF667EEA),
         page: const MapTripsScreen(),
       ),
       _MenuItem(
         title: 'QR beolvasás',
-        subtitle: 'Pontgyűjtés állomásokkal',
+        subtitle: 'Pontok és esemény pecsétek',
         icon: Icons.qr_code_scanner,
         color: const Color(0xFF4CAF50),
         page: const CameraScreen(),
       ),
       _MenuItem(
         title: 'Rendezvények',
-        subtitle: 'Közelgő események',
+        subtitle: 'Képek, részletek, pecsétvadászat',
         icon: Icons.celebration_outlined,
         color: const Color(0xFFFF9800),
         page: const EventsScreen(),
       ),
       _MenuItem(
-        title: 'Történelem',
-        subtitle: 'Nagyvázsony múltja',
+        title: 'Nagyvázsony története',
+        subtitle: 'Idővonal és helytörténet',
         icon: Icons.history_edu_outlined,
         color: const Color(0xFF8E44AD),
         page: const HistoryScreen(),
@@ -76,14 +99,14 @@ class MainMenuScreen extends StatelessWidget {
       ),
       _MenuItem(
         title: 'Szállás és étterem',
-        subtitle: 'Szállások, vendéglátás',
+        subtitle: 'Képek, linkek, hívás',
         icon: Icons.hotel_outlined,
         color: const Color(0xFFE91E63),
         page: const AccommodationScreen(),
       ),
       _MenuItem(
         title: 'Fiókom',
-        subtitle: 'Profil és ranglista',
+        subtitle: 'Ranglista és achievementek',
         icon: Icons.person_outline,
         color: const Color(0xFF2196F3),
         page: const ProfileScreen(),
@@ -104,62 +127,109 @@ class MainMenuScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              'assets/var.jpg',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF667EEA),
-                    const Color(0xFF667EEA).withValues(alpha: 0.82),
+                    const Color(0xFFF2EBDD).withValues(alpha: 0.90),
+                    const Color(0xFFE7DDC9).withValues(alpha: 0.82),
                   ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
-                borderRadius: BorderRadius.circular(18),
               ),
-              child: const Column(
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Fedezd fel Nagyvázsonyt',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.82),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            width: 56,
+                            height: 56,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Fedezd fel Nagyvázsonyt',
+                                style: TextStyle(
+                                  color: Color(0xFF1F2937),
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              SizedBox(height: 6),
+                              Text(
+                                'Túrák, események, történetek és helyi élmények egy alkalmazásban.',
+                                style: TextStyle(
+                                  color: Color(0xFF475569),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Válassz egy menüpontot a túrákhoz, rendezvényekhez vagy a profilodhoz.',
-                    style: TextStyle(color: Colors.white70),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: GridView.builder(
+                      key: const PageStorageKey('main-menu-grid'),
+                      controller: _scrollController,
+                      itemCount: items.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: width < 420 ? 2.45 : 1.2,
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return _MenuCard(item: item);
+                      },
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 14),
-            Expanded(
-              child: GridView.builder(
-                itemCount: items.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: width < 420 ? 2.45 : 1.2,
-                ),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return _MenuCard(item: item);
-                },
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -188,20 +258,20 @@ class _MenuCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       onTap: () {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.page));
       },
       child: Ink(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: item.color.withValues(alpha: 0.24)),
+          color: Colors.white.withValues(alpha: 0.86),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: item.color.withValues(alpha: 0.22)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 10,
-              offset: const Offset(0, 2),
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -210,7 +280,7 @@ class _MenuCard extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                radius: 23,
+                radius: 24,
                 backgroundColor: item.color.withValues(alpha: 0.14),
                 child: Icon(item.icon, color: item.color),
               ),
@@ -222,7 +292,7 @@ class _MenuCard extends StatelessWidget {
                   children: [
                     Text(
                       item.title,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -231,13 +301,13 @@ class _MenuCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: Colors.grey.shade700,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.grey.shade400),
+              Icon(Icons.chevron_right, color: Colors.grey.shade500),
             ],
           ),
         ),

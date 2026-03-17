@@ -25,6 +25,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadUserData();
   }
 
+  int _safeCount(dynamic value) {
+    if (value is List) return value.length;
+    if (value is num) return value.toInt();
+    return 0;
+  }
+
+  int _safeInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('$value') ?? 0;
+  }
+
   Future<void> _loadUserData() async {
     try {
       setState(() {
@@ -35,16 +47,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final snapshot = await _firestore.collection('user_progress').get();
       final List<Map<String, dynamic>> users = snapshot.docs.map((doc) {
         final data = doc.data();
-        final completedStations = (data['completedStations'] as List?)?.length ?? 0;
-        final totalPoints = data['totalPoints'] is num
-            ? (data['totalPoints'] as num).toInt()
-            : int.tryParse('${data['totalPoints']}') ?? 0;
+        final completedStations = _safeCount(data['completedStations']);
+        final completedEvents = _safeCount(data['completedEvents']);
+        final totalPoints = _safeInt(data['totalPoints']);
 
         return {
           'id': doc.id,
           'name': data['name']?.toString() ?? 'Ismeretlen',
           'email': data['email']?.toString() ?? '',
           'completedStations': completedStations,
+          'completedEvents': completedEvents,
           'points': totalPoints,
           'currentTrip': data['currentTrip']?.toString() ?? 'Nincs túra',
         };
@@ -65,8 +77,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'id': currentUid ?? 'unknown',
           'name': data['displayName']?.toString() ?? data['name']?.toString() ?? 'Felhasználó',
           'email': data['email']?.toString() ?? _auth.currentUser?.email ?? '',
-          'completedStations': (data['visitedStations'] as List?)?.length ?? 0,
-          'points': data['points'] is num ? (data['points'] as num).toInt() : 0,
+          'completedStations': _safeCount(data['visitedStations']),
+          'completedEvents': _safeCount(data['visitedEvents']),
+          'points': _safeInt(data['points']),
           'currentTrip': 'Nincs túra',
         };
         users.add(Map<String, dynamic>.from(current));
@@ -96,10 +109,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '#$rank';
   }
 
+  List<_Achievement> _buildAchievements() {
+    final points = _safeInt(_currentUserData?['points']);
+    final stations = _safeCount(_currentUserData?['completedStations']);
+    final events = _safeCount(_currentUserData?['completedEvents']);
+
+    return [
+      _Achievement('Első lépések', 'Olvass be 1 QR-kódot', stations >= 1 || events >= 1, Icons.flag_outlined),
+      _Achievement('Felfedező', 'Látogass meg legalább 3 állomást', stations >= 3, Icons.hiking_outlined),
+      _Achievement('Túrahős', 'Gyűjts össze 140 pontot', points >= 140, Icons.workspace_premium_outlined),
+      _Achievement('Eseményvadász', 'Vegyél részt 1 eseményen', events >= 1, Icons.celebration_outlined),
+      _Achievement('Helyi legenda', 'Legyél top 3 a ranglistán', _userRank > 0 && _userRank <= 3, Icons.military_tech_outlined),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final currentPoints = (_currentUserData?['points'] ?? 0) as int;
+    final currentPoints = _safeInt(_currentUserData?['points']);
+    final stationCount = _safeCount(_currentUserData?['completedStations']);
+    final eventCount = _safeCount(_currentUserData?['completedEvents']);
     final progressToReward = (currentPoints / 140).clamp(0.0, 1.0);
+    final achievements = _buildAchievements();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Fiókom')),
@@ -132,7 +162,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           _buildStatCard('Pontok', currentPoints.toString(), Icons.star, Colors.amber),
                           const SizedBox(width: 12),
-                          _buildStatCard('Állomások', (_currentUserData?['completedStations'] ?? 0).toString(), Icons.place, Colors.blue),
+                          _buildStatCard('Állomások', stationCount.toString(), Icons.place, Colors.blue),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _buildStatCard('Események', eventCount.toString(), Icons.celebration, Colors.deepOrange),
+                          const SizedBox(width: 12),
+                          _buildStatCard('Rang', _userRank == 0 ? '-' : _getRankMedal(_userRank), Icons.leaderboard, Colors.teal),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -160,8 +198,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: ListTile(
                           leading: Icon(Icons.map, color: Colors.blue.shade400),
                           title: const Text('Jelenlegi túra'),
-                          subtitle: Text(_currentUserData?['currentTrip'] ?? 'Nincs túra'),
+                          subtitle: Text(_currentUserData?['currentTrip']?.toString() ?? 'Nincs túra'),
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Achievementek', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: achievements.map((a) => _AchievementChip(achievement: a)).toList(),
                       ),
                       const SizedBox(height: 16),
                       const Text('Rangsor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -187,9 +233,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(user['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        Text(user['name'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                         Text(
-                                          '${user['completedStations']} állomás',
+                                          '${_safeCount(user['completedStations'])} állomás · ${_safeCount(user['completedEvents'])} esemény',
                                           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                                         ),
                                       ],
@@ -202,7 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      '${user['points']} pont',
+                                      '${_safeInt(user['points'])} pont',
                                       style: TextStyle(
                                         color: Colors.amber.shade900,
                                         fontWeight: FontWeight.bold,
@@ -228,30 +274,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue.shade400, Colors.blue.shade600],
+          colors: [Colors.blue.shade400, Colors.blue.shade700],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         children: [
           const CircleAvatar(
-            radius: 40,
+            radius: 42,
             backgroundColor: Colors.white,
             child: Icon(Icons.person, size: 48, color: Colors.blue),
           ),
           const SizedBox(height: 12),
           Text(
-            _currentUserData?['name'] ?? 'Felhasználó',
+            _currentUserData?['name']?.toString() ?? 'Felhasználó',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           const SizedBox(height: 4),
           Text(
-            _currentUserData?['email'] ?? '',
+            _currentUserData?['email']?.toString() ?? '',
             style: const TextStyle(color: Colors.white70),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             'Rang: ${_getRankMedal(_userRank)}',
             style: const TextStyle(color: Colors.white),
@@ -276,6 +322,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _Achievement {
+  final String title;
+  final String description;
+  final bool unlocked;
+  final IconData icon;
+
+  _Achievement(this.title, this.description, this.unlocked, this.icon);
+}
+
+class _AchievementChip extends StatelessWidget {
+  final _Achievement achievement;
+
+  const _AchievementChip({required this.achievement});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = achievement.unlocked ? const Color(0xFFE7F5EA) : const Color(0xFFF3F4F6);
+    final fg = achievement.unlocked ? const Color(0xFF166534) : const Color(0xFF6B7280);
+
+    return Container(
+      width: 160,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: fg.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(achievement.icon, size: 18, color: fg),
+              const Spacer(),
+              Icon(
+                achievement.unlocked ? Icons.check_circle : Icons.lock_outline,
+                size: 18,
+                color: fg,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(achievement.title, style: TextStyle(fontWeight: FontWeight.w700, color: fg)),
+          const SizedBox(height: 4),
+          Text(
+            achievement.description,
+            style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.84)),
+          ),
+        ],
       ),
     );
   }

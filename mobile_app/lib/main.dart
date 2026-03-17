@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
 import 'screens/auth_gate.dart';
@@ -24,7 +24,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.fromSeed(seedColor: const Color(0xFF667EEA));
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF5B6F4C),
+      brightness: Brightness.light,
+    );
 
     return MaterialApp(
       title: 'Nagyvázsony',
@@ -32,7 +35,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: colorScheme,
-        scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+        scaffoldBackgroundColor: const Color(0xFFF2EBDD),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,
@@ -40,9 +43,17 @@ class MyApp extends StatelessWidget {
           foregroundColor: Color(0xFF1E293B),
         ),
         cardTheme: CardThemeData(
+          color: Colors.white.withValues(alpha: 0.92),
           elevation: 1,
           margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        chipTheme: ChipThemeData(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
         ),
       ),
       home: const AuthGate(),

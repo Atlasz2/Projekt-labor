@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -187,6 +187,7 @@ class _EventsScreenState extends State<EventsScreen> {
               'location': _safeString(data['location']),
               'imageUrl': _safeString(data['imageUrl']),
               'category': _safeString(data['category']),
+              'qrCode': _safeString(data['qrCode']),
             };
           }).toList();
 
@@ -291,6 +292,7 @@ class _EventCard extends StatelessWidget {
     final location = event['location'] as String;
     final description = event['description'] as String;
     final category = event['category'] as String;
+    final qrCode = (event['qrCode'] ?? '') as String;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
@@ -324,6 +326,12 @@ class _EventCard extends StatelessWidget {
                       left: 12,
                       child: _categoryChip(category),
                     ),
+                  if (qrCode.isNotEmpty)
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: _qrChip(),
+                    ),
                 ],
               )
             else
@@ -340,6 +348,12 @@ class _EventCard extends StatelessWidget {
                       bottom: 12,
                       left: 12,
                       child: _categoryChip(category),
+                    ),
+                  if (qrCode.isNotEmpty)
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: _qrChip(),
                     ),
                 ],
               ),
@@ -452,6 +466,17 @@ class _EventCard extends StatelessWidget {
     );
   }
 
+  Widget _qrChip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF166534).withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Text('QR pecsét', style: TextStyle(color: Colors.white, fontSize: 11)),
+    );
+  }
+
   Widget _categoryChip(String cat) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -464,3 +489,4 @@ class _EventCard extends StatelessWidget {
     );
   }
 }
+

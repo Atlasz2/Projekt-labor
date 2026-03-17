@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,6 +19,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   final List<Map<String, dynamic>> _scanHistory = [];
   final Set<String> _completedStationIds = <String>{};
+  final Set<String> _completedEventIds = <String>{};
 
   bool _isLoading = true;
   bool _isProcessing = false;
@@ -39,6 +40,12 @@ class _CameraScreenState extends State<CameraScreen> {
   void dispose() {
     _scannerController.dispose();
     super.dispose();
+  }
+
+  int _safeInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('$value') ?? fallback;
   }
 
   Future<void> _initData() async {
@@ -66,7 +73,7 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
-Future<void> _ensureProgressDoc(User user) async {
+  Future<void> _ensureProgressDoc(User user) async {
     final progressRef = _firestore.collection('user_progress').doc(user.uid);
     final progressDoc = await progressRef.get();
     if (!progressDoc.exists) {
@@ -76,9 +83,11 @@ Future<void> _ensureProgressDoc(User user) async {
         'name': userData['displayName'] ?? userData['name'] ?? 'Felhasználó',
         'email': user.email ?? userData['email'] ?? '',
         'completedStations': <String>[],
+        'completedEvents': <String>[],
         'totalPoints': 0,
         'currentTrip': 'Nincs túra',
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
     }
   }
@@ -87,32 +96,51 @@ Future<void> _ensureProgressDoc(User user) async {
     final progressDoc = await _firestore.collection('user_progress').doc(userId).get();
     final progressData = progressDoc.data() ?? {};
 
-    final completed = (progressData['completedStations'] as List?)
+    final completedStations = (progressData['completedStations'] as List?)
+            ?.map((item) => item.toString())
+            .toSet() ??
+        <String>{};
+    final completedEvents = (progressData['completedEvents'] as List?)
             ?.map((item) => item.toString())
             .toSet() ??
         <String>{};
 
-    final historySnapshot = await _firestore
+    final stationHistorySnapshot = await _firestore
         .collection('user_progress')
         .doc(userId)
         .collection('completed_stations')
         .get();
+    final eventHistorySnapshot = await _firestore
+        .collection('user_progress')
+        .doc(userId)
+        .collection('completed_events')
+        .get();
 
-    final history = historySnapshot.docs.map((doc) {
+    final history = <Map<String, dynamic>>[];
+
+    for (final doc in stationHistorySnapshot.docs) {
       final data = doc.data();
-      final scannedAt = data['scannedAt'];
-      DateTime? date;
-      if (scannedAt is Timestamp) {
-        date = scannedAt.toDate();
-      }
-
-      return {
-        'stationId': doc.id,
+      final ts = data['scannedAt'];
+      history.add({
+        'id': doc.id,
+        'type': 'station',
         'name': (data['stationName'] ?? 'Ismeretlen állomás').toString(),
-        'points': (data['points'] ?? 0) is int ? data['points'] as int : int.tryParse('${data['points']}') ?? 0,
-        'date': date,
-      };
-    }).toList();
+        'points': _safeInt(data['points']),
+        'date': ts is Timestamp ? ts.toDate() : null,
+      });
+    }
+
+    for (final doc in eventHistorySnapshot.docs) {
+      final data = doc.data();
+      final ts = data['scannedAt'];
+      history.add({
+        'id': doc.id,
+        'type': 'event',
+        'name': (data['eventName'] ?? 'Ismeretlen esemény').toString(),
+        'points': _safeInt(data['points']),
+        'date': ts is Timestamp ? ts.toDate() : null,
+      });
+    }
 
     history.sort((a, b) {
       final ad = a['date'] as DateTime?;
@@ -123,47 +151,63 @@ Future<void> _ensureProgressDoc(User user) async {
       return bd.compareTo(ad);
     });
 
-    final totalPoints = (progressData['totalPoints'] ?? 0) is int
-        ? progressData['totalPoints'] as int
-        : int.tryParse('${progressData['totalPoints']}') ?? 0;
-
     setState(() {
       _completedStationIds
         ..clear()
-        ..addAll(completed);
+        ..addAll(completedStations);
+      _completedEventIds
+        ..clear()
+        ..addAll(completedEvents);
       _scanHistory
         ..clear()
         ..addAll(history);
-      _totalPoints = totalPoints;
+      _totalPoints = _safeInt(progressData['totalPoints']);
     });
   }
 
-  Future<Map<String, dynamic>?> _findStationByCode(String code) async {
+  Future<Map<String, dynamic>?> _findTargetByCode(String code) async {
     final normalized = code.trim();
 
-    final qrQuery = await _firestore
+    final qrStationQuery = await _firestore
         .collection('stations')
         .where('qrCode', isEqualTo: normalized)
         .limit(1)
         .get();
-
-    if (qrQuery.docs.isNotEmpty) {
-      final doc = qrQuery.docs.first;
+    if (qrStationQuery.docs.isNotEmpty) {
+      final doc = qrStationQuery.docs.first;
       final data = doc.data();
       return {
+        'kind': 'station',
         'id': doc.id,
         'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
-        'points': (data['points'] ?? 10) is int ? data['points'] as int : int.tryParse('${data['points']}') ?? 10,
+        'points': _safeInt(data['points'], fallback: 10),
       };
     }
 
-    final directDoc = await _firestore.collection('stations').doc(normalized).get();
-    if (directDoc.exists) {
-      final data = directDoc.data() ?? {};
+    final stationDoc = await _firestore.collection('stations').doc(normalized).get();
+    if (stationDoc.exists) {
+      final data = stationDoc.data() ?? {};
       return {
-        'id': directDoc.id,
+        'kind': 'station',
+        'id': stationDoc.id,
         'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
-        'points': (data['points'] ?? 10) is int ? data['points'] as int : int.tryParse('${data['points']}') ?? 10,
+        'points': _safeInt(data['points'], fallback: 10),
+      };
+    }
+
+    final eventQuery = await _firestore
+        .collection('events')
+        .where('qrCode', isEqualTo: normalized)
+        .limit(1)
+        .get();
+    if (eventQuery.docs.isNotEmpty) {
+      final doc = eventQuery.docs.first;
+      final data = doc.data();
+      return {
+        'kind': 'event',
+        'id': doc.id,
+        'name': (data['name'] ?? 'Ismeretlen esemény').toString(),
+        'points': _safeInt(data['points'], fallback: 20),
       };
     }
 
@@ -197,52 +241,76 @@ Future<void> _ensureProgressDoc(User user) async {
     setState(() => _isProcessing = true);
 
     try {
-      final station = await _findStationByCode(code);
-      if (station == null) {
+      final target = await _findTargetByCode(code);
+      if (target == null) {
         _showSnack('Ismeretlen QR-kód.');
         return;
       }
 
-      final stationId = station['id'] as String;
-      final stationName = station['name'] as String;
-      final points = station['points'] as int;
-
-      if (_completedStationIds.contains(stationId)) {
-        _showSnack('Ez az állomás már be lett olvasva.');
-        return;
-      }
-
+      final id = target['id'] as String;
+      final kind = target['kind'] as String;
+      final name = target['name'] as String;
+      final points = target['points'] as int;
       final userProgressRef = _firestore.collection('user_progress').doc(user.uid);
-      final completedStationRef = userProgressRef.collection('completed_stations').doc(stationId);
-
       final batch = _firestore.batch();
-      batch.set(userProgressRef, {
-        'completedStations': FieldValue.arrayUnion([stationId]),
-        'totalPoints': FieldValue.increment(points),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      batch.set(completedStationRef, {
-        'stationId': stationId,
-        'stationName': stationName,
-        'points': points,
-        'scannedCode': code,
-        'scannedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+
+      if (kind == 'station') {
+        if (_completedStationIds.contains(id)) {
+          _showSnack('Ez az állomás már be lett olvasva.');
+          return;
+        }
+        batch.set(userProgressRef, {
+          'completedStations': FieldValue.arrayUnion([id]),
+          'totalPoints': FieldValue.increment(points),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        batch.set(userProgressRef.collection('completed_stations').doc(id), {
+          'stationId': id,
+          'stationName': name,
+          'points': points,
+          'scannedCode': code,
+          'scannedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } else {
+        if (_completedEventIds.contains(id)) {
+          _showSnack('Ehhez az eseményhez már megszerezted a pecsétet.');
+          return;
+        }
+        batch.set(userProgressRef, {
+          'completedEvents': FieldValue.arrayUnion([id]),
+          'totalPoints': FieldValue.increment(points),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        batch.set(userProgressRef.collection('completed_events').doc(id), {
+          'eventId': id,
+          'eventName': name,
+          'points': points,
+          'scannedCode': code,
+          'scannedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
 
       await batch.commit();
 
       setState(() {
-        _completedStationIds.add(stationId);
+        if (kind == 'station') {
+          _completedStationIds.add(id);
+        } else {
+          _completedEventIds.add(id);
+        }
         _totalPoints += points;
         _scanHistory.insert(0, {
-          'stationId': stationId,
-          'name': stationName,
+          'id': id,
+          'type': kind,
+          'name': name,
           'points': points,
           'date': DateTime.now(),
         });
       });
 
-      _showSnack('Sikeres beolvasás: $stationName (+$points pont)');
+      _showSnack(kind == 'event'
+          ? 'Esemény pecsét megszerezve: $name (+$points pont)'
+          : 'Sikeres beolvasás: $name (+$points pont)');
     } catch (e) {
       _showSnack('Hiba a beolvasás mentésekor: $e');
     } finally {
@@ -335,7 +403,9 @@ Future<void> _ensureProgressDoc(User user) async {
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text(
-                                _isProcessing ? 'Feldolgozás...' : 'Irányítsd a QR-kódot a keretbe',
+                                _isProcessing
+                                    ? 'Feldolgozás...'
+                                    : 'Irányítsd az állomás vagy esemény QR-kódját a keretbe',
                                 style: const TextStyle(color: Colors.white),
                                 textAlign: TextAlign.center,
                               ),
@@ -372,17 +442,31 @@ Future<void> _ensureProgressDoc(User user) async {
                             const SizedBox(height: 8),
                             Expanded(
                               child: _scanHistory.isEmpty
-                                  ? const Center(child: Text('Még nincs beolvasott állomás.'))
+                                  ? const Center(child: Text('Még nincs beolvasott állomás vagy esemény.'))
                                   : ListView.builder(
                                       itemCount: _scanHistory.length,
                                       itemBuilder: (context, index) {
                                         final item = _scanHistory[index];
+                                        final isEvent = item['type'] == 'event';
                                         return Card(
                                           child: ListTile(
-                                            leading: const Icon(Icons.qr_code_2),
+                                            leading: Icon(
+                                              isEvent ? Icons.celebration : Icons.qr_code_2,
+                                              color: isEvent ? Colors.deepOrange : null,
+                                            ),
                                             title: Text(item['name'] as String),
                                             subtitle: Text(_formatDate(item['date'] as DateTime?)),
-                                            trailing: Text('+${item['points']} pont'),
+                                            trailing: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Text('+${item['points']} pont'),
+                                                Text(
+                                                  isEvent ? 'esemény' : 'állomás',
+                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         );
                                       },
