@@ -140,8 +140,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFFF2EBDD).withValues(alpha: 0.90),
-                    const Color(0xFFE7DDC9).withValues(alpha: 0.82),
+                    const Color(0xFFF2EBDD).withValues(alpha: 0.96),
+                    const Color(0xFFE7DDC9).withValues(alpha: 0.92),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -159,7 +159,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.82),
+                      color: Colors.white.withValues(alpha: 0.93),
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
@@ -264,14 +264,14 @@ class _MenuCard extends StatelessWidget {
       },
       child: Ink(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.86),
+          color: Colors.white.withValues(alpha: 0.98),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: item.color.withValues(alpha: 0.22)),
+          border: Border.all(color: item.color.withValues(alpha: 0.42), width: 1.4),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -315,3 +315,4 @@ class _MenuCard extends StatelessWidget {
     );
   }
 }
+

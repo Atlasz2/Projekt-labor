@@ -23,12 +23,17 @@ class _CameraScreenState extends State<CameraScreen> {
 
   bool _isLoading = true;
   bool _isProcessing = false;
+  bool _showSuccessOverlay = false;
+  String _successName = '';
+  int _successPoints = 0;
+  String _successKind = 'station';
   String? _error;
   int _totalPoints = 0;
 
   String? _lastCode;
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
   static const Duration _scanCooldown = Duration(milliseconds: 1500);
+  Timer? _successTimer;
 
   @override
   void initState() {
@@ -38,6 +43,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
+    _successTimer?.cancel();
     _scannerController.dispose();
     super.dispose();
   }
@@ -118,11 +124,11 @@ class _CameraScreenState extends State<CameraScreen> {
 
     final history = <Map<String, dynamic>>[];
 
-    for (final doc in stationHistorySnapshot.docs) {
-      final data = doc.data();
+    for (final item in stationHistorySnapshot.docs) {
+      final data = item.data();
       final ts = data['scannedAt'];
       history.add({
-        'id': doc.id,
+        'id': item.id,
         'type': 'station',
         'name': (data['stationName'] ?? 'Ismeretlen állomás').toString(),
         'points': _safeInt(data['points']),
@@ -130,11 +136,11 @@ class _CameraScreenState extends State<CameraScreen> {
       });
     }
 
-    for (final doc in eventHistorySnapshot.docs) {
-      final data = doc.data();
+    for (final item in eventHistorySnapshot.docs) {
+      final data = item.data();
       final ts = data['scannedAt'];
       history.add({
-        'id': doc.id,
+        'id': item.id,
         'type': 'event',
         'name': (data['eventName'] ?? 'Ismeretlen esemény').toString(),
         'points': _safeInt(data['points']),
@@ -308,6 +314,7 @@ class _CameraScreenState extends State<CameraScreen> {
         });
       });
 
+      _showSuccess(name, points, kind);
       _showSnack(kind == 'event'
           ? 'Esemény pecsét megszerezve: $name (+$points pont)'
           : 'Sikeres beolvasás: $name (+$points pont)');
@@ -335,6 +342,21 @@ class _CameraScreenState extends State<CameraScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
+  }
+
+  void _showSuccess(String name, int points, String kind) {
+    _successTimer?.cancel();
+    setState(() {
+      _showSuccessOverlay = true;
+      _successName = name;
+      _successPoints = points;
+      _successKind = kind;
+    });
+
+    _successTimer = Timer(const Duration(milliseconds: 1300), () {
+      if (!mounted) return;
+      setState(() => _showSuccessOverlay = false);
+    });
   }
 
   @override
@@ -372,107 +394,155 @@ class _CameraScreenState extends State<CameraScreen> {
                     ),
                   ),
                 )
-              : Column(
+              : Stack(
                   children: [
-                    Expanded(
-                      flex: 3,
-                      child: Stack(
-                        children: [
-                          MobileScanner(
-                            controller: _scannerController,
-                            onDetect: _onDetect,
-                          ),
-                          Center(
-                            child: Container(
-                              width: 260,
-                              height: 260,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.white, width: 3),
-                                borderRadius: BorderRadius.circular(18),
+                    Column(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Stack(
+                            children: [
+                              MobileScanner(
+                                controller: _scannerController,
+                                onDetect: _onDetect,
                               ),
-                            ),
-                          ),
-                          Positioned(
-                            left: 16,
-                            right: 16,
-                            bottom: 18,
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(10),
+                              Center(
+                                child: Container(
+                                  width: 260,
+                                  height: 260,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.white, width: 3),
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                ),
                               ),
-                              child: Text(
-                                _isProcessing
-                                    ? 'Feldolgozás...'
-                                    : 'Irányítsd az állomás vagy esemény QR-kódját a keretbe',
-                                style: const TextStyle(color: Colors.white),
-                                textAlign: TextAlign.center,
+                              Positioned(
+                                left: 16,
+                                right: 16,
+                                bottom: 18,
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.6),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    _isProcessing
+                                        ? 'Feldolgozás...'
+                                        : 'Irányítsd az állomás vagy esemény QR-kódját a keretbe',
+                                    style: const TextStyle(color: Colors.white),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Előrehaladás: ${(progress * 100).toStringAsFixed(0)}% (cél: 140 pont)',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            LinearProgressIndicator(
-                              value: progress,
-                              minHeight: 10,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            const SizedBox(height: 14),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('Beolvasási előzmények', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                Text('${_scanHistory.length} db'),
+                                Text(
+                                  'Előrehaladás: ${(progress * 100).toStringAsFixed(0)}% (cél: 140 pont)',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 8),
+                                LinearProgressIndicator(
+                                  value: progress,
+                                  minHeight: 10,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                const SizedBox(height: 14),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Beolvasási előzmények', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    Text('${_scanHistory.length} db'),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Expanded(
+                                  child: _scanHistory.isEmpty
+                                      ? const Center(child: Text('Még nincs beolvasott állomás vagy esemény.'))
+                                      : ListView.builder(
+                                          itemCount: _scanHistory.length,
+                                          itemBuilder: (context, index) {
+                                            final item = _scanHistory[index];
+                                            final isEvent = item['type'] == 'event';
+                                            return Card(
+                                              child: ListTile(
+                                                leading: Icon(
+                                                  isEvent ? Icons.celebration : Icons.qr_code_2,
+                                                  color: isEvent ? Colors.deepOrange : null,
+                                                ),
+                                                title: Text(item['name'] as String),
+                                                subtitle: Text(_formatDate(item['date'] as DateTime?)),
+                                                trailing: Column(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  children: [
+                                                    Text('+${item['points']} pont'),
+                                                    Text(
+                                                      isEvent ? 'esemény' : 'állomás',
+                                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Expanded(
-                              child: _scanHistory.isEmpty
-                                  ? const Center(child: Text('Még nincs beolvasott állomás vagy esemény.'))
-                                  : ListView.builder(
-                                      itemCount: _scanHistory.length,
-                                      itemBuilder: (context, index) {
-                                        final item = _scanHistory[index];
-                                        final isEvent = item['type'] == 'event';
-                                        return Card(
-                                          child: ListTile(
-                                            leading: Icon(
-                                              isEvent ? Icons.celebration : Icons.qr_code_2,
-                                              color: isEvent ? Colors.deepOrange : null,
-                                            ),
-                                            title: Text(item['name'] as String),
-                                            subtitle: Text(_formatDate(item['date'] as DateTime?)),
-                                            trailing: Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                Text('+${item['points']} pont'),
-                                                Text(
-                                                  isEvent ? 'esemény' : 'állomás',
-                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    AnimatedOpacity(
+                      opacity: _showSuccessOverlay ? 1 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      child: IgnorePointer(
+                        ignoring: true,
+                        child: Center(
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 26),
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.78),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
                             ),
-                          ],
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _successKind == 'event' ? Icons.celebration : Icons.check_circle,
+                                  color: Colors.lightGreenAccent,
+                                  size: 54,
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Sikeres beolvasás!',
+                                  style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _successName,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '+$_successPoints pont',
+                                  style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 18),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),

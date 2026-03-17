@@ -40,7 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserData() async {
     try {
       setState(() {
-        _isLoading = true;
+        _isLoading = _currentUserData == null;
         _error = null;
       });
 
@@ -380,3 +380,4 @@ class _AchievementChip extends StatelessWidget {
     );
   }
 }
+

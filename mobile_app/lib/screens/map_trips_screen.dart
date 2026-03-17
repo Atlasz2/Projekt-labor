@@ -195,15 +195,19 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     final minLng = routePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
     final maxLng = routePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
 
-    await ctrl.animateCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(minLat - 0.003, minLng - 0.003),
-          northeast: LatLng(maxLat + 0.003, maxLng + 0.003),
+    try {
+      await ctrl.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(minLat - 0.003, minLng - 0.003),
+            northeast: LatLng(maxLat + 0.003, maxLng + 0.003),
+          ),
+          72,
         ),
-        72,
-      ),
-    );
+      );
+    } catch (_) {
+      await ctrl.animateCamera(CameraUpdate.newLatLngZoom(routePoints.first, 14));
+    }
   }
 
   Future<void> _goToMyLocation() async {
@@ -455,3 +459,4 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     );
   }
 }
+

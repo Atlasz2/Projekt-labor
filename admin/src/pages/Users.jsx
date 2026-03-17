@@ -68,7 +68,7 @@ function Users() {
             completedStations,
             totalStations,
             progress,
-            points: Number(progressData.points || completedStations * 10),
+            points: Number(progressData.totalPoints ?? progressData.points ?? 0),
             lastUpdated: progressData.lastUpdated || null,
             createdAt: progressData.createdAt || null,
           };
@@ -262,3 +262,4 @@ function Users() {
 }
 
 export default Users;
+
