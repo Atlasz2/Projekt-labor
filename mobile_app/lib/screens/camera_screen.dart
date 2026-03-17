@@ -27,15 +27,19 @@ class _CameraScreenState extends State<CameraScreen> {
   int _totalPoints = 0;
 
   bool _showFeedbackOverlay = false;
+  bool _showAchievementOverlay = false;
   bool _feedbackSuccess = true;
   String _feedbackTitle = '';
   String _feedbackSubtitle = '';
   int? _feedbackPoints;
+  String _achievementTitle = '';
+  String _achievementSubtitle = '';
 
   String? _lastCode;
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
   static const Duration _scanCooldown = Duration(milliseconds: 1400);
   Timer? _overlayTimer;
+  Timer? _achievementTimer;
 
   @override
   void initState() {
@@ -46,6 +50,7 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void dispose() {
     _overlayTimer?.cancel();
+    _achievementTimer?.cancel();
     _scannerController.dispose();
     super.dispose();
   }
@@ -228,6 +233,7 @@ class _CameraScreenState extends State<CameraScreen> {
           'id': doc.id,
           'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
           'points': _safeInt(data['points'], fallback: 10),
+          'tripId': (data['tripId'] ?? '').toString(),
         };
       }
     }
@@ -241,6 +247,7 @@ class _CameraScreenState extends State<CameraScreen> {
           'id': stationDoc.id,
           'name': (data['name'] ?? 'Ismeretlen állomás').toString(),
           'points': _safeInt(data['points'], fallback: 10),
+          'tripId': (data['tripId'] ?? '').toString(),
         };
       }
     }
@@ -316,6 +323,10 @@ class _CameraScreenState extends State<CameraScreen> {
       final kind = target['kind'] as String;
       final name = target['name'] as String;
       final points = target['points'] as int;
+      final tripId = (target['tripId'] ?? '').toString();
+      final beforeStations = _completedStationIds.length;
+      final beforeEvents = _completedEventIds.length;
+      final beforePoints = _totalPoints;
 
       if (kind == 'station' && _completedStationIds.contains(id)) {
         _showFeedback(success: false, title: 'Már beolvasva', subtitle: '$name már korábban rögzítve lett.');
@@ -383,6 +394,25 @@ class _CameraScreenState extends State<CameraScreen> {
         subtitle: name,
         points: points,
       );
+
+      final afterStations = kind == 'station' ? beforeStations + 1 : beforeStations;
+      final afterEvents = kind == 'event' ? beforeEvents + 1 : beforeEvents;
+      final afterPoints = beforePoints + points;
+      final unlocked = <Map<String, String>>[];
+      if (beforeStations < 1 && afterStations >= 1) unlocked.add({'title': 'Achievement: Első lépések', 'subtitle': 'Megszerezted az első QR beolvasást!'});
+      if (beforeStations < 3 && afterStations >= 3) unlocked.add({'title': 'Achievement: Felfedező', 'subtitle': 'Legalább 3 állomást bejártál!'});
+      if (beforeEvents < 1 && afterEvents >= 1) unlocked.add({'title': 'Achievement: Eseményvadász', 'subtitle': 'Megvan az első esemény pecsét!'});
+      if (beforePoints < 140 && afterPoints >= 140) unlocked.add({'title': 'Achievement: Túrahős', 'subtitle': 'Elérted a 140 pontot!'});
+      if (kind == 'station' && tripId.isNotEmpty) {
+        final tripCompletion = await _checkTripCompletion(tripId);
+        if (tripCompletion != null) {
+          unlocked.add({'title': 'Achievement: Túra teljesítve', 'subtitle': tripCompletion});
+        }
+      }
+      if (unlocked.isNotEmpty) {
+        final first = unlocked.first;
+        _showAchievement(first['title']!, first['subtitle']!);
+      }
       _showSnack(kind == 'event'
           ? 'Esemény pecsét megszerezve: $name (+$points pont)'
           : 'Sikeres beolvasás: $name (+$points pont)');
@@ -401,6 +431,7 @@ class _CameraScreenState extends State<CameraScreen> {
     int? points,
   }) {
     _overlayTimer?.cancel();
+    _achievementTimer?.cancel();
     if (!mounted) return;
 
     setState(() {
@@ -417,6 +448,44 @@ class _CameraScreenState extends State<CameraScreen> {
     });
   }
 
+
+  Future<String?> _checkTripCompletion(String tripId) async {
+    try {
+      final tripDoc = await _firestore.collection('trips').doc(tripId).get();
+      final tripData = tripDoc.data() ?? {};
+      final tripName = (tripData['name'] ?? 'Ismeretlen túra').toString();
+
+      final stationsSnapshot = await _firestore
+          .collection('stations')
+          .where('tripId', isEqualTo: tripId)
+          .get();
+      final stationIds = stationsSnapshot.docs.map((d) => d.id).toSet();
+      if (stationIds.isEmpty) return null;
+
+      final completed = _completedStationIds;
+      final doneCount = stationIds.where((id) => completed.contains(id)).length;
+      if (doneCount >= stationIds.length) {
+        return '$tripName útvonal teljesítve!';
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _showAchievement(String title, String subtitle) {
+    _achievementTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _achievementTitle = title;
+      _achievementSubtitle = subtitle;
+      _showAchievementOverlay = true;
+    });
+    _achievementTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => _showAchievementOverlay = false);
+    });
+  }
   String _formatDate(DateTime? date) {
     if (date == null) return 'Ismeretlen időpont';
     final y = date.year.toString().padLeft(4, '0');
@@ -576,6 +645,44 @@ class _CameraScreenState extends State<CameraScreen> {
                       ],
                     ),
                     AnimatedOpacity(
+                      opacity: _showAchievementOverlay ? 1 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      child: IgnorePointer(
+                        ignoring: true,
+                        child: Center(
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 22),
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF3A0CA3), Color(0xFFF72585)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(22),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.pinkAccent.withValues(alpha: 0.35),
+                                  blurRadius: 24,
+                                  spreadRadius: 4,
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.emoji_events, color: Colors.amberAccent, size: 60),
+                                const SizedBox(height: 8),
+                                Text(_achievementTitle, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                                const SizedBox(height: 8),
+                                Text(_achievementSubtitle, style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    AnimatedOpacity(
                       opacity: _showFeedbackOverlay ? 1 : 0,
                       duration: const Duration(milliseconds: 180),
                       child: IgnorePointer(
@@ -643,3 +750,4 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
+

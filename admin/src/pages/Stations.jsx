@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { db, storage } from '../firebaseConfig';
-import { collection, getDocs, updateDoc, deleteDoc, doc, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
 import { jsPDF } from 'jspdf';
-import '../styles/Stations.css';
-import ConfirmDialog from '../components/ConfirmDialog';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import '../styles/Stations.css';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: '220px', width: '100%' };
 
 const getQrValue = (station) => station.qrCode || station.id;
-
 const getQrImageUrl = (value, size = 140) => {
   const data = encodeURIComponent(value || '');
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${data}`;
@@ -30,9 +29,10 @@ const fetchDataUrl = async (url) => {
 };
 
 function MapPicker({ value, onChange }) {
-  const markerPosition = value?.lat != null && value?.lon != null
-    ? { lat: value.lat, lng: value.lon }
-    : null;
+  const markerPosition =
+    value?.lat != null && value?.lon != null
+      ? { lat: value.lat, lng: value.lon }
+      : null;
   const center = markerPosition || DEFAULT_CENTER;
 
   return (
@@ -47,7 +47,7 @@ function MapPicker({ value, onChange }) {
       options={{
         streetViewControl: false,
         mapTypeControl: false,
-        fullscreenControl: false
+        fullscreenControl: false,
       }}
     >
       {markerPosition ? <Marker position={markerPosition} /> : null}
@@ -57,13 +57,17 @@ function MapPicker({ value, onChange }) {
 
 export default function Stations() {
   const [stations, setStations] = useState([]);
+  const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [snack, setSnack] = useState({ open: false, msg: '', severity: 'error' });
-  const showMsg = (msg, severity = 'error') => setSnack({ open: true, msg, severity });
+
+  const showMsg = (msg, severity = 'error') =>
+    setSnack({ open: true, msg, severity });
+
   const [formData, setFormData] = useState({
     name: '',
     latitude: null,
@@ -71,24 +75,26 @@ export default function Stations() {
     description: '',
     points: 0,
     imageUrl: '',
-    qrCode: ''
+    qrCode: '',
+    tripId: '',
   });
 
   const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
   });
 
   useEffect(() => {
     fetchStations();
+    fetchTrips();
   }, []);
 
   const fetchStations = async () => {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, 'stations'));
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+      const data = snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
       }));
       setStations(data);
     } catch (error) {
@@ -97,6 +103,22 @@ export default function Stations() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTrips = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'trips'));
+      const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      setTrips(data);
+    } catch (error) {
+      console.error('Turak betoltese sikertelen:', error);
+    }
+  };
+
+  const getTripName = (tripId) => {
+    if (!tripId) return 'Nincs turahoz rendelve';
+    const trip = trips.find((item) => item.id === tripId);
+    return trip?.name || 'Ismeretlen tura';
   };
 
   const handleEdit = (station) => {
@@ -108,7 +130,8 @@ export default function Stations() {
       description: station.description || '',
       points: station.points || 0,
       imageUrl: station.imageUrl || '',
-      qrCode: station.qrCode || ''
+      qrCode: station.qrCode || '',
+      tripId: station.tripId || '',
     });
     setShowModal(true);
   };
@@ -122,7 +145,8 @@ export default function Stations() {
       description: '',
       points: 0,
       imageUrl: '',
-      qrCode: ''
+      qrCode: '',
+      tripId: '',
     });
     setShowModal(true);
   };
@@ -135,7 +159,7 @@ export default function Stations() {
       const storageRef = ref(storage, `stations/${Date.now()}_${safeName}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
-      setFormData(prev => ({ ...prev, imageUrl: url }));
+      setFormData((prev) => ({ ...prev, imageUrl: url }));
     } catch (error) {
       console.error('Kep feltoltes sikertelen:', error);
       showMsg('Hiba a kep feltoltese kozben');
@@ -156,17 +180,18 @@ export default function Stations() {
         latitude: Number(formData.latitude),
         longitude: Number(formData.longitude),
         description: formData.description || '',
-        points: parseInt(formData.points) || 0,
+        points: parseInt(formData.points, 10) || 0,
         imageUrl: formData.imageUrl || '',
-        qrCode: formData.qrCode || ''
+        qrCode: formData.qrCode || '',
+        tripId: formData.tripId || '',
       };
 
       if (editingId) {
-        const docRef = doc(db, 'stations', editingId);
-        await updateDoc(docRef, payload);
+        await updateDoc(doc(db, 'stations', editingId), payload);
       } else {
         await addDoc(collection(db, 'stations'), payload);
       }
+
       setShowModal(false);
       fetchStations();
     } catch (error) {
@@ -193,10 +218,10 @@ export default function Stations() {
   };
 
   const handleMapPick = (coords) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       latitude: coords.lat,
-      longitude: coords.lon
+      longitude: coords.lon,
     }));
   };
 
@@ -215,21 +240,22 @@ export default function Stations() {
       docPdf.setFontSize(12);
       const coordText = `Koordinata: ${station.latitude?.toFixed(5)}, ${station.longitude?.toFixed(5)}`;
       docPdf.text(coordText, 20, 30);
+      docPdf.text(`Tura: ${getTripName(station.tripId)}`, 20, 38);
 
       if (station.description) {
         docPdf.setFontSize(11);
         const lines = docPdf.splitTextToSize(station.description, 170);
-        docPdf.text(lines, 20, 40);
+        docPdf.text(lines, 20, 48);
       }
 
-      docPdf.addImage(qrData, 'PNG', 20, 70, 60, 60);
+      docPdf.addImage(qrData, 'PNG', 20, 78, 60, 60);
       docPdf.setFontSize(10);
-      docPdf.text(`QR: ${qrValue}`, 20, 135);
+      docPdf.text(`QR: ${qrValue}`, 20, 143);
 
       if (station.imageUrl) {
         try {
           const imageData = await fetchDataUrl(station.imageUrl);
-          docPdf.addImage(imageData, 'JPEG', 100, 70, 90, 60);
+          docPdf.addImage(imageData, 'JPEG', 100, 78, 90, 60);
         } catch (err) {
           console.error('Kep PDF-be tetele sikertelen:', err);
         }
@@ -243,7 +269,13 @@ export default function Stations() {
     }
   };
 
-  if (loading) return <div className="stations-shell"><p className="empty-state">Betoltes...</p></div>;
+  if (loading) {
+    return (
+      <div className="stations-shell">
+        <p className="empty-state">Betoltes...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="stations-shell">
@@ -259,7 +291,7 @@ export default function Stations() {
       </div>
 
       <div className="stations-grid">
-        {stations.map(station => {
+        {stations.map((station) => {
           const qrValue = getQrValue(station);
           const qrUrl = getQrImageUrl(qrValue);
           return (
@@ -278,6 +310,7 @@ export default function Stations() {
                   <span className="station-coords">📍 {station.latitude?.toFixed(4)}, {station.longitude?.toFixed(4)}</span>
                 </div>
                 <p className="station-desc">{station.description || 'Nincs leiras megadva.'}</p>
+                <p className="station-desc"><strong>Tura:</strong> {getTripName(station.tripId)}</p>
                 <div className="station-qr">
                   <div className="qr-meta">
                     <span className="qr-label">QR: {qrValue}</span>
@@ -299,21 +332,17 @@ export default function Stations() {
         <div className="modal-overlay">
           <div className="modal">
             <h2>{editingId ? 'Allomas szerkesztese' : 'Uj allomas'}</h2>
+
             <div className="form-group">
               <label>Nev *</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
+              <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
             </div>
+
             <div className="form-group">
               <label>Leiras</label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
+              <textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
             </div>
+
             <div className="form-group">
               <label>Koordinata (terkepen valaszd ki)</label>
               <div className="map-picker">
@@ -331,26 +360,32 @@ export default function Stations() {
                   : 'Kattints a terkepre a koordinata beallitashoz.'}
               </p>
             </div>
+
+            <div className="form-group">
+              <label>Turahoz rendeles</label>
+              <select
+                value={formData.tripId || ''}
+                onChange={(e) => setFormData({ ...formData, tripId: e.target.value })}
+              >
+                <option value="">Nincs turahoz rendelve</option>
+                {trips.map((trip) => (
+                  <option key={trip.id} value={trip.id}>{trip.name || trip.id}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="form-group">
               <label>Pontok</label>
-              <input
-                type="number"
-                value={formData.points}
-                onChange={(e) => setFormData({ ...formData, points: e.target.value })}
-              />
+              <input type="number" value={formData.points} onChange={(e) => setFormData({ ...formData, points: e.target.value })} />
             </div>
+
             <div className="form-group">
               <label>Kep feltoltese (opcionalis)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e.target.files?.[0])}
-              />
+              <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} />
               {uploading && <p className="upload-note">Feltoltes...</p>}
-              {formData.imageUrl && !uploading && (
-                <img className="image-preview" src={formData.imageUrl} alt="Elonezet" loading="lazy" />
-              )}
+              {formData.imageUrl && !uploading && <img className="image-preview" src={formData.imageUrl} alt="Elonezet" loading="lazy" />}
             </div>
+
             <div className="form-group">
               <label>QR kod (opcionalis)</label>
               <input
@@ -360,6 +395,7 @@ export default function Stations() {
                 placeholder="Ha ures, az allomas ID lesz hasznalva"
               />
             </div>
+
             <div className="modal-actions">
               <button onClick={handleSave} className="btn-save">Mentes</button>
               <button onClick={() => setShowModal(false)} className="btn-cancel">Megsem</button>
@@ -367,26 +403,26 @@ export default function Stations() {
           </div>
         </div>
       )}
+
       <ConfirmDialog
         open={deleteDialog.open}
         title="Allomas torlese"
-        message="Biztosan torold ezt az allomastt?"
+        message="Biztosan torold ezt az allomast?"
         confirmText="Torles"
         onClose={() => setDeleteDialog({ open: false, id: null })}
         onConfirm={confirmDelete}
       />
+
       <Snackbar
         open={snack.open}
         autoHideDuration={4000}
-        onClose={() => setSnack(s => ({ ...s, open: false }))}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity={snack.severity} onClose={() => setSnack(s => ({ ...s, open: false }))}>
+        <Alert severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))}>
           {snack.msg}
         </Alert>
       </Snackbar>
     </div>
   );
 }
-
-
