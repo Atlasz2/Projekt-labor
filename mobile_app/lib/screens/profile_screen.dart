@@ -17,6 +17,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _currentUserData;
   List<Map<String, dynamic>> _allUsers = [];
   List<Map<String, dynamic>> _newlyUnlockedAchievements = [];
+  List<Map<String, dynamic>> _achievementDefinitions = [];
+  Set<String> _unlockedAchievementIds = <String>{};
+
   bool _isLoading = true;
   bool _showAchievementBanner = false;
   String? _error;
@@ -26,8 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-    _loadUnlockedAchievements();
+    _refreshAll();
   }
 
   @override
@@ -46,6 +48,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse('$value') ?? 0;
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _loadUserData(),
+      _loadAchievementCatalogAndUnlocks(),
+    ]);
   }
 
   Future<void> _loadUserData() async {
@@ -69,7 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'completedStations': completedStations,
           'completedEvents': completedEvents,
           'points': totalPoints,
-          'currentTrip': data['currentTrip']?.toString() ?? 'Nincs túra',
+          'currentTrip': data['currentTrip']?.toString() ?? 'Nincs tura',
         };
       }).toList();
 
@@ -86,12 +95,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final data = userDoc.data() ?? {};
         current = {
           'id': currentUid ?? 'unknown',
-          'name': data['displayName']?.toString() ?? data['name']?.toString() ?? 'Felhasználó',
+          'name': data['displayName']?.toString() ?? data['name']?.toString() ?? 'Felhasznalo',
           'email': data['email']?.toString() ?? _auth.currentUser?.email ?? '',
           'completedStations': _safeCount(data['visitedStations']),
           'completedEvents': _safeCount(data['visitedEvents']),
           'points': _safeInt(data['points']),
-          'currentTrip': 'Nincs túra',
+          'currentTrip': 'Nincs tura',
         };
         users.add(Map<String, dynamic>.from(current));
       }
@@ -107,27 +116,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Hiba az adatok betöltésekor: $e';
+        _error = 'Hiba az adatok betoltesekor: $e';
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _loadUnlockedAchievements() async {
+  Future<void> _loadAchievementCatalogAndUnlocks() async {
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) return;
 
-      final achievementDocs = await _firestore
+      final achSnap = await _firestore.collection('achievements').get();
+      final defs = achSnap.docs
+          .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
+          .toList();
+
+      final unlockedSnap = await _firestore
           .collection('user_progress')
           .doc(uid)
           .collection('unlocked_achievements')
           .get();
 
+      final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
+
       final now = DateTime.now();
       final last24Hours = now.subtract(const Duration(hours: 24));
-
-      final newlyUnlocked = achievementDocs.docs
+      final newlyUnlocked = unlockedSnap.docs
           .where((doc) {
             final unlockedAt = doc.data()['unlockedAt'];
             if (unlockedAt == null) return false;
@@ -137,12 +152,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .map((doc) => {'id': doc.id, ...doc.data()})
           .toList();
 
-      if (newlyUnlocked.isNotEmpty && mounted) {
-        setState(() {
-          _newlyUnlockedAchievements = newlyUnlocked;
-          _showAchievementBanner = true;
-        });
+      if (!mounted) return;
+      setState(() {
+        _achievementDefinitions = defs;
+        _unlockedAchievementIds = unlockedIds;
+        _newlyUnlockedAchievements = newlyUnlocked;
+        _showAchievementBanner = newlyUnlocked.isNotEmpty;
+      });
 
+      if (newlyUnlocked.isNotEmpty) {
         _bannerDismissTimer?.cancel();
         _bannerDismissTimer = Timer(const Duration(seconds: 5), () {
           if (mounted) {
@@ -151,7 +169,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Achievement betöltés sikertelen: $e');
+      debugPrint('Achievement betoltes sikertelen: $e');
     }
   }
 
@@ -162,18 +180,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '#$rank';
   }
 
-  List<_Achievement> _buildAchievements() {
-    final points = _safeInt(_currentUserData?['points']);
-    final stations = _safeCount(_currentUserData?['completedStations']);
-    final events = _safeCount(_currentUserData?['completedEvents']);
+  String _conditionText(String type, int value) {
+    if (type == 'station_count') return '$value allomas';
+    if (type == 'event_count') return '$value esemeny';
+    if (type == 'qr_count') return '$value QR-kod';
+    if (type == 'points_threshold') return '$value pont';
+    if (type == 'trip_complete') return '$value teljesitett tura';
+    if (type == 'top_n') return 'Top $value helyezes';
+    if (type == 'manual') return 'Manualis';
+    return '';
+  }
 
-    return [
-      _Achievement('Első lépések', 'Olvass be 1 QR-kódot', stations >= 1 || events >= 1, Icons.flag_outlined),
-      _Achievement('Felfedező', 'Látogass meg legalább 3 állomást', stations >= 3, Icons.hiking_outlined),
-      _Achievement('Túrahős', 'Gyűjts össze 140 pontot', points >= 140, Icons.workspace_premium_outlined),
-      _Achievement('Eseményvadász', 'Vegyél részt 1 eseményen', events >= 1, Icons.celebration_outlined),
-      _Achievement('Helyi legenda', 'Legyél top 3 a ranglistán', _userRank > 0 && _userRank <= 3, Icons.military_tech_outlined),
-    ];
+  List<_Achievement> _buildAchievements() {
+    if (_achievementDefinitions.isEmpty) {
+      final points = _safeInt(_currentUserData?['points']);
+      final stations = _safeCount(_currentUserData?['completedStations']);
+      final events = _safeCount(_currentUserData?['completedEvents']);
+      return [
+        _Achievement('Elso lepesek', 'Olvass be 1 QR-kodot', stations >= 1 || events >= 1, '👣', '1 QR-kod'),
+        _Achievement('Felfedezo', 'Latogass meg legalabb 3 allomast', stations >= 3, '🧭', '3 allomas'),
+        _Achievement('Turahos', 'Gyujts ossze 140 pontot', points >= 140, '🏃', '140 pont'),
+      ];
+    }
+
+    return _achievementDefinitions.map((a) {
+      final id = (a['id'] ?? '').toString();
+      final title = (a['name'] ?? 'Achievement').toString();
+      final description = (a['description'] ?? '').toString();
+      final icon = (a['icon'] ?? '🏆').toString();
+      final conditionType = (a['conditionType'] ?? '').toString();
+      final conditionValue = _safeInt(a['conditionValue']);
+      final condition = _conditionText(conditionType, conditionValue);
+      final unlocked = _unlockedAchievementIds.contains(id);
+      return _Achievement(title, description, unlocked, icon, condition);
+    }).toList();
   }
 
   @override
@@ -185,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final achievements = _buildAchievements();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Fiókom')),
+      appBar: AppBar(title: const Text('Fiokom')),
       body: Stack(
         children: [
           _isLoading
@@ -201,13 +241,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             const SizedBox(height: 12),
                             Text(_error!, textAlign: TextAlign.center),
                             const SizedBox(height: 12),
-                            FilledButton(onPressed: _loadUserData, child: const Text('Újrapróbálás')),
+                            FilledButton(onPressed: _refreshAll, child: const Text('Ujraprobalas')),
                           ],
                         ),
                       ),
                     )
                   : RefreshIndicator(
-                      onRefresh: _loadUserData,
+                      onRefresh: _refreshAll,
                       child: ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
@@ -217,13 +257,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               _buildStatCard('Pontok', currentPoints.toString(), Icons.star, Colors.amber),
                               const SizedBox(width: 12),
-                              _buildStatCard('Állomások', stationCount.toString(), Icons.place, Colors.blue),
+                              _buildStatCard('Allomasok', stationCount.toString(), Icons.place, Colors.blue),
                             ],
                           ),
                           const SizedBox(height: 12),
                           Row(
                             children: [
-                              _buildStatCard('Események', eventCount.toString(), Icons.celebration, Colors.deepOrange),
+                              _buildStatCard('Esemenyek', eventCount.toString(), Icons.celebration, Colors.deepOrange),
                               const SizedBox(width: 12),
                               _buildStatCard('Rang', _userRank == 0 ? '-' : _getRankMedal(_userRank), Icons.leaderboard, Colors.teal),
                             ],
@@ -235,7 +275,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text('Jutalom előrehaladás', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  const Text('Jutalom elorehaladas', style: TextStyle(fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 8),
                                   LinearProgressIndicator(
                                     value: progressToReward,
@@ -252,8 +292,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Card(
                             child: ListTile(
                               leading: Icon(Icons.map, color: Colors.blue.shade400),
-                              title: const Text('Jelenlegi túra'),
-                              subtitle: Text(_currentUserData?['currentTrip']?.toString() ?? 'Nincs túra'),
+                              title: const Text('Jelenlegi tura'),
+                              subtitle: Text(_currentUserData?['currentTrip']?.toString() ?? 'Nincs tura'),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -290,7 +330,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           children: [
                                             Text(user['name'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
                                             Text(
-                                              '${_safeCount(user['completedStations'])} állomás · ${_safeCount(user['completedEvents'])} esemény',
+                                              '${_safeCount(user['completedStations'])} allomas · ${_safeCount(user['completedEvents'])} esemeny',
                                               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                                             ),
                                           ],
@@ -320,7 +360,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ],
                       ),
                     ),
-          // Achievements banner felül
           if (_showAchievementBanner && _newlyUnlockedAchievements.isNotEmpty)
             Positioned(
               top: 0,
@@ -338,7 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Új Achievement feloldva!',
+                            'Uj Achievement feloldva!',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -346,7 +385,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           Text(
-                            _newlyUnlockedAchievements.map((a) => (a['id'] as String).replaceAll('_', ' ')).join(', '),
+                            _newlyUnlockedAchievements
+                                .map((a) => (a['name'] ?? a['id']).toString())
+                                .join(', '),
                             style: const TextStyle(color: Colors.white70, fontSize: 12),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -388,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            _currentUserData?['name']?.toString() ?? 'Felhasználó',
+            _currentUserData?['name']?.toString() ?? 'Felhasznalo',
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           const SizedBox(height: 4),
@@ -430,9 +471,10 @@ class _Achievement {
   final String title;
   final String description;
   final bool unlocked;
-  final IconData icon;
+  final String iconEmoji;
+  final String condition;
 
-  _Achievement(this.title, this.description, this.unlocked, this.icon);
+  _Achievement(this.title, this.description, this.unlocked, this.iconEmoji, this.condition);
 }
 
 class _AchievementChip extends StatelessWidget {
@@ -446,7 +488,7 @@ class _AchievementChip extends StatelessWidget {
     final fg = achievement.unlocked ? const Color(0xFF166534) : const Color(0xFF6B7280);
 
     return Container(
-      width: 160,
+      width: 178,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
@@ -458,7 +500,7 @@ class _AchievementChip extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(achievement.icon, size: 18, color: fg),
+              Text(achievement.iconEmoji, style: TextStyle(fontSize: 18, color: fg)),
               const Spacer(),
               Icon(
                 achievement.unlocked ? Icons.check_circle : Icons.lock_outline,
@@ -474,6 +516,20 @@ class _AchievementChip extends StatelessWidget {
             achievement.description,
             style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.84)),
           ),
+          if (achievement.condition.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.68),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                'Feltetel: ${achievement.condition}',
+                style: TextStyle(fontSize: 11, color: fg),
+              ),
+            ),
+          ]
         ],
       ),
     );
