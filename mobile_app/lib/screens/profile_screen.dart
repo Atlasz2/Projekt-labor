@@ -224,6 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final eventCount = _safeCount(_currentUserData?['completedEvents']);
     final progressToReward = (currentPoints / 140).clamp(0.0, 1.0);
     final achievements = _buildAchievements();
+    final unlockedCount = achievements.where((a) => a.unlocked).length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Fiokom')),
@@ -299,6 +300,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 16),
                           const Text('Achievementek', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),                          Text('Feloldva: $unlockedCount / ${achievements.length}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 10,

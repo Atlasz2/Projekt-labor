@@ -104,72 +104,97 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
     final id = (ach['id'] ?? '').toString();
 
     if (_unlockedIds.contains(id)) {
-      return _ProgressData(
+      return const _ProgressData(
         conditionLabel: 'Feloldva',
         currentLabel: 'Kesz',
+        remainingLabel: 'Teljesitve',
         progress: 1,
+        sortScore: 1,
       );
     }
 
     if (type == 'station_count') {
       final current = _stations;
+      final remaining = (target - current).clamp(0, target);
       return _ProgressData(
         conditionLabel: '$target allomas',
         currentLabel: '$current / $target',
+        remainingLabel: remaining == 0 ? 'Teljesitve' : 'Hianyzik $remaining allomas',
         progress: (current / target).clamp(0.0, 1.0),
+        sortScore: (current / target).clamp(0.0, 1.0),
       );
     }
     if (type == 'event_count') {
       final current = _events;
+      final remaining = (target - current).clamp(0, target);
       return _ProgressData(
         conditionLabel: '$target esemeny',
         currentLabel: '$current / $target',
+        remainingLabel: remaining == 0 ? 'Teljesitve' : 'Hianyzik $remaining esemeny',
         progress: (current / target).clamp(0.0, 1.0),
+        sortScore: (current / target).clamp(0.0, 1.0),
       );
     }
     if (type == 'qr_count') {
       final current = _stations + _events;
+      final remaining = (target - current).clamp(0, target);
       return _ProgressData(
         conditionLabel: '$target QR-kod',
         currentLabel: '$current / $target',
+        remainingLabel: remaining == 0 ? 'Teljesitve' : 'Hianyzik $remaining QR-kod',
         progress: (current / target).clamp(0.0, 1.0),
+        sortScore: (current / target).clamp(0.0, 1.0),
       );
     }
     if (type == 'points_threshold') {
       final current = _points;
+      final remaining = (target - current).clamp(0, target);
       return _ProgressData(
         conditionLabel: '$target pont',
         currentLabel: '$current / $target',
+        remainingLabel: remaining == 0 ? 'Teljesitve' : 'Hianyzik $remaining pont',
         progress: (current / target).clamp(0.0, 1.0),
+        sortScore: (current / target).clamp(0.0, 1.0),
       );
     }
     if (type == 'trip_complete') {
       final current = _completedTrips;
+      final remaining = (target - current).clamp(0, target);
       return _ProgressData(
         conditionLabel: '$target teljesitett tura',
         currentLabel: '$current / $target',
+        remainingLabel: remaining == 0 ? 'Teljesitve' : 'Hianyzik $remaining teljesitett tura',
         progress: (current / target).clamp(0.0, 1.0),
+        sortScore: (current / target).clamp(0.0, 1.0),
       );
     }
     if (type == 'top_n') {
       final rank = _rank == 0 ? 9999 : _rank;
       final done = rank <= target;
+      final delta = done ? 0 : rank - target;
       return _ProgressData(
         conditionLabel: 'Top $target helyezes',
         currentLabel: _rank == 0 ? 'Nincs rang' : '$rank. hely',
+        remainingLabel: done ? 'Teljesitve' : 'Hianyzik $delta helyezes',
         progress: done ? 1 : (target / rank).clamp(0.0, 1.0),
+        sortScore: done ? 1 : (target / rank).clamp(0.0, 1.0),
       );
     }
 
-    return _ProgressData(
+    return const _ProgressData(
       conditionLabel: 'Manualis',
       currentLabel: 'Admin adja at',
+      remainingLabel: 'Varakozas admin jovahagyasra',
       progress: 0,
+      sortScore: 0,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final total = _achievements.length;
+    final unlocked = _unlockedIds.length;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Achievement haladas')),
       body: _loading
@@ -211,12 +236,35 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      ..._achievements.map((a) {
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _TopStatCard(
+                              icon: Icons.emoji_events_outlined,
+                              label: 'Feloldott',
+                              value: '$unlocked / $total',
+                              color: const Color(0xFF166534),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _TopStatCard(
+                              icon: Icons.qr_code_scanner,
+                              label: 'QR osszesen',
+                              value: '${_stations + _events}',
+                              color: const Color(0xFF1D4ED8),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ..._sortedAchievementViews().map((view) {
+                        final a = view.achievement;
                         final title = (a['name'] ?? 'Achievement').toString();
                         final desc = (a['description'] ?? '').toString();
                         final icon = (a['icon'] ?? '🏆').toString();
                         final unlocked = _unlockedIds.contains((a['id'] ?? '').toString());
-                        final progress = _progressFor(a);
+                        final progress = view.progress;
                         final fg = unlocked ? const Color(0xFF166534) : const Color(0xFF374151);
                         final bg = unlocked ? const Color(0xFFE7F5EA) : Colors.white;
 
@@ -266,6 +314,11 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  progress.remainingLabel,
+                                  style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.85)),
+                                ),
                                 const SizedBox(height: 10),
                                 LinearProgressIndicator(
                                   value: progress.progress,
@@ -282,16 +335,77 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
                 ),
     );
   }
+
+  List<_AchievementView> _sortedAchievementViews() {
+    final list = _achievements
+        .map((a) => _AchievementView(achievement: a, progress: _progressFor(a)))
+        .toList();
+    list.sort((a, b) {
+      final aUnlocked = _unlockedIds.contains((a.achievement['id'] ?? '').toString());
+      final bUnlocked = _unlockedIds.contains((b.achievement['id'] ?? '').toString());
+      if (aUnlocked != bUnlocked) return aUnlocked ? 1 : -1;
+      return b.progress.sortScore.compareTo(a.progress.sortScore);
+    });
+    return list;
+  }
+}
+
+class _AchievementView {
+  final Map<String, dynamic> achievement;
+  final _ProgressData progress;
+  _AchievementView({required this.achievement, required this.progress});
 }
 
 class _ProgressData {
   final String conditionLabel;
   final String currentLabel;
+  final String remainingLabel;
   final double progress;
+  final double sortScore;
 
-  _ProgressData({
+  const _ProgressData({
     required this.conditionLabel,
     required this.currentLabel,
+    required this.remainingLabel,
     required this.progress,
+    required this.sortScore,
   });
+}
+
+class _TopStatCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  const _TopStatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
