@@ -217,12 +217,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }).toList();
   }
 
+  int _nextPointTarget(int currentPoints) {
+    final thresholds = _achievementDefinitions
+        .where((a) => (a['conditionType']?.toString() ?? '') == 'points_threshold')
+        .map((a) => _safeInt(a['conditionValue']))
+        .where((t) => t > 0)
+        .toList();
+    final above = thresholds.where((t) => t > currentPoints).toList();
+    if (above.isNotEmpty) {
+      above.sort();
+      return above.first;
+    }
+    if (thresholds.isNotEmpty) {
+      thresholds.sort();
+      return thresholds.last;
+    }
+    return 140;
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentPoints = _safeInt(_currentUserData?['points']);
     final stationCount = _safeCount(_currentUserData?['completedStations']);
     final eventCount = _safeCount(_currentUserData?['completedEvents']);
-    final progressToReward = (currentPoints / 140).clamp(0.0, 1.0);
+    final rewardTarget = _nextPointTarget(currentPoints);
+    final progressToReward = rewardTarget > 0
+        ? (currentPoints / rewardTarget).clamp(0.0, 1.0)
+        : 1.0;
     final achievements = _buildAchievements();
     final unlockedCount = achievements.where((a) => a.unlocked).length;
 
@@ -285,7 +306,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   const SizedBox(height: 8),
-                                  Text('$currentPoints / 140 pont'),
+                                  Text('$currentPoints / $rewardTarget pont'),
                                 ],
                               ),
                             ),

@@ -27,6 +27,23 @@ class _EventsScreenState extends State<EventsScreen> {
     return v.toString().trim().isEmpty ? fallback : v.toString().trim();
   }
 
+  DateTime _sortDateKey(dynamic raw) {
+    final s = _safeString(raw);
+    if (s.isEmpty) return DateTime(9999);
+    try {
+      final dt = DateTime.tryParse(s);
+      if (dt != null) return dt;
+      final p = s.split('-');
+      if (p.length >= 3) {
+        final y = int.tryParse(p[0]) ?? 9999;
+        final m = int.tryParse(p[1]) ?? 12;
+        final d = int.tryParse(p[2]) ?? 31;
+        return DateTime(y, m, d);
+      }
+    } catch (_) {}
+    return DateTime(9999);
+  }
+
   Map<String, String> _parseDate(dynamic raw) {
     final s = _safeString(raw);
     if (s.isEmpty) return {'day': '?', 'month': '?', 'full': 'Ismeretlen dátum'};
@@ -190,6 +207,8 @@ class _EventsScreenState extends State<EventsScreen> {
               'qrCode': _safeString(data['qrCode']),
             };
           }).toList();
+
+          events.sort((a, b) => _sortDateKey(a['date']).compareTo(_sortDateKey(b['date'])));
 
           return CustomScrollView(
             slivers: [

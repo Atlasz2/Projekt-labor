@@ -103,11 +103,14 @@ export default function Achievements() {
     } finally { setSaving(false); }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Biztosan torolni szeretned ezt az achievementet?")) return;
-    await deleteDoc(doc(db, "achievements", id));
+  const handleDelete = (id) => setConfirmDeleteId(id);
+
+  const doDelete = async () => {
+    if (!confirmDeleteId) return;
+    await deleteDoc(doc(db, "achievements", confirmDeleteId));
+    setConfirmDeleteId(null);
     await loadAll();
-  };
+  };;
 
   const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
@@ -252,6 +255,20 @@ export default function Achievements() {
           </div>
         </div>
       )}
-    </div>
+      {confirmDeleteId && (
+        <div className="ach-overlay" onClick={() => setConfirmDeleteId(null)}>
+          <div className="ach-modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="ach-modal-header">
+              <h2>Torles megerositese</h2>
+              <button className="ach-modal-x" onClick={() => setConfirmDeleteId(null)}>&#x2715;</button>
+            </div>
+            <p style={{ padding: '16px 0', color: '#374151' }}>Biztosan torolni szeretned ezt a jutalmat? Ez a muvelet nem vonhato vissza.</p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button className="ach-cancel-btn" onClick={() => setConfirmDeleteId(null)}>Megse</button>
+              <button className="ach-row-btn del" onClick={doDelete}>Torles</button>
+            </div>
+          </div>
+        </div>
+      )}    </div>
   );
 }

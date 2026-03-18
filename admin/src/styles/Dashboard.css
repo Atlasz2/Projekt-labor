@@ -402,3 +402,66 @@
     transition: none;
   }
 }
+
+/* tone-rose for new stat items */
+.tone-rose {
+  background: linear-gradient(135deg, #fff0f3 0%, #ffe4e8 100%);
+  border: 1px solid #fecdd3;
+}
+.tone-rose .kpi-badge {
+  background: #e11d48;
+  color: #fff;
+}
+
+/* Dashboard achievement card */
+.achievement-card {
+  grid-column: 1 / -1;
+}
+.achievement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.achievement-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #f3f4f6;
+}
+.achievement-rank {
+  font-weight: 700;
+  color: #9ca3af;
+  font-size: 13px;
+  min-width: 22px;
+}
+.achievement-icon {
+  font-size: 22px;
+}
+.achievement-info {
+  flex: 1;
+  min-width: 0;
+}
+.achievement-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+}
+.achievement-desc {
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.achievement-count {
+  font-weight: 700;
+  font-size: 13px;
+  color: #667eea;
+  background: #eef2ff;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
