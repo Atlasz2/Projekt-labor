@@ -13,9 +13,7 @@ class AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const _LoadingSplashScreen();
         }
 
         // No user logged in
@@ -33,9 +31,7 @@ class AuthGate extends StatelessWidget {
               .snapshots(),
           builder: (context, docSnapshot) {
             if (docSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
+              return const _LoadingSplashScreen();
             }
 
             // Check if user document exists
@@ -48,6 +44,36 @@ class AuthGate extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _LoadingSplashScreen extends StatelessWidget {
+  const _LoadingSplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/loading_screen.jpg',
+            fit: BoxFit.cover,
+          ),
+          Container(color: Colors.black.withValues(alpha: 0.20)),
+          const Center(
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
