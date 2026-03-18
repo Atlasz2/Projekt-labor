@@ -11,6 +11,7 @@ import 'events_screen.dart';
 import 'history_screen.dart';
 import 'map_trips_screen.dart';
 import 'profile_screen.dart';
+import 'unlocked_content_screen.dart';
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -98,6 +99,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       _MenuItem('Nagyvázsony története', 'Idővonal és helytörténet', Icons.history_edu_outlined, const Color(0xFF8E44AD), const HistoryScreen()),
       _MenuItem('Kapcsolat', 'Elérhetőségek és iroda', Icons.call_outlined, const Color(0xFF0097A7), const ContactScreen()),
       _MenuItem('Szállás és étterem', 'Képek, linkek, hívás', Icons.hotel_outlined, const Color(0xFFE91E63), const AccommodationScreen()),
+      _MenuItem('Feloldott Tartalmak', 'Gyűjtött élmések és jelzések', Icons.collections_outlined, const Color(0xFFFF6B6B), const UnlockedContentScreen()),
       _MenuItem('Fiókom', 'Ranglista és achievementek', Icons.person_outline, const Color(0xFF2196F3), const ProfileScreen()),
     ];
 

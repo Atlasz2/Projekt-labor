@@ -4,16 +4,29 @@ import 'package:flutter/material.dart';
 import 'name_screen.dart';
 import 'main_menu_screen.dart';
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _appInitialized = false;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        // Only show splash on first auth check (app startup)
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !_appInitialized) {
           return const _LoadingSplashScreen();
+        }
+
+        if (snapshot.connectionState == ConnectionState.done) {
+          _appInitialized = true;
         }
 
         // No user logged in
@@ -30,8 +43,13 @@ class AuthGate extends StatelessWidget {
               .doc(user.uid)
               .snapshots(),
           builder: (context, docSnapshot) {
+            // Don't show splash for Firestore checks after initialization
             if (docSnapshot.connectionState == ConnectionState.waiting) {
-              return const _LoadingSplashScreen();
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
             }
 
             // Check if user document exists
