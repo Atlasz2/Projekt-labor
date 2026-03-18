@@ -1,0 +1,31 @@
+Launching lib\main.dart on SM S908B in debug mode...
+Running Gradle task 'assembleDebug'...                          
+Could not write file to C:\Users\rafae\Documents\Egyetem\5.f├ęl├ęv\Projekt labor\negyes\mobile_app\build\app\intermediates\flutter\debug\flutter_assets\shaders/ink_sparkle.frag
+
+Could not write file to C:\Users\rafae\Documents\Egyetem\5.f├ęl├ęv\Projekt labor\negyes\mobile_app\build\app\intermediates\flutter\debug\flutter_assets\shaders/stretch_effect.frag
+
+Target debug_android_application failed: ShaderCompilerException: Shader compilation of "C:\src\flutter\packages\flutter\lib\src\material\shaders\ink_sparkle.frag" to "C:\Users\rafae\Documents\Egyetem\5.f├ęl├ęv\Projekt labor\negyes\mobile_app\build\app\intermediates\flutter\debug\flutter_assets\shaders/ink_sparkle.frag" failed with exit code 1.
+impellerc stdout:
+
+impellerc stderr:
+Could not write file to C:\Users\rafae\Documents\Egyetem\5.f├ęl├ęv\Projekt labor\negyes\mobile_app\build\app\intermediates\flutter\debug\flutter_assets\shaders/ink_sparkle.frag
+
+
+
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileFlutterBuildDebug'.
+> Process 'command 'C:\src\flutter\bin\flutter.bat'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 24s
+Running Gradle task 'assembleDebug'...                             24,5s
+Error: Gradle task assembleDebug failed with exit code 1

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -10,8 +10,12 @@ function Dashboard() {
     stations: 0,
     users: 0,
     trackedUsers: 0,
-    activeTrips: 0
+    activeTrips: 0,
+    achievements: 0,
+    totalPoints: 0,
+    averagePoints: 0
   });
+  const [topAchievements, setTopAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -27,21 +31,35 @@ function Dashboard() {
           stationsSnapshot,
           usersSnapshot,
           userProgressSnapshot,
+          achievementsSnapshot,
         ] = await Promise.all([
           getDocs(collection(db, 'trips')),
           getDocs(query(collection(db, 'trips'), where('isActive', '==', true))),
           getDocs(collection(db, 'stations')),
           getDocs(collection(db, 'users')),
           getDocs(collection(db, 'user_progress')),
+          getDocs(collection(db, 'achievements')),
         ]);
 
+        const totalPts = Array.from(userProgressSnapshot.docs).reduce((sum, doc) => sum + (doc.data().totalPoints || 0), 0);
+        const avgPts = userProgressSnapshot.size > 0 ? Math.round(totalPts / userProgressSnapshot.size) : 0;
+        
         setStats({
           trips: tripsSnapshot.size,
           stations: stationsSnapshot.size,
           users: usersSnapshot.size,
           trackedUsers: userProgressSnapshot.size,
           activeTrips: activeTripsSnapshot.size,
+          achievements: achievementsSnapshot.size,
+          totalPoints: totalPts,
+          averagePoints: avgPts
         });
+        
+        // Top achievements by unlockedCount
+        const achData = achievementsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.unlockedCount || 0) - (a.unlockedCount || 0))
+          .slice(0, 3);
+        setTopAchievements(achData);
       } catch (err) {
         console.error('Hiba a betolteskor:', err);
         setError('Nem sikerult betolteni az adatokat: ' + err.message);

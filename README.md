@@ -1,4 +1,4 @@
-# Nagyvazsony - Interaktív Túraútvonal Applikáció
+﻿# Nagyvazsony - Interaktív Túraútvonal Applikáció
 
 ## Téma Címe
 Interaktív túraútvonal applikáció fejlesztése
@@ -37,3 +37,5 @@ Az alkalmazás képes beolvasni az egyes túraútvonalakon található QR-kódok
 - Rendszergazdai felület (React)
 - Felhasználói előrehaladás tárolása
 - Közelség alapú értesítések
+
+
