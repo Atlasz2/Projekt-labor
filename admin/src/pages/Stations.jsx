@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { db, storage } from '../firebaseConfig';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -117,6 +117,7 @@ export default function Stations() {
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
       setFormData((prev) => ({ ...prev, imageUrl: url }));
+      showMsg('Kép sikeresen feltöltve! ✅', 'success');
     } catch { showMsg('Hiba a kép feltöltésekor'); }
     finally { setUploading(false); }
   };
@@ -172,7 +173,7 @@ export default function Stations() {
     } catch { showMsg('Hiba PDF letöltésekor'); }
   };
 
-  const sections = ['🏷️ Alap adatok', '📍 Helyszín', '📖 Tartalom', '🔓 Feloldható info', '🖼️ Média'];
+  const sections = ['🏷️ Alap adatok', '📍 Helyszín', '📖 Tartalom', '🔓 Feloldható info'];
 
   if (loading) return <div className="stations-shell"><p className="empty-state">Betöltés...</p></div>;
 
@@ -315,13 +316,8 @@ export default function Stations() {
                     <label>ℹ️ Extra információ</label>
                     <textarea rows="2" value={formData.extraInfo} onChange={(e) => setFormData({ ...formData, extraInfo: e.target.value })} placeholder="Nyitvatartás, belépési díj, megközelítés..." />
                   </div>
-                </div>
-              )}
-
-              {activeSection === 4 && (
-                <div className="form-section">
                   <div className="field-group">
-                    <label>🖼️ Borítókép feltöltése</label>
+                    <label>🖼️ Borítókép (opcionális)</label>
                     <div className="upload-zone">
                       <input type="file" id="img-upload" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} style={{ display: 'none' }} />
                       <label htmlFor="img-upload" className="upload-btn">{uploading ? '⏳ Feltöltés...' : '📁 Kép kiválasztása'}</label>
@@ -354,3 +350,7 @@ export default function Stations() {
     </div>
   );
 }
+
+
+
+
