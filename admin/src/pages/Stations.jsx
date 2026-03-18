@@ -265,6 +265,14 @@ export default function Stations() {
                     <input type="text" value={formData.qrCode} onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })} placeholder="Ha üres, az állomás ID lesz használva" />
                     <span className="field-hint">Az állomásnál kihelyezett QR kódon lévő szöveg</span>
                   </div>
+                  <div className="field-group">
+                    <label>🖼️ Borítókép</label>
+                    <div className="upload-zone">
+                      <input type="file" id="img-upload" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} style={{ display: 'none' }} />
+                      <label htmlFor="img-upload" className="upload-btn">{uploading ? '⏳ Feltöltés...' : '📁 Kép kiválasztása'}</label>
+                      {formData.imageUrl && !uploading && <img className="image-preview" src={formData.imageUrl} alt="Előnézet" loading="lazy" />}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -316,14 +324,7 @@ export default function Stations() {
                     <label>ℹ️ Extra információ</label>
                     <textarea rows="2" value={formData.extraInfo} onChange={(e) => setFormData({ ...formData, extraInfo: e.target.value })} placeholder="Nyitvatartás, belépési díj, megközelítés..." />
                   </div>
-                  <div className="field-group">
-                    <label>🖼️ Borítókép (opcionális)</label>
-                    <div className="upload-zone">
-                      <input type="file" id="img-upload" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} style={{ display: 'none' }} />
-                      <label htmlFor="img-upload" className="upload-btn">{uploading ? '⏳ Feltöltés...' : '📁 Kép kiválasztása'}</label>
-                      {formData.imageUrl && !uploading && <img className="image-preview" src={formData.imageUrl} alt="Előnézet" loading="lazy" />}
-                    </div>
-                  </div>
+
                 </div>
               )}
             </div>
