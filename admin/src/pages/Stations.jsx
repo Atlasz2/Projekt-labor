@@ -61,6 +61,7 @@ export default function Stations() {
   const [snack, setSnack] = useState({ open: false, msg: '', severity: 'error' });
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [activeSection, setActiveSection] = useState(0);
+  const [search, setSearch] = useState('');
 
   const showMsg = (msg, severity = 'error') => setSnack({ open: true, msg, severity });
 
@@ -123,8 +124,8 @@ export default function Stations() {
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim()) { showMsg('Add meg az állomás nevét!', 'warning'); return; }
-    if (formData.latitude == null || formData.longitude == null) { showMsg('Jelöld ki a helyszínt a térképen!', 'warning'); return; }
+    if (!formData.name.trim()) { setActiveSection(0); showMsg('Add meg az állomás nevét!', 'warning'); return; }
+    if (formData.latitude == null || formData.longitude == null) { setActiveSection(1); showMsg('Jelöld ki a helyszínt a térképen!', 'warning'); return; }
     try {
       const payload = {
         name: formData.name.trim(), latitude: Number(formData.latitude), longitude: Number(formData.longitude),
@@ -175,6 +176,11 @@ export default function Stations() {
 
   const sections = ['🏷️ Alap adatok', '📍 Helyszín', '📖 Tartalom', '🔓 Feloldható info'];
 
+  const filtered = stations.filter((s) => {
+    const q = search.toLowerCase();
+    return !q || s.name?.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q) || getTripName(s.tripId)?.toLowerCase().includes(q);
+  });
+
   if (loading) return <div className="stations-shell"><p className="empty-state">Betöltés...</p></div>;
 
   return (
@@ -190,8 +196,19 @@ export default function Stations() {
         </div>
       </div>
 
+      <div className="stations-search">
+        <input
+          type="search"
+          placeholder="🔍 Keresés neve, leírása vagy túrája alapján..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="search-input"
+        />
+        <span className="search-count">{filtered.length} / {stations.length} állomás</span>
+      </div>
+
       <div className="stations-grid">
-        {stations.map((station) => {
+        {filtered.map((station) => {
           const qrValue = getQrValue(station);
           const tripName = getTripName(station.tripId);
           return (
@@ -223,6 +240,7 @@ export default function Stations() {
           );
         })}
         {stations.length === 0 && <p className="empty-state">Még nincsenek állomások. Adj hozzá egyet!</p>}
+        {stations.length > 0 && filtered.length === 0 && <p className="empty-state">Nincs találat a keresésre.</p>}
       </div>
 
       {showModal && (

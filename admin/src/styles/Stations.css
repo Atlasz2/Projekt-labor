@@ -150,3 +150,8 @@
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
+/* ---- Search bar ---- */
+.stations-search { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.search-input { flex: 1; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 12px; font-size: 14px; color: #111827; background: white; transition: border-color .2s, box-shadow .2s; outline: none; }
+.search-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.09); }
+.search-count { font-size: 12px; color: #9ca3af; white-space: nowrap; font-weight: 600; }

@@ -1,8 +1,7 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
@@ -11,235 +10,272 @@ class MapTripsScreen extends StatefulWidget {
   State<MapTripsScreen> createState() => _MapTripsScreenState();
 }
 
-class _MapTripsScreenState extends State<MapTripsScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Completer<GoogleMapController> _controller = Completer<GoogleMapController>();
+class _MapTripsScreenState extends State<MapTripsScreen> with SingleTickerProviderStateMixin {
+  final _firestore = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
 
-  bool _isLoading = true;
+  late TabController _tabs;
+  bool _loading = true;
   String? _error;
 
   List<Map<String, dynamic>> _trips = [];
   List<Map<String, dynamic>> _stations = [];
+  Set<String> _completedIds = {};
   String? _selectedTripId;
 
+  GoogleMapController? _mapController;
   Set<Marker> _markers = {};
-  Set<Polyline> _polylines = {};
-
-  static const LatLng _center = LatLng(47.0587, 17.7139);
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _tabs = TabController(length: 2, vsync: this);
+    _loadAll();
   }
 
-  double? _toDouble(dynamic v) {
-    if (v is num) return v.toDouble();
-    return double.tryParse('$v');
+  @override
+  void dispose() {
+    _tabs.dispose();
+    _mapController?.dispose();
+    super.dispose();
   }
 
-  List<String> _toStringList(dynamic v) {
-    if (v is List) return v.map((e) => e.toString()).toList();
-    return const [];
-  }
-
-  List<LatLng> _parsePolyline(dynamic raw) {
-    if (raw is! List) return const [];
-    final out = <LatLng>[];
-    for (final item in raw) {
-      if (item is List && item.length >= 2) {
-        final lat = _toDouble(item[0]);
-        final lng = _toDouble(item[1]);
-        if (lat != null && lng != null) out.add(LatLng(lat, lng));
-      } else if (item is Map) {
-        final lat = _toDouble(item['lat'] ?? item['latitude']);
-        final lng = _toDouble(item['lng'] ?? item['longitude']);
-        if (lat != null && lng != null) out.add(LatLng(lat, lng));
-      }
-    }
-    return out;
-  }
-
-  Future<void> _loadData() async {
+  Future<void> _loadAll() async {
+    setState(() { _loading = true; _error = null; });
     try {
-      final tripSnap = await _firestore.collection('trips').get();
-      final stationSnap = await _firestore.collection('stations').get();
+      final uid = _auth.currentUser?.uid;
+      final results = await Future.wait([
+        _firestore.collection('trips').get(),
+        _firestore.collection('stations').get(),
+        if (uid != null) _firestore.collection('user_progress').doc(uid).get(),
+      ]);
 
-      final trips = tripSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-      final stations = stationSnap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      final tripsSnap = results[0] as QuerySnapshot;
+      final stationsSnap = results[1] as QuerySnapshot;
+      final trips = tripsSnap.docs.map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map}).toList();
+      final stations = stationsSnap.docs.map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map}).toList();
 
+      Set<String> completed = {};
+      if (uid != null && results.length > 2) {
+        final progress = results[2] as DocumentSnapshot;
+        if (progress.exists) {
+          completed = Set<String>.from((progress.data() as Map)['completedStations'] ?? []);
+        }
+      }
+
+      if (!mounted) return;
       setState(() {
         _trips = trips;
         _stations = stations;
-        _isLoading = false;
+        _completedIds = completed;
+        _selectedTripId = trips.isNotEmpty ? trips.first['id'] as String : null;
+        _loading = false;
+        _buildMarkers();
       });
-
-      if (trips.isNotEmpty) {
-        _selectTrip(trips.first['id'].toString(), animate: false);
-      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = 'Hiba a térképadatok betöltésekor: $e';
-      });
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.toString(); });
     }
   }
 
-  List<Map<String, dynamic>> _tripStations(Map<String, dynamic> trip) {
-    final tripId = trip['id']?.toString() ?? '';
-    final stationIds = _toStringList(trip['stationIds']);
+  void _buildMarkers() {
+    final visibleStations = _selectedTripId == null
+        ? _stations
+        : _stations.where((s) => s['tripId'] == _selectedTripId).toList();
 
-    if (stationIds.isNotEmpty) {
-      final byId = <Map<String, dynamic>>[];
-      for (final id in stationIds) {
-        final found = _stations.cast<Map<String, dynamic>?>().firstWhere(
-              (s) => s?['id']?.toString() == id,
-              orElse: () => null,
-            );
-        if (found != null) byId.add(found);
-      }
-      if (byId.isNotEmpty) return byId;
-    }
-
-    final byTripField = _stations.where((s) => s['tripId']?.toString() == tripId).toList();
-    byTripField.sort((a, b) => (a['orderIndex'] ?? 0).toString().compareTo((b['orderIndex'] ?? 0).toString()));
-    return byTripField;
-  }
-
-  List<LatLng> _routePoints(Map<String, dynamic> trip, List<Map<String, dynamic>> stations) {
-    final poly = _parsePolyline(trip['polyline']);
-    if (poly.length >= 2) return poly;
-
-    final byStations = stations
-        .map((s) {
-          final lat = _toDouble(s['latitude'] ?? s['lat']);
-          final lng = _toDouble(s['longitude'] ?? s['lng']);
-          if (lat == null || lng == null) return null;
-          return LatLng(lat, lng);
-        })
-        .whereType<LatLng>()
-        .toList();
-
-    return byStations;
-  }
-
-  Future<void> _selectTrip(String id, {bool animate = true}) async {
-    final trip = _trips.cast<Map<String, dynamic>?>().firstWhere(
-          (t) => t?['id']?.toString() == id,
-          orElse: () => null,
+    _markers = Set<Marker>.from(
+      visibleStations.where((s) => s['latitude'] != null && s['longitude'] != null).map((s) {
+        final done = _completedIds.contains(s['id'] as String);
+        return Marker(
+          markerId: MarkerId(s['id'] as String),
+          position: LatLng((s['latitude'] as num).toDouble(), (s['longitude'] as num).toDouble()),
+          infoWindow: InfoWindow(title: s['name']?.toString(), snippet: done ? '✅ Teljesítve' : '${s['points'] ?? 10} pont'),
+          icon: done
+              ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
+              : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
         );
-    if (trip == null) return;
-
-    final stations = _tripStations(trip);
-    final points = _routePoints(trip, stations);
-
-    final markers = <Marker>{};
-    for (final s in stations) {
-      final lat = _toDouble(s['latitude'] ?? s['lat']);
-      final lng = _toDouble(s['longitude'] ?? s['lng']);
-      if (lat == null || lng == null) continue;
-      markers.add(
-        Marker(
-          markerId: MarkerId(s['id'].toString()),
-          position: LatLng(lat, lng),
-          infoWindow: InfoWindow(
-            title: (s['name'] ?? 'Állomás').toString(),
-            snippet: '${(s['points'] ?? 0)} pont',
-          ),
-        ),
-      );
-    }
-
-    final polylines = <Polyline>{};
-    if (points.length >= 2) {
-      polylines.add(
-        Polyline(
-          polylineId: const PolylineId('trip-route'),
-          points: points,
-          width: 6,
-          color: const Color(0xFF4F46E5),
-        ),
-      );
-    }
-
-    setState(() {
-      _selectedTripId = id;
-      _markers = markers;
-      _polylines = polylines;
-    });
-
-    if (!animate || points.isEmpty || !_controller.isCompleted) return;
-    final c = await _controller.future;
-    if (points.length == 1) {
-      await c.animateCamera(CameraUpdate.newLatLngZoom(points.first, 15));
-      return;
-    }
-
-    final minLat = points.map((e) => e.latitude).reduce((a, b) => a < b ? a : b);
-    final maxLat = points.map((e) => e.latitude).reduce((a, b) => a > b ? a : b);
-    final minLng = points.map((e) => e.longitude).reduce((a, b) => a < b ? a : b);
-    final maxLng = points.map((e) => e.longitude).reduce((a, b) => a > b ? a : b);
-
-    try {
-      await c.animateCamera(
-        CameraUpdate.newLatLngBounds(
-          LatLngBounds(
-            southwest: LatLng(minLat - 0.003, minLng - 0.003),
-            northeast: LatLng(maxLat + 0.003, maxLng + 0.003),
-          ),
-          64,
-        ),
-      );
-    } catch (_) {
-      await c.animateCamera(CameraUpdate.newLatLngZoom(points.first, 14));
-    }
+      }),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (_error != null) {
-      return Scaffold(body: Center(child: Text(_error!)));
-    }
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Térkép és túrák')),
-      body: Column(
-        children: [
-          SizedBox(
-            height: 320,
-            child: GoogleMap(
-              initialCameraPosition: const CameraPosition(target: _center, zoom: 13),
-              myLocationButtonEnabled: true,
-              myLocationEnabled: true,
-              markers: _markers,
-              polylines: _polylines,
-              onMapCreated: (c) {
-                if (!_controller.isCompleted) _controller.complete(c);
-              },
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _trips.length,
-              itemBuilder: (context, i) {
-                final t = _trips[i];
-                final selected = _selectedTripId == t['id'];
-                return Card(
-                  color: selected ? const Color(0xFFEFF2FF) : Colors.white,
-                  child: ListTile(
-                    title: Text((t['name'] ?? 'Névtelen túra').toString()),
-                    subtitle: Text('Állomások: ${_tripStations(t).length}'),
-                    trailing: const Icon(Icons.route),
-                    onTap: () => _selectTrip(t['id'].toString()),
+      appBar: AppBar(
+        title: const Text('Térkép és Túrák'),
+        bottom: TabBar(
+          controller: _tabs,
+          tabs: const [Tab(icon: Icon(Icons.map), text: 'Térkép'), Tab(icon: Icon(Icons.list), text: 'Túrák')],
+        ),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? _buildError()
+              : TabBarView(
+                  controller: _tabs,
+                  children: [_buildMapTab(), _buildListTab()],
+                ),
+    );
+  }
+
+  Widget _buildMapTab() {
+    final firstStation = _stations.firstWhere(
+      (s) => s['tripId'] == _selectedTripId && s['latitude'] != null,
+      orElse: () => <String, dynamic>{},
+    );
+    final center = firstStation.isNotEmpty
+        ? LatLng((firstStation['latitude'] as num).toDouble(), (firstStation['longitude'] as num).toDouble())
+        : const LatLng(47.06, 17.715);
+
+    return Column(
+      children: [
+        if (_trips.isNotEmpty)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: _trips.map((trip) {
+                final selected = trip['id'] == _selectedTripId;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(trip['name']?.toString() ?? 'Túra'),
+                    selected: selected,
+                    onSelected: (_) => setState(() {
+                      _selectedTripId = trip['id'] as String;
+                      _buildMarkers();
+                    }),
                   ),
                 );
-              },
+              }).toList(),
             ),
           ),
+        Expanded(
+          child: GoogleMap(
+            initialCameraPosition: CameraPosition(target: center, zoom: 13),
+            markers: _markers,
+            onMapCreated: (c) => _mapController = c,
+            myLocationButtonEnabled: true,
+            myLocationEnabled: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildListTab() {
+    if (_trips.isEmpty) {
+      return const Center(child: Text('Még nincsenek túrák', style: TextStyle(color: Colors.grey)));
+    }
+    return RefreshIndicator(
+      onRefresh: _loadAll,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: _trips.length,
+        itemBuilder: (_, i) {
+          final trip = _trips[i];
+          final tripStations = _stations.where((s) => s['tripId'] == trip['id']).toList();
+          final doneCount = tripStations.where((s) => _completedIds.contains(s['id'] as String)).length;
+          final totalPts = tripStations.fold<int>(0, (acc, s) => acc + ((s['points'] as num?)?.toInt() ?? 0));
+          final progress = tripStations.isEmpty ? 0.0 : doneCount / tripStations.length;
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () {
+                setState(() {
+                  _selectedTripId = trip['id'] as String;
+                  _buildMarkers();
+                  _tabs.animateTo(0);
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF667EEA).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.route, color: Color(0xFF667EEA)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(trip['name']?.toString() ?? 'Túra', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              if (trip['description'] != null)
+                                Text(trip['description'].toString(), style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                        if (progress == 1.0)
+                          const Icon(Icons.emoji_events, color: Colors.amber),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        _chip(Icons.place, '${tripStations.length} állomás'),
+                        const SizedBox(width: 8),
+                        _chip(Icons.star, '$totalPts pont'),
+                        const Spacer(),
+                        Text('$doneCount/${tripStations.length}', style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: progress == 1.0 ? Colors.green : const Color(0xFF667EEA),
+                        )),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 6,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation(progress == 1.0 ? Colors.green : const Color(0xFF667EEA)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _chip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: Colors.grey),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      ]),
+    );
+  }
+
+  Widget _buildError() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+          const SizedBox(height: 12),
+          const Text('Nem sikerült betölteni', style: TextStyle(fontSize: 16)),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: _loadAll, child: const Text('Újra próbálás')),
         ],
       ),
     );
