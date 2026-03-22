@@ -1,9 +1,9 @@
-﻿/* ========== Content Page Container ========== */
+/* ========== Content Page Container ========== */
 .content-page {
   max-width: 1200px;
   margin: 0 auto;
   padding: 40px 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  background: linear-gradient(135deg, #f4efe6 0%, #ebe2d4 100%);
   min-height: 100vh;
 }
 
@@ -14,7 +14,7 @@
 
 .page-header h1 {
   font-size: 2.5em;
-  color: #2c3e50;
+  color: #34261a;
   margin: 0 0 10px 0;
   font-weight: 700;
   letter-spacing: -0.5px;
@@ -22,7 +22,7 @@
 
 .page-header p {
   font-size: 1.1em;
-  color: #7f8c8d;
+  color: #7d6b57;
   margin: 0;
   font-weight: 400;
 }
@@ -38,10 +38,10 @@
 
 .form-container h2 {
   font-size: 1.8em;
-  color: #2c3e50;
+  color: #34261a;
   margin: 0 0 24px 0;
   padding-bottom: 16px;
-  border-bottom: 2px solid #667eea;
+  border-bottom: 2px solid #8b5e34;
 }
 
 /* ========== Form Elements ========== */
@@ -60,16 +60,16 @@
   font-size: 1em;
   font-family: inherit;
   transition: all 0.3s ease;
-  background: #f8f9fb;
+  background: #f7f2e9;
 }
 
 .form-container input:focus,
 .form-container textarea:focus,
 .form-container select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #8b5e34;
   background: white;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  box-shadow: 0 0 0 3px rgba(139, 94, 52, 0.1);
 }
 
 .form-container textarea {
@@ -79,7 +79,7 @@
 
 /* ========== Primary Button ========== */
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #8b5e34 0%, #4b634d 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -88,12 +88,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 15px rgba(139, 94, 52, 0.24);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+  box-shadow: 0 6px 20px rgba(139, 94, 52, 0.3);
 }
 
 .btn-primary:active {
@@ -102,9 +102,9 @@
 
 /* ========== Secondary Button ========== */
 .btn-secondary {
-  background: #ecf0f1;
-  color: #2c3e50;
-  border: 1px solid #bdc3c7;
+  background: #e6dccd;
+  color: #34261a;
+  border: 1px solid #cdbfa9;
   padding: 12px 24px;
   border-radius: 8px;
   font-size: 1em;
@@ -114,13 +114,13 @@
 }
 
 .btn-secondary:hover {
-  background: #d5dce0;
-  border-color: #a3adb5;
+  background: #e6dccd;
+  border-color: #b5a28e;
 }
 
 /* ========== Edit Button ========== */
 .btn-edit {
-  background: #3498db;
+  background: #4b634d;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -131,13 +131,13 @@
 }
 
 .btn-edit:hover {
-  background: #2980b9;
+  background: #8b5e34;
   transform: translateY(-1px);
 }
 
 /* ========== Delete Button ========== */
 .btn-delete {
-  background: #e74c3c;
+  background: #b86a4b;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -148,7 +148,7 @@
 }
 
 .btn-delete:hover {
-  background: #c0392b;
+  background: #9e5337;
   transform: translateY(-1px);
 }
 
@@ -167,7 +167,7 @@
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
-  border: 1px solid #e8ecf1;
+  border: 1px solid #ebe2d4;
 }
 
 .card:hover {
@@ -177,20 +177,20 @@
 
 .card h3 {
   font-size: 1.4em;
-  color: #2c3e50;
+  color: #34261a;
   margin: 0 0 12px 0;
   word-break: break-word;
 }
 
 .card p {
-  color: #34495e;
+  color: #4f4030;
   margin: 8px 0;
   font-size: 0.95em;
   line-height: 1.5;
 }
 
 .card strong {
-  color: #2c3e50;
+  color: #34261a;
   font-weight: 600;
 }
 
@@ -200,7 +200,7 @@
   gap: 8px;
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #e8ecf1;
+  border-top: 1px solid #ebe2d4;
 }
 
 .card-actions button {
@@ -211,23 +211,23 @@
 
 /* ========== Error Message ========== */
 .error-message {
-  background: #fadbd8;
-  color: #c0392b;
+  background: #f3dfd4;
+  color: #9e5337;
   padding: 16px 20px;
   border-radius: 8px;
   margin-bottom: 24px;
-  border-left: 4px solid #c0392b;
+  border-left: 4px solid #9e5337;
   font-weight: 500;
 }
 
 /* ========== Success Message ========== */
 .success-message {
-  background: #d5f4e6;
-  color: #27ae60;
+  background: #e4ecde;
+  color: #55704a;
   padding: 16px 20px;
   border-radius: 8px;
   margin-bottom: 24px;
-  border-left: 4px solid #27ae60;
+  border-left: 4px solid #55704a;
   font-weight: 500;
 }
 
@@ -276,3 +276,5 @@
     padding: 16px;
   }
 }
+
+

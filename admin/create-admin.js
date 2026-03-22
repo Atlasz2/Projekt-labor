@@ -1,8 +1,13 @@
 const axios = require("axios").default;
 
-const email = "admin@nagyvazsony.hu";
-const password = "Admin123456!";
-const apiKey = "AIzaSyCxsLcEZymxThZP7SxN2QGTqlfHik2Ma3g";
+const email = process.env.ADMIN_EMAIL;
+const password = process.env.ADMIN_PASSWORD;
+const apiKey = process.env.FIREBASE_WEB_API_KEY;
+
+if (!email || !password || !apiKey) {
+  console.error("Hiányzó környezeti változók. Szükséges: ADMIN_EMAIL, ADMIN_PASSWORD, FIREBASE_WEB_API_KEY");
+  process.exit(1);
+}
 
 axios.post(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
   email: email,
@@ -11,8 +16,7 @@ axios.post(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiK
 }).then(response => {
   console.log("✅ Admin felhasználó sikeresen létrehozva!");
   console.log("");
-  console.log("Email: admin@nagyvazsony.hu");
-  console.log("Jelszó: Admin123456!");
+  console.log(`Email: ${email}`);
   console.log("");
   console.log("Menj ide a bejelentkezéshez: http://localhost:5176");
   process.exit(0);
@@ -20,8 +24,7 @@ axios.post(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiK
   if (error.response?.data?.error?.message === "EMAIL_EXISTS") {
     console.log("✅ Admin felhasználó már létezik!");
     console.log("");
-    console.log("Email: admin@nagyvazsony.hu");
-    console.log("Jelszó: Admin123456!");
+    console.log(`Email: ${email}`);
     console.log("");
     console.log("Menj ide a bejelentkezéshez: http://localhost:5176");
   } else {

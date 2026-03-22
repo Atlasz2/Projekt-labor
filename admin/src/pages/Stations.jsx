@@ -126,6 +126,14 @@ export default function Stations() {
   const handleSave = async () => {
     if (!formData.name.trim()) { setActiveSection(0); showMsg('Add meg az állomás nevét!', 'warning'); return; }
     if (formData.latitude == null || formData.longitude == null) { setActiveSection(1); showMsg('Jelöld ki a helyszínt a térképen!', 'warning'); return; }
+    const _dupName = formData.name.trim().toLowerCase();
+    const _dupTrip = formData.tripId || '';
+    const _dup = stations.find((s) =>
+      s.id !== editingId &&
+      s.name?.trim().toLowerCase() === _dupName &&
+      (s.tripId || '') === _dupTrip
+    );
+    if (_dup) { setActiveSection(0); showMsg('Már létezik ilyen nevű állomás ebben a túrában!', 'warning'); return; }
     try {
       const payload = {
         name: formData.name.trim(), latitude: Number(formData.latitude), longitude: Number(formData.longitude),

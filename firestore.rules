@@ -15,6 +15,7 @@ service cloud.firestore {
       return isSignedIn()
         && request.auth.token.email != null
         && exists(/databases/$(database)/documents/users/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.email == request.auth.token.email
         && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin';
     }
 
@@ -22,34 +23,44 @@ service cloud.firestore {
       return adminByUid() || adminByEmailDoc();
     }
 
-    match /{document=**} {
-      allow read: if true;
-    }
-
     match /user_progress/{userId} {
-      allow read: if true;
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
 
       match /completed_stations/{stationId} {
-        allow read: if true;
-        allow write: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
 
       match /completed_events/{eventId} {
-        allow read: if true;
-        allow write: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
 
       match /unlocked_achievements/{achievementId} {
-        allow read: if true;
-        allow write: if isSignedIn() && request.auth.uid == userId;
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
     }
 
     match /users/{userId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId
+        || (request.auth.token.email != null && request.auth.token.email == userId)
+        || isAdmin()
+      );
+      allow create, update: if isSignedIn() && (
+        request.auth.uid == userId
+        || (request.auth.token.email != null && request.auth.token.email == userId)
+        || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /public_leaderboard/{userId} {
       allow read: if true;
       allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAdmin();
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
     match /trips/{tripId} {

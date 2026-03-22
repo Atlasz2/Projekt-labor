@@ -38,6 +38,7 @@ export default function Achievements() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -110,7 +111,7 @@ export default function Achievements() {
     await deleteDoc(doc(db, "achievements", confirmDeleteId));
     setConfirmDeleteId(null);
     await loadAll();
-  };;
+  };
 
   const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
@@ -272,3 +273,7 @@ export default function Achievements() {
       )}    </div>
   );
 }
+
+
+
+

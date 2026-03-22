@@ -42,62 +42,144 @@ class _CameraScreenState extends State<CameraScreen> {
       final completed = List<String>.from(data['completedStations'] ?? []);
       if (completed.isEmpty) return;
       final stSnap = await _firestore.collection('stations').get();
-      final all = {for (final d in stSnap.docs) d.id: <String, dynamic>{'id': d.id, ...d.data()}};
+      final all = {
+        for (final d in stSnap.docs)
+          d.id: <String, dynamic>{'id': d.id, ...d.data()},
+      };
       if (!mounted) return;
-      setState(() => _history = completed.map((id) => all[id] ?? {'name': id}).toList().reversed.take(10).toList());
+      setState(() {
+        _history = completed
+            .map((id) => all[id] ?? {'name': id})
+            .toList()
+            .reversed
+            .take(10)
+            .toList();
+      });
     } catch (_) {}
+  }
+
+  Future<void> _syncLeaderboardEntry({
+    required String uid,
+    required int points,
+    required int completedStationsCount,
+    required int completedEventsCount,
+    String? displayName,
+  }) async {
+    var effectiveName = displayName?.trim() ?? '';
+    if (effectiveName.isEmpty) {
+      final userDoc = await _firestore.collection('users').doc(uid).get();
+      final userData = userDoc.data() ?? <String, dynamic>{};
+      effectiveName =
+          userData['displayName']?.toString() ??
+          userData['name']?.toString() ??
+          'Felhasznalo';
+    }
+
+    await _firestore.collection('public_leaderboard').doc(uid).set({
+      'displayName': effectiveName,
+      'points': points,
+      'completedStationsCount': completedStationsCount,
+      'completedEventsCount': completedEventsCount,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> _onQrDetected(String code) async {
     if (!_scanning || _loading) return;
-    setState(() { _scanning = false; _loading = true; _errorMsg = null; });
+    setState(() {
+      _scanning = false;
+      _loading = true;
+      _errorMsg = null;
+    });
     _controller.stop();
 
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) throw Exception('Nincs bejelentkezett felhasznalo');
 
-      var snap = await _firestore.collection('stations').where('qrCode', isEqualTo: code).limit(1).get();
+      var snap = await _firestore
+          .collection('stations')
+          .where('qrCode', isEqualTo: code)
+          .limit(1)
+          .get();
       if (snap.docs.isEmpty) {
         final byId = await _firestore.collection('stations').doc(code).get();
         if (byId.exists) {
-          await _handleStationFound(uid, byId.id, <String, dynamic>{'id': byId.id, ...byId.data()!});
+          await _handleStationFound(uid, byId.id, <String, dynamic>{
+            'id': byId.id,
+            ...byId.data()!,
+          });
           return;
         }
         throw Exception('Ismeretlen QR kod: $code');
       }
+
       final stDoc = snap.docs.first;
       final stData = stDoc.data();
-      await _handleStationFound(uid, stDoc.id, <String, dynamic>{'id': stDoc.id, ...stData});
+      await _handleStationFound(uid, stDoc.id, <String, dynamic>{
+        'id': stDoc.id,
+        ...stData,
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _errorMsg = 'Hiba: ${e.toString().replaceAll('Exception: ', '')}'; });
+      setState(() {
+        _loading = false;
+        _errorMsg = 'Hiba: ${e.toString().replaceAll('Exception: ', '')}';
+      });
     }
   }
 
-  Future<void> _handleStationFound(String uid, String stationId, Map<String, dynamic> data) async {
+  Future<void> _handleStationFound(
+    String uid,
+    String stationId,
+    Map<String, dynamic> data,
+  ) async {
     final progressRef = _firestore.collection('user_progress').doc(uid);
     final progressDoc = await progressRef.get();
     final progressData = progressDoc.data() ?? {};
-    final completed = List<String>.from(progressData['completedStations'] ?? []);
+    final completed = List<String>.from(
+      progressData['completedStations'] ?? [],
+    );
+    final completedEvents = List<String>.from(
+      progressData['completedEvents'] ?? [],
+    );
     final alreadyDone = completed.contains(stationId);
-    final points = (data['points'] as num?)?.toInt() ?? 10;
+    final stationPoints = (data['points'] as num?)?.toInt() ?? 10;
+    final currentPoints = (progressData['totalPoints'] as num?)?.toInt() ?? 0;
+    var updatedPoints = currentPoints;
     List<Map<String, dynamic>> newAch = [];
 
     if (!alreadyDone) {
       completed.add(stationId);
-      final currentPoints = (progressData['totalPoints'] as num?)?.toInt() ?? 0;
-      final newPoints = currentPoints + points;
+      updatedPoints = currentPoints + stationPoints;
       await progressRef.set({
         'completedStations': completed,
-        'totalPoints': newPoints,
+        'totalPoints': updatedPoints,
+        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      newAch = await _checkAchievements(uid, completed, newPoints, progressData);
+      newAch = await _checkAchievements(
+        uid,
+        completed,
+        updatedPoints,
+        progressData,
+      );
     }
+
+    await _syncLeaderboardEntry(
+      uid: uid,
+      displayName: progressData['name']?.toString(),
+      points: updatedPoints,
+      completedStationsCount: completed.length,
+      completedEventsCount: completedEvents.length,
+    );
 
     if (!mounted) return;
     setState(() {
-      _station = {...data, 'alreadyDone': alreadyDone, 'newAchievements': newAch};
+      _station = {
+        ...data,
+        'alreadyDone': alreadyDone,
+        'newAchievements': newAch,
+      };
       _loading = false;
     });
     _loadHistory();
@@ -112,14 +194,22 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final results = await Future.wait([
         _firestore.collection('achievements').get(),
-        _firestore.collection('user_progress').doc(uid).collection('unlocked_achievements').get(),
+        _firestore
+            .collection('user_progress')
+            .doc(uid)
+            .collection('unlocked_achievements')
+            .get(),
       ]);
       final achSnap = results[0] as QuerySnapshot;
       final unlockedSnap = results[1] as QuerySnapshot;
       final alreadyUnlocked = unlockedSnap.docs.map((d) => d.id).toSet();
 
-      final completedEvents = List<String>.from(progressData['completedEvents'] ?? []);
-      final completedTripIds = List<String>.from(progressData['completedTripIds'] ?? []);
+      final completedEvents = List<String>.from(
+        progressData['completedEvents'] ?? [],
+      );
+      final completedTripIds = List<String>.from(
+        progressData['completedTripIds'] ?? [],
+      );
       final newlyUnlocked = <Map<String, dynamic>>[];
 
       for (final doc in achSnap.docs) {
@@ -144,8 +234,10 @@ class _CameraScreenState extends State<CameraScreen> {
 
         if (met) {
           await _firestore
-              .collection('user_progress').doc(uid)
-              .collection('unlocked_achievements').doc(id)
+              .collection('user_progress')
+              .doc(uid)
+              .collection('unlocked_achievements')
+              .doc(id)
               .set({'unlockedAt': FieldValue.serverTimestamp()});
           newlyUnlocked.add({'id': id, ...achData});
         }
@@ -170,7 +262,11 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   void _reset() {
-    setState(() { _scanning = true; _station = null; _errorMsg = null; });
+    setState(() {
+      _scanning = true;
+      _station = null;
+      _errorMsg = null;
+    });
     _controller.start();
   }
 
@@ -191,10 +287,10 @@ class _CameraScreenState extends State<CameraScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _station != null
-              ? _buildResult()
-              : _errorMsg != null
-                  ? _buildError()
-                  : _buildScanner(),
+          ? _buildResult()
+          : _errorMsg != null
+          ? _buildError()
+          : _buildScanner(),
     );
   }
 
@@ -204,7 +300,9 @@ class _CameraScreenState extends State<CameraScreen> {
         Expanded(
           flex: 3,
           child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(24),
+            ),
             child: Stack(
               children: [
                 MobileScanner(
@@ -216,7 +314,8 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
                 Center(
                   child: Container(
-                    width: 220, height: 220,
+                    width: 220,
+                    height: 220,
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.white, width: 3),
                       borderRadius: BorderRadius.circular(16),
@@ -224,13 +323,17 @@ class _CameraScreenState extends State<CameraScreen> {
                   ),
                 ),
                 Positioned(
-                  bottom: 0, left: 0, right: 0,
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
                   child: Container(
                     padding: const EdgeInsets.all(12),
                     color: Colors.black54,
-                    child: const Text('Iranyitsd a QR kodra a keretet',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white)),
+                    child: const Text(
+                      'Iranyitsd a QR kodra a keretet',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
               ],
@@ -245,18 +348,34 @@ class _CameraScreenState extends State<CameraScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Nemreg beolvasva (${_history.length})',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(
+                    'Nemreg beolvasva (${_history.length})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Expanded(
                     child: ListView.builder(
                       itemCount: _history.length,
                       itemBuilder: (_, i) => ListTile(
-                        leading: const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 20),
-                        title: Text(_history[i]['name'] ?? 'Ismeretlen',
-                            style: const TextStyle(fontSize: 13)),
-                        trailing: Text('${_history[i]['points'] ?? '?'} pt',
-                            style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+                        leading: const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF4CAF50),
+                          size: 20,
+                        ),
+                        title: Text(
+                          _history[i]['name'] ?? 'Ismeretlen',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        trailing: Text(
+                          '${_history[i]['points'] ?? '?'} pt',
+                          style: const TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                       ),
@@ -278,7 +397,8 @@ class _CameraScreenState extends State<CameraScreen> {
     final unlockContent = s['unlockContent']?.toString() ?? '';
     final extraInfo = s['extraInfo']?.toString() ?? '';
     final imageUrl = s['imageUrl']?.toString() ?? '';
-    final newAch = (s['newAchievements'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final newAch =
+        (s['newAchievements'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -288,12 +408,18 @@ class _CameraScreenState extends State<CameraScreen> {
           if (imageUrl.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Image.network(imageUrl, height: 180, width: double.infinity, fit: BoxFit.cover,
-                  errorBuilder: (ctx, err, trace) => const SizedBox.shrink()),
+              child: Image.network(
+                imageUrl,
+                height: 180,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, trace) => const SizedBox.shrink(),
+              ),
             ),
           const SizedBox(height: 20),
           Container(
-            width: 72, height: 72,
+            width: 72,
+            height: 72,
             decoration: BoxDecoration(
               color: alreadyDone
                   ? Colors.grey.shade200
@@ -307,9 +433,11 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          Text(name,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center),
+          Text(
+            name,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -322,7 +450,10 @@ class _CameraScreenState extends State<CameraScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.star_rounded, color: alreadyDone ? Colors.grey : Colors.amber),
+                Icon(
+                  Icons.star_rounded,
+                  color: alreadyDone ? Colors.grey : Colors.amber,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   alreadyDone ? 'Mar feloldott (+0 pt)' : '+$points pont',
@@ -350,35 +481,57 @@ class _CameraScreenState extends State<CameraScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(children: [
-                    Icon(Icons.emoji_events, color: Colors.amber, size: 20),
-                    SizedBox(width: 8),
-                    Text('Uj jutalom feloldva! 🎉',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
-                  ]),
-                  const SizedBox(height: 10),
-                  ...newAch.map((a) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        Text(a['icon']?.toString() ?? '🏆',
-                            style: const TextStyle(fontSize: 20)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(a['name']?.toString() ?? '',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              if ((a['description']?.toString() ?? '').isNotEmpty)
-                                Text(a['description'].toString(),
-                                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                            ],
-                          ),
+                  const Row(
+                    children: [
+                      Icon(Icons.emoji_events, color: Colors.amber, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Uj jutalom feloldva! 🎉',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...newAch.map(
+                    (a) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Text(
+                            a['icon']?.toString() ?? '🏆',
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  a['name']?.toString() ?? '',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                if ((a['description']?.toString() ?? '')
+                                    .isNotEmpty)
+                                  Text(
+                                    a['description'].toString(),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  )),
+                  ),
                 ],
               ),
             ),
@@ -396,15 +549,24 @@ class _CameraScreenState extends State<CameraScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(children: [
-                    Icon(Icons.lock_open, color: Colors.amber, size: 18),
-                    SizedBox(width: 8),
-                    Text('Feloldott tartalom',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber)),
-                  ]),
+                  const Row(
+                    children: [
+                      Icon(Icons.lock_open, color: Colors.amber, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Feloldott tartalom',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
-                  Text(unlockContent,
-                      style: const TextStyle(fontSize: 14, height: 1.6)),
+                  Text(
+                    unlockContent,
+                    style: const TextStyle(fontSize: 14, height: 1.6),
+                  ),
                 ],
               ),
             ),
@@ -421,11 +583,17 @@ class _CameraScreenState extends State<CameraScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF667EEA), size: 18),
+                  const Icon(
+                    Icons.info_outline,
+                    color: Color(0xFF667EEA),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(extraInfo,
-                        style: const TextStyle(fontSize: 13, height: 1.5)),
+                    child: Text(
+                      extraInfo,
+                      style: const TextStyle(fontSize: 13, height: 1.5),
+                    ),
                   ),
                 ],
               ),
@@ -455,9 +623,11 @@ class _CameraScreenState extends State<CameraScreen> {
           children: [
             const Icon(Icons.error_outline, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text(_errorMsg ?? 'Ismeretlen hiba',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16)),
+            Text(
+              _errorMsg ?? 'Ismeretlen hiba',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+            ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _reset,
@@ -474,13 +644,16 @@ class _CameraScreenState extends State<CameraScreen> {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Text('Beolvasasi elozmenyek',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Beolvasasi elozmenyek',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             const Divider(),
             Expanded(
               child: ListView.builder(
@@ -494,9 +667,13 @@ class _CameraScreenState extends State<CameraScreen> {
                     ),
                     title: Text(st['name'] ?? 'Ismeretlen'),
                     subtitle: Text(st['description'] ?? ''),
-                    trailing: Text('${st['points'] ?? '?'} pt',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, color: Colors.amber)),
+                    trailing: Text(
+                      '${st['points'] ?? '?'} pt',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber,
+                      ),
+                    ),
                   );
                 },
               ),

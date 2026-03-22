@@ -15,39 +15,39 @@ class UnlockedContentScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Feloldott Tartalmak'),
-      ),
+      appBar: AppBar(title: const Text('Feloldott Tartalmak')),
       body: Stack(
         children: [
-          Positioned.fill(child: Image.asset('assets/var.jpg', fit: BoxFit.cover)),
           Positioned.fill(
-            child: Container(color: const Color(0xFFF2EBDD).withValues(alpha: 0.97)),
+            child: Image.asset('assets/var.jpg', fit: BoxFit.cover),
+          ),
+          Positioned.fill(
+            child: Container(
+              color: const Color(0xFFF2EBDD).withValues(alpha: 0.97),
+            ),
           ),
           SafeArea(
-            child: StreamBuilder<DocumentSnapshot>(
+            child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('user_progress')
                   .doc(uid)
+                  .collection('unlocked_achievements')
                   .snapshots(),
-              builder: (context, userProgressSnapshot) {
-                if (userProgressSnapshot.connectionState ==
+              builder: (context, unlockedSnapshot) {
+                if (unlockedSnapshot.connectionState ==
                     ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
+                  return const Center(child: CircularProgressIndicator());
                 }
 
-                if (!userProgressSnapshot.hasData ||
-                    !userProgressSnapshot.data!.exists) {
+                if (!unlockedSnapshot.hasData) {
                   return const Center(
                     child: Text('Még nincs feloldott tartalom'),
                   );
                 }
 
-                final userProgressDoc = userProgressSnapshot.data!;
-                final unlockedAchievementIds =
-                    List<String>.from((userProgressDoc['unlocked_achievements'] as List?)?.cast<String>() ?? []);
+                final unlockedAchievementIds = unlockedSnapshot.data!.docs
+                    .map((doc) => doc.id)
+                    .toList();
 
                 if (unlockedAchievementIds.isEmpty) {
                   return Center(
@@ -56,8 +56,11 @@ class UnlockedContentScreen extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.lock_open_rounded,
-                              size: 60, color: Colors.grey),
+                          const Icon(
+                            Icons.lock_open_rounded,
+                            size: 60,
+                            color: Colors.grey,
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             'Még nincs feloldott tartalom',
@@ -83,9 +86,7 @@ class UnlockedContentScreen extends StatelessWidget {
                   builder: (context, achievementsSnapshot) {
                     if (achievementsSnapshot.connectionState ==
                         ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
+                      return const Center(child: CircularProgressIndicator());
                     }
 
                     if (!achievementsSnapshot.hasData) {
@@ -93,13 +94,13 @@ class UnlockedContentScreen extends StatelessWidget {
                     }
 
                     final unlockedAchievements = achievementsSnapshot.data!.docs
-                        .where(
-                            (doc) =>
-                                unlockedAchievementIds.contains(doc.id))
+                        .where((doc) => unlockedAchievementIds.contains(doc.id))
                         .toList();
 
                     if (unlockedAchievements.isEmpty) {
-                      return const Center(child: Text('Nincs feloldott tartalom'));
+                      return const Center(
+                        child: Text('Nincs feloldott tartalom'),
+                      );
                     }
 
                     return ListView.builder(
@@ -108,12 +109,13 @@ class UnlockedContentScreen extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final ach = unlockedAchievements[index];
                         final data = ach.data() as Map<String, dynamic>;
-                        final title = data['title'] ?? 'Nincs cím';
+                        final title =
+                            data['title'] ?? data['name'] ?? 'Nincs cím';
                         final description = data['description'] ?? '';
-                        final color = Color(
-                            int.tryParse(data['color'] ?? '0xFF4CAF50',
-                                radix: 16) ??
-                                0xFF4CAF50);
+                        final colorValue = data['color'];
+                        final color = colorValue is int
+                            ? Color(colorValue)
+                            : const Color(0xFF4CAF50);
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),

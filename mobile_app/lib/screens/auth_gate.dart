@@ -12,21 +12,23 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  bool _appInitialized = false;
+  bool _initialAuthResolved = FirebaseAuth.instance.currentUser != null;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Only show splash on first auth check (app startup)
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !_appInitialized) {
+        // Only allow the splash on cold start before auth is resolved once.
+        if (!_initialAuthResolved &&
+            snapshot.connectionState == ConnectionState.waiting &&
+            snapshot.data == null) {
           return const _LoadingSplashScreen();
         }
 
-        if (snapshot.connectionState == ConnectionState.done) {
-          _appInitialized = true;
+        if (!_initialAuthResolved &&
+            snapshot.connectionState != ConnectionState.waiting) {
+          _initialAuthResolved = true;
         }
 
         // No user logged in
@@ -34,26 +36,26 @@ class _AuthGateState extends State<AuthGate> {
           return const NameScreen();
         }
 
+        _initialAuthResolved = true;
         final user = snapshot.data!;
 
-        // User is logged in, check if they have a Firestore document
-        return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance
+        // User is logged in - show MainMenuScreen immediately without waiting for Firestore
+        // Firestore updates will happen in background without blocking UI
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
-              .snapshots(),
+              .get(),
           builder: (context, docSnapshot) {
-            // Don't show splash for Firestore checks after initialization
-            if (docSnapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(
-                  child: CircularProgressIndicator(),
-                ),
-              );
+            // Show MainMenuScreen immediately even if Firestore data is loading
+            // This prevents the loading spinner from blocking the UI
+            if (!docSnapshot.hasData) {
+              // Still loading, but show menu anyway
+              return const MainMenuScreen();
             }
 
             // Check if user document exists
-            if (!docSnapshot.hasData || !docSnapshot.data!.exists) {
+            if (!docSnapshot.data!.exists) {
               return const NameScreen();
             }
 
@@ -95,3 +97,5 @@ class _LoadingSplashScreen extends StatelessWidget {
     );
   }
 }
+
+

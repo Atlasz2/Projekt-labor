@@ -25,9 +25,9 @@ class _NameScreenState extends State<NameScreen> {
     final displayName = _displayNameController.text.trim();
 
     if (displayName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A név megadása kötelező!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('A név megadása kötelező!')));
       return;
     }
 
@@ -50,15 +50,31 @@ class _NameScreenState extends State<NameScreen> {
         'achievements': <String>[],
       }, SetOptions(merge: true));
 
-      await FirebaseFirestore.instance.collection('user_progress').doc(user.uid).set({
-        'name': displayName,
-        'email': email,
-        'completedStations': <String>[],
-        'totalPoints': 0,
-        'currentTrip': 'Nincs túra',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance
+          .collection('user_progress')
+          .doc(user.uid)
+          .set({
+            'name': displayName,
+            'email': email,
+            'completedStations': <String>[],
+            'completedEvents': <String>[],
+            'completedTripIds': <String>[],
+            'totalPoints': 0,
+            'currentTrip': 'Nincs túra',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+      await FirebaseFirestore.instance
+          .collection('public_leaderboard')
+          .doc(user.uid)
+          .set({
+            'displayName': displayName,
+            'points': 0,
+            'completedStationsCount': 0,
+            'completedEventsCount': 0,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -67,15 +83,15 @@ class _NameScreenState extends State<NameScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hiba: ${e.message}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Hiba: ${e.message}')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Váratlan hiba: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Váratlan hiba: $e')));
       }
     } finally {
       if (mounted) {
@@ -87,38 +103,25 @@ class _NameScreenState extends State<NameScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nagyvázsony'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Nagyvázsony'), centerTitle: true),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 40),
-            Icon(
-              Icons.location_on,
-              size: 64,
-              color: const Color(0xFF667EEA),
-            ),
+            Icon(Icons.location_on, size: 64, color: const Color(0xFF667EEA)),
             const SizedBox(height: 24),
             const Text(
               'Üdvözölünk a Nagyvázsony Túra Alkalmazásban!',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
               'Kérjük, add meg a nevedet a folytatáshoz.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
             const SizedBox(height: 48),
             TextField(
@@ -160,9 +163,7 @@ class _NameScreenState extends State<NameScreen> {
                   ? const SizedBox(
                       height: 20,
                       width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                      ),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text(
                       'Folytatás',

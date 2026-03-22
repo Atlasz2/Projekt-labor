@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebaseConfig";
 import { resolveUserRole } from "../utils/resolveUserRole";
@@ -35,70 +35,99 @@ function Layout() {
     navigate("/");
   };
 
+  const renderNavLink = (to, icon, label) => (
+    <li>
+      <NavLink
+        to={to}
+        className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+      >
+        <span className="nav-icon" aria-hidden="true">{icon}</span>
+        <span className="nav-label">{label}</span>
+      </NavLink>
+    </li>
+  );
+
   return (
     <div className="layout">
       <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
-        <div className="sidebar-header">
-          <div className="header-content">
-            <h2>Admin</h2>
-            <span className="admin-badge">Nagyvázsonyi</span>
+        <div className="sidebar-shell">
+          <div className="sidebar-header">
+            <div className="header-brand">
+              <div className="brand-mark">NV</div>
+              <div className="header-content">
+                <p className="brand-kicker">Admin</p>
+                <h2>Nagyvázsony</h2>
+              </div>
+            </div>
+            <button
+              className="sidebar-close-btn"
+              onClick={() => setSidebarOpen(false)}
+              title="Bezárás"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="current-user-card">
+            <span className="current-user-label">Aktív fiók</span>
             <div className="current-user">{currentUserLabel}</div>
           </div>
-          <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} title="Bezárás">✕</button>
+
+          <nav className="sidebar-nav">
+            <ul className="nav-links">
+              {renderNavLink("/dashboard", "DB", "Dashboard")}
+
+              {currentRole === "admin" && (
+                <>
+                  <li className="nav-header">Túrák kezelése</li>
+                  {renderNavLink("/trips", "TU", "Túrák")}
+                  {renderNavLink("/stations", "AL", "Állomások")}
+
+                  <li className="nav-header">Települési tartalom</li>
+                  {renderNavLink("/about", "NT", "Nagyvázsony története")}
+                  {renderNavLink("/events", "RE", "Rendezvények")}
+                  {renderNavLink("/accommodations", "SZ", "Szállások")}
+                  {renderNavLink("/restaurants", "VE", "Vendéglátás")}
+                  {renderNavLink("/contact", "KA", "Kapcsolat")}
+                </>
+              )}
+
+              <li className="nav-header">Nézetek</li>
+              {renderNavLink("/achievements", "AC", "Achievementek")}
+              {renderNavLink("/map", "TE", "Térkép")}
+              {renderNavLink("/users", "FU", "Felhasználók")}
+
+              {currentRole === "admin" && (
+                <>
+                  <li className="nav-header">Rendszer</li>
+                  {renderNavLink("/seed-database", "AD", "Adatbázis feltöltés")}
+                </>
+              )}
+            </ul>
+          </nav>
+
+          <div className="sidebar-footer">
+            <button className="logout-btn" onClick={handleLogout}>
+              <span className="logout-icon">KI</span>
+              <span className="logout-label">Kijelentkezés</span>
+            </button>
+          </div>
         </div>
-
-        <nav>
-          <ul className="nav-links">
-            <li>
-              <Link to="/dashboard"><span className="nav-icon">📊</span><span className="nav-label">Dashboard</span></Link>
-            </li>
-
-            {currentRole === "admin" && (
-              <>
-                <li className="nav-header">Túrák menedzsment</li>
-                <li><Link to="/trips"><span className="nav-icon">🚶</span><span className="nav-label">Túrák</span></Link></li>
-                <li><Link to="/stations"><span className="nav-icon">📍</span><span className="nav-label">Állomások</span></Link></li>
-
-                <li className="nav-header">Város információ</li>
-                <li><Link to="/about"><span className="nav-icon">🏛️</span><span className="nav-label">Nagyvázsony története</span></Link></li>
-                <li><Link to="/events"><span className="nav-icon">🎉</span><span className="nav-label">Rendezvények</span></Link></li>
-                <li><Link to="/accommodations"><span className="nav-icon">🏨</span><span className="nav-label">Szállások</span></Link></li>
-                <li><Link to="/restaurants"><span className="nav-icon">🍽️</span><span className="nav-label">Vendéglátás</span></Link></li>
-                <li><Link to="/contact"><span className="nav-icon">📞</span><span className="nav-label">Kapcsolat</span></Link></li>
-              </>
-            )}
-
-            <li className="nav-header">Nézetek</li>
-            <li><Link to='/achievements'><span className='nav-icon'>🏆</span><span className='nav-label'>Achievementek</span></Link></li>
-            <li><Link to="/map"><span className="nav-icon">🗺️</span><span className="nav-label">Térkép</span></Link></li>
-            <li><Link to="/users"><span className="nav-icon">👥</span><span className="nav-label">Felhasználók</span></Link></li>
-
-            {currentRole === "admin" && (
-              <>
-                <li className="nav-header">Rendszer</li>
-                <li><Link to="/seed-database"><span className="nav-icon">🗄️</span><span className="nav-label">Adatbázis Feltöltés</span></Link></li>
-              </>
-            )}
-          </ul>
-        </nav>
-
-        <button className="logout-btn" onClick={handleLogout}>
-          <span className="logout-icon">🚪</span>
-          <span className="logout-label">Kijelentkezés</span>
-        </button>
       </aside>
 
       {!sidebarOpen && (
-        <button className="sidebar-open-btn" onClick={() => setSidebarOpen(true)} title="Megnyitás">☰</button>
+        <button className="sidebar-open-btn" onClick={() => setSidebarOpen(true)} title="Megnyitás">
+          ☰
+        </button>
       )}
 
       <main className={`main-content ${sidebarOpen ? "expanded" : "full"}`}>
-        <Outlet />
+        <div className="content-shell">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
 }
 
 export default Layout;
-
-

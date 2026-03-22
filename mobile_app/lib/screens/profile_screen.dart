@@ -52,10 +52,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _refreshAll() async {
-    await Future.wait([
-      _loadUserData(),
-      _loadAchievementCatalogAndUnlocks(),
-    ]);
+    await Future.wait([_loadUserData(), _loadAchievementCatalogAndUnlocks()]);
+  }
+
+  Future<void> _syncLeaderboardEntry(Map<String, dynamic> current) async {
+    await _firestore
+        .collection('public_leaderboard')
+        .doc(current['id'].toString())
+        .set({
+          'displayName': current['name']?.toString() ?? 'Felhasznalo',
+          'points': _safeInt(current['points']),
+          'completedStationsCount': _safeCount(current['completedStations']),
+          'completedEventsCount': _safeCount(current['completedEvents']),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
   }
 
   Future<void> _loadUserData() async {
@@ -65,49 +75,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _error = null;
       });
 
-      final snapshot = await _firestore.collection('user_progress').get();
-      final List<Map<String, dynamic>> users = snapshot.docs.map((doc) {
-        final data = doc.data();
-        final completedStations = _safeCount(data['completedStations']);
-        final completedEvents = _safeCount(data['completedEvents']);
-        final totalPoints = _safeInt(data['totalPoints']);
+      final currentUid = _auth.currentUser?.uid;
+      if (currentUid == null) {
+        throw Exception('Nincs bejelentkezett felhasznalo.');
+      }
 
-        return {
+      final progressDoc = await _firestore
+          .collection('user_progress')
+          .doc(currentUid)
+          .get();
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(currentUid)
+          .get();
+
+      final progressData = progressDoc.data() ?? <String, dynamic>{};
+      final userData = userDoc.data() ?? <String, dynamic>{};
+
+      final current = <String, dynamic>{
+        'id': currentUid,
+        'name':
+            userData['displayName']?.toString() ??
+            userData['name']?.toString() ??
+            progressData['name']?.toString() ??
+            'Felhasznalo',
+        'email':
+            userData['email']?.toString() ?? _auth.currentUser?.email ?? '',
+        'completedStations': _safeCount(progressData['completedStations']) > 0
+            ? _safeCount(progressData['completedStations'])
+            : _safeCount(userData['visitedStations']),
+        'completedEvents': _safeCount(progressData['completedEvents']) > 0
+            ? _safeCount(progressData['completedEvents'])
+            : _safeCount(userData['visitedEvents']),
+        'points': _safeInt(progressData['totalPoints']) > 0
+            ? _safeInt(progressData['totalPoints'])
+            : _safeInt(userData['points']),
+        'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs tura',
+      };
+
+      await _syncLeaderboardEntry(current);
+
+      final leaderboardSnap = await _firestore
+          .collection('public_leaderboard')
+          .orderBy('points', descending: true)
+          .get();
+
+      final users = leaderboardSnap.docs.map((doc) {
+        final data = doc.data();
+        return <String, dynamic>{
           'id': doc.id,
-          'name': data['name']?.toString() ?? 'Ismeretlen',
-          'email': data['email']?.toString() ?? '',
-          'completedStations': completedStations,
-          'completedEvents': completedEvents,
-          'points': totalPoints,
-          'currentTrip': data['currentTrip']?.toString() ?? 'Nincs tura',
+          'name': data['displayName']?.toString() ?? 'Felhasznalo',
+          'completedStations': _safeInt(data['completedStationsCount']),
+          'completedEvents': _safeInt(data['completedEventsCount']),
+          'points': _safeInt(data['points']),
+          'currentTrip': doc.id == currentUid
+              ? current['currentTrip']
+              : 'Nincs tura',
         };
       }).toList();
 
-      users.sort((a, b) => (b['points'] as int).compareTo(a['points'] as int));
-
-      final currentUid = _auth.currentUser?.uid;
-      Map<String, dynamic>? current = users.cast<Map<String, dynamic>?>().firstWhere(
-            (item) => item?['id'] == currentUid,
-            orElse: () => null,
-          );
-
-      if (current == null) {
-        final userDoc = await _firestore.collection('users').doc(currentUid).get();
-        final data = userDoc.data() ?? {};
-        current = {
-          'id': currentUid ?? 'unknown',
-          'name': data['displayName']?.toString() ?? data['name']?.toString() ?? 'Felhasznalo',
-          'email': data['email']?.toString() ?? _auth.currentUser?.email ?? '',
-          'completedStations': _safeCount(data['visitedStations']),
-          'completedEvents': _safeCount(data['visitedEvents']),
-          'points': _safeInt(data['points']),
-          'currentTrip': 'Nincs tura',
-        };
+      if (!users.any((item) => item['id'] == currentUid)) {
         users.add(Map<String, dynamic>.from(current));
       }
 
-      users.sort((a, b) => (b['points'] as int).compareTo(a['points'] as int));
-      final userRank = users.indexWhere((item) => item['id'] == current?['id']) + 1;
+      users.sort(
+        (a, b) => _safeInt(b['points']).compareTo(_safeInt(a['points'])),
+      );
+      final userRank = users.indexWhere((item) => item['id'] == currentUid) + 1;
 
       setState(() {
         _currentUserData = current;
@@ -198,9 +232,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final stations = _safeCount(_currentUserData?['completedStations']);
       final events = _safeCount(_currentUserData?['completedEvents']);
       return [
-        _Achievement('Elso lepesek', 'Olvass be 1 QR-kodot', stations >= 1 || events >= 1, '👣', '1 QR-kod'),
-        _Achievement('Felfedezo', 'Latogass meg legalabb 3 allomast', stations >= 3, '🧭', '3 allomas'),
-        _Achievement('Turahos', 'Gyujts ossze 140 pontot', points >= 140, '🏃', '140 pont'),
+        _Achievement(
+          'Elso lepesek',
+          'Olvass be 1 QR-kodot',
+          stations >= 1 || events >= 1,
+          '👣',
+          '1 QR-kod',
+        ),
+        _Achievement(
+          'Felfedezo',
+          'Latogass meg legalabb 3 allomast',
+          stations >= 3,
+          '🧭',
+          '3 allomas',
+        ),
+        _Achievement(
+          'Turahos',
+          'Gyujts ossze 140 pontot',
+          points >= 140,
+          '🏃',
+          '140 pont',
+        ),
       ];
     }
 
@@ -219,7 +271,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   int _nextPointTarget(int currentPoints) {
     final thresholds = _achievementDefinitions
-        .where((a) => (a['conditionType']?.toString() ?? '') == 'points_threshold')
+        .where(
+          (a) => (a['conditionType']?.toString() ?? '') == 'points_threshold',
+        )
         .map((a) => _safeInt(a['conditionValue']))
         .where((t) => t > 0)
         .toList();
@@ -254,148 +308,224 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-                            const SizedBox(height: 12),
-                            Text(_error!, textAlign: TextAlign.center),
-                            const SizedBox(height: 12),
-                            FilledButton(onPressed: _refreshAll, child: const Text('Ujraprobalas')),
-                          ],
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red.shade300,
                         ),
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _refreshAll,
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
+                        const SizedBox(height: 12),
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _refreshAll,
+                          child: const Text('Ujraprobalas'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _refreshAll,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      _buildProfileHeader(),
+                      const SizedBox(height: 16),
+                      Row(
                         children: [
-                          _buildProfileHeader(),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              _buildStatCard('Pontok', currentPoints.toString(), Icons.star, Colors.amber),
-                              const SizedBox(width: 12),
-                              _buildStatCard('Allomasok', stationCount.toString(), Icons.place, Colors.blue),
-                            ],
+                          _buildStatCard(
+                            'Pontok',
+                            currentPoints.toString(),
+                            Icons.star,
+                            Colors.amber,
                           ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              _buildStatCard('Esemenyek', eventCount.toString(), Icons.celebration, Colors.deepOrange),
-                              const SizedBox(width: 12),
-                              _buildStatCard('Rang', _userRank == 0 ? '-' : _getRankMedal(_userRank), Icons.leaderboard, Colors.teal),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('Jutalom elorehaladas', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 8),
-                                  LinearProgressIndicator(
-                                    value: progressToReward,
-                                    minHeight: 10,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text('$currentPoints / $rewardTarget pont'),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Card(
-                            child: ListTile(
-                              leading: Icon(Icons.map, color: Colors.blue.shade400),
-                              title: const Text('Jelenlegi tura'),
-                              subtitle: Text(_currentUserData?['currentTrip']?.toString() ?? 'Nincs tura'),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text('Achievementek', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),                          Text('Feloldva: $unlockedCount / ${achievements.length}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: achievements.map((a) => _AchievementChip(achievement: a)).toList(),
-                          ),
-                          const SizedBox(height: 10),
-                          Card(
-                            child: ListTile(
-                              leading: const Icon(Icons.track_changes_outlined),
-                              title: const Text('Reszletes achievement haladas'),
-                              subtitle: const Text('Feltetelek, allapotok, pontos elorehaladas'),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const AchievementProgressScreen()),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text('Rangsor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Card(
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _allUsers.length,
-                              separatorBuilder: (_, _) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final user = _allUsers[index];
-                                final isCurrentUser = user['id'] == _currentUserData?['id'];
-
-                                return Container(
-                                  color: isCurrentUser ? Colors.blue.shade50 : Colors.transparent,
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(
-                                    children: [
-                                      Text(_getRankMedal(index + 1), style: const TextStyle(fontSize: 20)),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(user['name'].toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                                            Text(
-                                              '${_safeCount(user['completedStations'])} allomas · ${_safeCount(user['completedEvents'])} esemeny',
-                                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.amber.shade100,
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          '${_safeInt(user['points'])} pont',
-                                          style: TextStyle(
-                                            color: Colors.amber.shade900,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
+                          const SizedBox(width: 12),
+                          _buildStatCard(
+                            'Allomasok',
+                            stationCount.toString(),
+                            Icons.place,
+                            Colors.blue,
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _buildStatCard(
+                            'Esemenyek',
+                            eventCount.toString(),
+                            Icons.celebration,
+                            Colors.deepOrange,
+                          ),
+                          const SizedBox(width: 12),
+                          _buildStatCard(
+                            'Rang',
+                            _userRank == 0 ? '-' : _getRankMedal(_userRank),
+                            Icons.leaderboard,
+                            Colors.teal,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Jutalom elorehaladas',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(
+                                value: progressToReward,
+                                minHeight: 10,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              const SizedBox(height: 8),
+                              Text('$currentPoints / $rewardTarget pont'),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Card(
+                        child: ListTile(
+                          leading: Icon(Icons.map, color: Colors.blue.shade400),
+                          title: const Text('Jelenlegi tura'),
+                          subtitle: Text(
+                            _currentUserData?['currentTrip']?.toString() ??
+                                'Nincs tura',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Achievementek',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Feloldva: $unlockedCount / ${achievements.length}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: achievements
+                            .map((a) => _AchievementChip(achievement: a))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 10),
+                      Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.track_changes_outlined),
+                          title: const Text('Reszletes achievement haladas'),
+                          subtitle: const Text(
+                            'Feltetelek, allapotok, pontos elorehaladas',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AchievementProgressScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Rangsor',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Card(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _allUsers.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final user = _allUsers[index];
+                            final isCurrentUser =
+                                user['id'] == _currentUserData?['id'];
+
+                            return Container(
+                              color: isCurrentUser
+                                  ? Colors.blue.shade50
+                                  : Colors.transparent,
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    _getRankMedal(index + 1),
+                                    style: const TextStyle(fontSize: 20),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          user['name'].toString(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${_safeCount(user['completedStations'])} allomas · ${_safeCount(user['completedEvents'])} esemeny',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '${_safeInt(user['points'])} pont',
+                                      style: TextStyle(
+                                        color: Colors.amber.shade900,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
           if (_showAchievementBanner && _newlyUnlockedAchievements.isNotEmpty)
             Positioned(
               top: 0,
@@ -403,7 +533,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               right: 0,
               child: Container(
                 color: Colors.amber[600],
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     const Icon(Icons.stars, color: Colors.white, size: 24),
@@ -424,7 +557,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             _newlyUnlockedAchievements
                                 .map((a) => (a['name'] ?? a['id']).toString())
                                 .join(', '),
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -433,7 +569,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => setState(() => _showAchievementBanner = false),
+                      onPressed: () =>
+                          setState(() => _showAchievementBanner = false),
                     ),
                   ],
                 ),
@@ -466,7 +603,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 12),
           Text(
             _currentUserData?['name']?.toString() ?? 'Felhasznalo',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -483,7 +624,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Card(
         child: Padding(
@@ -492,9 +638,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Icon(icon, color: color, size: 30),
               const SizedBox(height: 8),
-              Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              Text(
+                label,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
             ],
           ),
         ),
@@ -510,7 +665,13 @@ class _Achievement {
   final String iconEmoji;
   final String condition;
 
-  _Achievement(this.title, this.description, this.unlocked, this.iconEmoji, this.condition);
+  _Achievement(
+    this.title,
+    this.description,
+    this.unlocked,
+    this.iconEmoji,
+    this.condition,
+  );
 }
 
 class _AchievementChip extends StatelessWidget {
@@ -520,8 +681,12 @@ class _AchievementChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = achievement.unlocked ? const Color(0xFFE7F5EA) : const Color(0xFFF3F4F6);
-    final fg = achievement.unlocked ? const Color(0xFF166534) : const Color(0xFF6B7280);
+    final bg = achievement.unlocked
+        ? const Color(0xFFE7F5EA)
+        : const Color(0xFFF3F4F6);
+    final fg = achievement.unlocked
+        ? const Color(0xFF166534)
+        : const Color(0xFF6B7280);
 
     return Container(
       width: 178,
@@ -536,7 +701,10 @@ class _AchievementChip extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(achievement.iconEmoji, style: TextStyle(fontSize: 18, color: fg)),
+              Text(
+                achievement.iconEmoji,
+                style: TextStyle(fontSize: 18, color: fg),
+              ),
               const Spacer(),
               Icon(
                 achievement.unlocked ? Icons.check_circle : Icons.lock_outline,
@@ -546,7 +714,10 @@ class _AchievementChip extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(achievement.title, style: TextStyle(fontWeight: FontWeight.w700, color: fg)),
+          Text(
+            achievement.title,
+            style: TextStyle(fontWeight: FontWeight.w700, color: fg),
+          ),
           const SizedBox(height: 4),
           Text(
             achievement.description,
@@ -565,7 +736,7 @@ class _AchievementChip extends StatelessWidget {
                 style: TextStyle(fontSize: 11, color: fg),
               ),
             ),
-          ]
+          ],
         ],
       ),
     );

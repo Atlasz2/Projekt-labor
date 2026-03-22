@@ -25,10 +25,10 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "start": "npm --prefix admin run dev",
+    "build": "npm --prefix admin run build",
+    "test": "echo \"No root test suite configured. Run admin or mobile_app tests explicitly.\"",
+    "eject": "echo \"Root CRA app is not active in this workspace.\""
   },
   "eslintConfig": {
     "extends": [

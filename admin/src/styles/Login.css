@@ -9,7 +9,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #4CAF50 100%);
+  background: linear-gradient(135deg, #35493a 0%, #4b634d 50%, #6f8b5f 100%);
   position: relative;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -114,7 +114,7 @@
 }
 
 .login-header h1 {
-  color: #1B5E20;
+  color: #35493a;
   font-size: 2.2rem;
   margin-bottom: 8px;
   letter-spacing: -0.5px;
@@ -122,22 +122,22 @@
 }
 
 .login-header .subtitle {
-  color: #2E7D32;
+  color: #4b634d;
   font-size: 1.1rem;
   margin-bottom: 4px;
   font-weight: 500;
 }
 
 .login-header .tagline {
-  color: #999;
+  color: #9a8774;
   font-size: 0.95rem;
   font-weight: 400;
 }
 
 .error-alert {
-  background: #FFEBEE;
-  border-left: 4px solid #f44336;
-  color: #c62828;
+  background: #f3dfd4;
+  border-left: 4px solid #b86a4b;
+  color: #9e5337;
   padding: 16px;
   border-radius: 8px;
   margin-bottom: 24px;
@@ -177,7 +177,7 @@
 
 .form-group label {
   font-weight: 600;
-  color: #333;
+  color: #34261a;
   font-size: 0.95rem;
   display: flex;
   align-items: center;
@@ -190,33 +190,33 @@
 
 .form-group input {
   padding: 14px 16px;
-  border: 2px solid #E0E0E0;
+  border: 2px solid #dbcdb7;
   border-radius: 10px;
   font-size: 1rem;
   font-family: inherit;
   transition: all 0.3s ease;
-  background: #FAFAFA;
+  background: #f7f2e9;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #2E7D32;
+  border-color: #4b634d;
   background: white;
   box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
 }
 
 .form-group input:disabled {
-  background: #F5F5F5;
+  background: #f1e8db;
   cursor: not-allowed;
   opacity: 0.6;
 }
 
 .form-group input::placeholder {
-  color: #BDBDBD;
+  color: #aa947e;
 }
 
 .login-button {
-  background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
+  background: linear-gradient(135deg, #4b634d 0%, #35493a 100%);
   color: white;
   padding: 16px;
   border: none;
@@ -273,12 +273,12 @@
 .login-footer {
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #E0E0E0;
+  border-top: 1px solid #dbcdb7;
   text-align: center;
 }
 
 .test-info {
-  color: #666;
+  color: #746454;
   font-size: 0.9rem;
   margin-bottom: 12px;
   display: flex;
@@ -299,19 +299,19 @@
 }
 
 .credentials code {
-  background: #F5F5F5;
-  color: #1B5E20;
+  background: #f1e8db;
+  color: #35493a;
   padding: 8px 12px;
   border-radius: 6px;
   font-family: 'Courier New', monospace;
   font-size: 0.85rem;
-  border: 1px solid #E0E0E0;
+  border: 1px solid #dbcdb7;
   font-weight: 600;
 }
 
 .login-info-box {
   background: rgba(255, 255, 255, 0.95);
-  border: 2px solid #2E7D32;
+  border: 2px solid #4b634d;
   border-radius: 12px;
   padding: 20px;
   animation: slideUp 0.6s ease-out;
@@ -323,7 +323,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #333;
+  color: #34261a;
   margin: 8px 0;
   font-size: 0.95rem;
   font-weight: 500;
@@ -358,7 +358,7 @@
 .account-picker-box {
   border: 1px solid #e0e6ef;
   border-radius: 10px;
-  background: #f8fafc;
+  background: #f7f2e9;
   padding: 12px;
 }
 
@@ -378,7 +378,7 @@
 .account-chip {
   border: 1px solid #cfd8e3;
   background: #ffffff;
-  color: #1f2937;
+  color: #34261a;
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 0.82rem;
@@ -387,12 +387,14 @@
 }
 
 .account-chip:hover:not(:disabled) {
-  border-color: #2e7d32;
-  color: #2e7d32;
+  border-color: #4b634d;
+  color: #4b634d;
 }
 
 .account-chip.active {
-  background: #2e7d32;
+  background: #4b634d;
   color: #ffffff;
-  border-color: #2e7d32;
+  border-color: #4b634d;
 }
+
+

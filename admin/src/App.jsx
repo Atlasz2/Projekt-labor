@@ -38,12 +38,25 @@ function App() {
         setLoading(true);
 
         if (user) {
+          const role = await resolveUserRole(user);
+
+          if (role !== "admin") {
+            sessionStorage.setItem("admin_access_error", "Ehhez a fiókhoz nincs admin jogosultság.");
+            await signOut(auth);
+            setIsLoggedIn(false);
+            setUserRole("user");
+            localStorage.removeItem("demo_logged_in");
+            localStorage.removeItem("admin_email");
+            localStorage.removeItem("admin_role");
+            localStorage.removeItem("admin_uid");
+            setLoading(false);
+            return;
+          }
+
           setIsLoggedIn(true);
           localStorage.setItem("demo_logged_in", "true");
           localStorage.setItem("admin_email", user.email || "");
           localStorage.setItem("admin_uid", user.uid || "");
-
-          const role = await resolveUserRole(user);
           setUserRole(role);
           localStorage.setItem("admin_role", role);
         } else {
@@ -81,7 +94,7 @@ function App() {
   if (loading) return <FullPageLoader />;
 
   const adminOnly = (element) =>
-    userRole === "admin" ? element : <Navigate to="/dashboard" replace />;
+    userRole === "admin" ? element : <Navigate to="/" replace />;
 
   return (
     <BrowserRouter>
@@ -91,9 +104,9 @@ function App() {
 
           {isLoggedIn ? (
             <Route path="/" element={<Layout />}>
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="map" element={<Map />} />
-              <Route path="users" element={<Users />} />
+              <Route path="dashboard" element={adminOnly(<Dashboard />)} />
+              <Route path="map" element={adminOnly(<Map />)} />
+              <Route path="users" element={adminOnly(<Users />)} />
 
               <Route path="trips" element={adminOnly(<Trips />)} />
               <Route path="stations" element={adminOnly(<Stations />)} />
@@ -102,9 +115,10 @@ function App() {
               <Route path="accommodations" element={adminOnly(<Accommodations />)} />
               <Route path="restaurants" element={adminOnly(<Restaurants />)} />
               <Route path="contact" element={adminOnly(<Contact />)} />
-              
+
               <Route path='achievements' element={adminOnly(<Achievements />)} />
               <Route path="seed-database" element={adminOnly(<SeedDatabase />)} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           ) : (
             <Route path="*" element={<Navigate to="/" />} />
@@ -116,4 +130,3 @@ function App() {
 }
 
 export default App;
-

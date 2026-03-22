@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import {
   collection,
@@ -7,7 +7,6 @@ import {
   updateDoc,
   deleteDoc,
   doc,
-  deleteField,
 } from "firebase/firestore";
 import {
   GoogleMap,
@@ -39,6 +38,91 @@ const formatDistance = (meters) => {
   return `${km.toFixed(1)} km`;
 };
 
+const normalizeCoordinatePair = (pair, reverse = false) => {
+  if (!Array.isArray(pair) || pair.length < 2) return null;
+
+  const first = Number(pair[0]);
+  const second = Number(pair[1]);
+
+  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
+
+  return reverse ? [second, first] : [first, second];
+};
+
+const getStoredRouteCoordinates = (trip) => {
+  const routeFields = [
+    trip?.routeCoordinates,
+    trip?.routePoints,
+    trip?.path,
+    trip?.waypoints,
+  ];
+
+  for (const field of routeFields) {
+    if (!Array.isArray(field) || field.length === 0) continue;
+
+    const coords = field
+      .map((pair) => normalizeCoordinatePair(pair))
+      .filter(Boolean);
+
+    if (coords.length > 0) return coords;
+  }
+
+  const geometryCoordinates = trip?.geometry?.coordinates;
+  if (!Array.isArray(geometryCoordinates) || geometryCoordinates.length === 0) {
+    return [];
+  }
+
+  return geometryCoordinates
+    .map((pair) => normalizeCoordinatePair(pair, true))
+    .filter(Boolean);
+};
+
+const getDistanceValue = (distance) => {
+  if (typeof distance === "number" && Number.isFinite(distance) && distance > 0) {
+    return Number(distance.toFixed(1));
+  }
+
+  if (typeof distance === "string") {
+    const parsed = Number.parseFloat(distance.replace(",", "."));
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Number(parsed.toFixed(1));
+    }
+  }
+
+  return null;
+};
+
+const getDurationLabel = (duration) => {
+  if (typeof duration === "string" && duration.trim()) {
+    return duration.trim();
+  }
+
+  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+    return formatDuration(duration);
+  }
+
+  return null;
+};
+
+const getStoredTripMetrics = (trip, currentMetrics) => {
+  const distanceValue =
+    currentMetrics?.distanceValue ?? getDistanceValue(trip?.distance);
+  const durationLabel =
+    currentMetrics?.durationLabel ?? getDurationLabel(trip?.duration);
+
+  if (distanceValue == null && !durationLabel) return null;
+
+  return {
+    ...(distanceValue != null
+      ? {
+          distanceValue,
+          distanceLabel: `${distanceValue.toFixed(1)} km`,
+        }
+      : {}),
+    ...(durationLabel ? { durationLabel } : {}),
+  };
+};
+
 const getRouteData = async (coordinates) => {
   if (coordinates.length < 2) {
     return { coords: [], distanceMeters: 0, durationSeconds: 0 };
@@ -47,7 +131,7 @@ const getRouteData = async (coordinates) => {
   try {
     const osmCoords = coordinates.map(([lat, lon]) => `${lon},${lat}`).join(";");
     const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${osmCoords}?geometries=geojson`;
-    
+
     const response = await fetch(osrmUrl);
     const data = await response.json();
 
@@ -56,7 +140,11 @@ const getRouteData = async (coordinates) => {
       const distanceMeters = route.distance || 0;
       const durationSeconds = route.duration || 0;
 
-      if (route.geometry && route.geometry.coordinates && route.geometry.coordinates.length > 0) {
+      if (
+        route.geometry &&
+        route.geometry.coordinates &&
+        route.geometry.coordinates.length > 0
+      ) {
         const coords = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
         return { coords, distanceMeters, durationSeconds };
       }
@@ -71,13 +159,13 @@ const getRouteData = async (coordinates) => {
 const getStationCoords = (station) => {
   const lat = station?.location?.latitude ?? station?.latitude;
   const lon = station?.location?.longitude ?? station?.longitude;
-  return lat && lon ? [lat, lon] : null;
+  return typeof lat === "number" && typeof lon === "number" ? [lat, lon] : null;
 };
 
 const getStationLatLng = (station) => {
   const lat = station?.location?.latitude ?? station?.latitude;
   const lon = station?.location?.longitude ?? station?.longitude;
-  return lat && lon ? { lat, lng: lon } : null;
+  return typeof lat === "number" && typeof lon === "number" ? { lat, lng: lon } : null;
 };
 
 const getQrValue = (station) => station.qrCode || station.id;
@@ -99,9 +187,7 @@ const fetchDataUrl = async (url) => {
 
 function TripMap({ center, routePath, stations, isLoaded, loadError }) {
   const [selectedStation, setSelectedStation] = useState(null);
-  const path = routePath
-    ? routePath.map(([lat, lng]) => ({ lat, lng }))
-    : [];
+  const path = routePath ? routePath.map(([lat, lng]) => ({ lat, lng })) : [];
 
   if (loadError) {
     return <div className="no-stations">Google Maps hiba. Ellenorizd az API kulcsot.</div>;
@@ -173,10 +259,10 @@ function Trips() {
   const [expandedTripId, setExpandedTripId] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState({});
   const [tripMetrics, setTripMetrics] = useState({});
+  const [routeSavingId, setRouteSavingId] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [snack, setSnack] = useState({ open: false, msg: "", severity: "error" });
   const showMsg = (msg, severity = "error") => setSnack({ open: true, msg, severity });
-  const cleanupRef = useRef(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -203,19 +289,23 @@ function Trips() {
       }));
       setTrips(tripsData);
 
-      if (!cleanupRef.current) {
-        const withDifficulty = tripsData.filter(
-          (trip) => trip.difficulty !== undefined
-        );
-        if (withDifficulty.length > 0) {
-          await Promise.all(
-            withDifficulty.map((trip) =>
-              updateDoc(doc(db, "trips", trip.id), { difficulty: deleteField() })
-            )
-          );
+      const hydratedRoutes = {};
+      const hydratedMetrics = {};
+
+      tripsData.forEach((trip) => {
+        const storedRoute = getStoredRouteCoordinates(trip);
+        if (storedRoute.length > 0) {
+          hydratedRoutes[trip.id] = storedRoute;
         }
-        cleanupRef.current = true;
-      }
+
+        const storedMetrics = getStoredTripMetrics(trip);
+        if (storedMetrics) {
+          hydratedMetrics[trip.id] = storedMetrics;
+        }
+      });
+
+      setRouteCoordinates(hydratedRoutes);
+      setTripMetrics(hydratedMetrics);
 
       const stationsSnapshot = await getDocs(collection(db, "stations"));
       const stationsData = stationsSnapshot.docs.map((doc) => ({
@@ -239,9 +329,7 @@ function Trips() {
 
   const getMapCenter = (tripId) => {
     const tripStations = getTripsStations(tripId);
-    const coords = tripStations
-      .map(getStationCoords)
-      .filter(Boolean);
+    const coords = tripStations.map(getStationCoords).filter(Boolean);
     if (coords.length === 0) return DEFAULT_CENTER;
 
     const avgLat = coords.reduce((sum, c) => sum + c[0], 0) / coords.length;
@@ -253,10 +341,31 @@ function Trips() {
     if (expandedTripId !== tripId) {
       setExpandedTripId(tripId);
 
+      const selectedTrip = trips.find((trip) => trip.id === tripId);
+      const storedRoute = getStoredRouteCoordinates(selectedTrip);
+      const storedMetrics = getStoredTripMetrics(selectedTrip, tripMetrics[tripId]);
+
+      if (storedRoute.length > 0) {
+        setRouteCoordinates((prev) => ({
+          ...prev,
+          [tripId]: storedRoute,
+        }));
+
+        if (storedMetrics) {
+          setTripMetrics((prev) => ({
+            ...prev,
+            [tripId]: {
+              ...prev[tripId],
+              ...storedMetrics,
+            },
+          }));
+        }
+
+        return;
+      }
+
       const tripStations = getTripsStations(tripId);
-      const coords = tripStations
-        .map(getStationCoords)
-        .filter(Boolean);
+      const coords = tripStations.map(getStationCoords).filter(Boolean);
 
       if (!routeCoordinates[tripId] && coords.length > 1) {
         const routeData = await getRouteData(coords);
@@ -270,26 +379,9 @@ function Trips() {
             [tripId]: {
               distanceLabel,
               durationLabel,
-              distanceValue: Number(
-                (routeData.distanceMeters / 1000).toFixed(1)
-              ),
+              distanceValue: Number((routeData.distanceMeters / 1000).toFixed(1)),
             },
           }));
-
-          const trip = trips.find((t) => t.id === tripId);
-          const distanceValue = Number(
-            (routeData.distanceMeters / 1000).toFixed(1)
-          );
-          if (
-            trip &&
-            (trip.distance !== distanceValue ||
-              trip.duration !== durationLabel)
-          ) {
-            await updateDoc(doc(db, "trips", tripId), {
-              distance: distanceValue,
-              duration: durationLabel,
-            });
-          }
         }
       }
     } else {
@@ -394,6 +486,97 @@ function Trips() {
     }
   };
 
+  const handleSaveRoute = async (trip) => {
+    try {
+      setRouteSavingId(trip.id);
+
+      const tripStations = getTripsStations(trip.id);
+      const coords = tripStations.map(getStationCoords).filter(Boolean);
+
+      let nextRoute = routeCoordinates[trip.id];
+      let distanceValue =
+        tripMetrics[trip.id]?.distanceValue ?? getDistanceValue(trip.distance);
+      let durationLabel =
+        tripMetrics[trip.id]?.durationLabel ?? getDurationLabel(trip.duration);
+
+      if ((!nextRoute || nextRoute.length === 0) && coords.length < 2) {
+        showMsg("Legalább két állomás szükséges az útvonal mentéséhez");
+        return;
+      }
+
+      if (!nextRoute || nextRoute.length === 0) {
+        const routeData = await getRouteData(coords);
+
+        if (!routeData.coords.length) {
+          showMsg("Nem sikerült útvonalat számolni a túrához");
+          return;
+        }
+
+        nextRoute = routeData.coords;
+
+        if (routeData.distanceMeters > 0) {
+          distanceValue = Number((routeData.distanceMeters / 1000).toFixed(1));
+        }
+
+        if (routeData.durationSeconds > 0) {
+          durationLabel = formatDuration(routeData.durationSeconds);
+        }
+      }
+
+      const payload = {
+        routeCoordinates: nextRoute,
+        routeSource: "osrm-foot",
+      };
+
+      if (distanceValue != null) {
+        payload.distance = Number(distanceValue.toFixed(1));
+      }
+
+      if (durationLabel) {
+        payload.duration = durationLabel;
+      }
+
+      await updateDoc(doc(db, "trips", trip.id), payload);
+
+      setRouteCoordinates((prev) => ({
+        ...prev,
+        [trip.id]: nextRoute,
+      }));
+
+      setTripMetrics((prev) => ({
+        ...prev,
+        [trip.id]: {
+          ...prev[trip.id],
+          ...(distanceValue != null
+            ? {
+                distanceValue: Number(distanceValue.toFixed(1)),
+                distanceLabel: `${Number(distanceValue.toFixed(1)).toFixed(1)} km`,
+              }
+            : {}),
+          ...(durationLabel ? { durationLabel } : {}),
+        },
+      }));
+
+      setTrips((prev) =>
+        prev.map((item) =>
+          item.id === trip.id
+            ? {
+                ...item,
+                ...payload,
+              }
+            : item
+        )
+      );
+
+      showMsg("Útvonal sikeresen mentve!", "success");
+    } catch (err) {
+      console.error(err);
+      showMsg("Hiba az útvonal mentésekor");
+    } finally {
+      setRouteSavingId(null);
+    }
+  };
+
   const handleDownloadPdf = async (station, tripName) => {
     try {
       const docPdf = new jsPDF({ unit: "mm", format: "a4" });
@@ -415,10 +598,7 @@ function Trips() {
       docPdf.text(`QR: ${qrValue}`, 20, tripName ? 40 : 30);
       docPdf.addImage(qrData, "PNG", 20, tripName ? 50 : 40, 70, 70);
 
-      const fileName = `${(station.name || "allomas").replace(
-        /\s+/g,
-        "_"
-      )}_QR.pdf`;
+      const fileName = `${(station.name || "allomas").replace(/\s+/g, "_")}_QR.pdf`;
       docPdf.save(fileName);
     } catch (error) {
       console.error("PDF letoltes hiba:", error);
@@ -503,9 +683,7 @@ function Trips() {
                 <label>Státusz</label>
                 <button
                   type="button"
-                  className={`status-toggle ${
-                    formData.isActive ? "active" : "inactive"
-                  }`}
+                  className={`status-toggle ${formData.isActive ? "active" : "inactive"}`}
                   onClick={handleToggleStatus}
                 >
                   <span className="toggle-dot"></span>
@@ -556,7 +734,7 @@ function Trips() {
 
               return (
                 <div key={trip.id} className="trip-card">
-                  <div 
+                  <div
                     className="trip-header"
                     onClick={() => handleExpandTrip(trip.id)}
                   >
@@ -586,9 +764,7 @@ function Trips() {
                         <span className="meta-value">{tripStations.length}</span>
                       </div>
                       <span
-                        className={`trip-badge ${
-                          trip.isActive ? "badge-active" : "badge-inactive"
-                        }`}
+                        className={`trip-badge ${trip.isActive ? "badge-active" : "badge-inactive"}`}
                       >
                         {trip.isActive ? "Aktív" : "Inaktív"}
                       </span>
@@ -605,6 +781,21 @@ function Trips() {
                           isLoaded={isLoaded}
                           loadError={loadError}
                         />
+                        <div className="route-save-panel">
+                          <button
+                            className="btn-submit"
+                            type="button"
+                            onClick={() => handleSaveRoute(trip)}
+                            disabled={routeSavingId === trip.id}
+                          >
+                            {routeSavingId === trip.id
+                              ? "Útvonal mentése..."
+                              : "Útvonal mentése a túrához"}
+                          </button>
+                          <p className="form-note">
+                            A mobilalkalmazás először a mentett útvonalat használja.
+                          </p>
+                        </div>
                       </div>
 
                       <div className="details-stations">
@@ -639,9 +830,7 @@ function Trips() {
                                     <img src={qrUrl} alt={`QR ${station.name}`} loading="lazy" />
                                     <button
                                       className="btn-qr-download"
-                                      onClick={() =>
-                                        handleDownloadPdf(station, trip.name)
-                                      }
+                                      onClick={() => handleDownloadPdf(station, trip.name)}
                                     >
                                       Download
                                     </button>
@@ -679,13 +868,13 @@ function Trips() {
           </div>
         )}
       </div>
-          <Snackbar
+      <Snackbar
         open={snack.open}
         autoHideDuration={4000}
-        onClose={() => setSnack(s => ({ ...s, open: false }))}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert severity={snack.severity} onClose={() => setSnack(s => ({ ...s, open: false }))}>
+        <Alert severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))}>
           {snack.msg}
         </Alert>
       </Snackbar>
@@ -702,5 +891,3 @@ function Trips() {
 }
 
 export default Trips;
-
-

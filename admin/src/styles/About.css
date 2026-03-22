@@ -1,4 +1,4 @@
-﻿.timeline {
+.timeline {
   position: relative;
   padding: 40px 0;
   max-width: 800px;
@@ -23,17 +23,17 @@
 .timeline-dot {
   width: 20px;
   height: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #8b5e34 0%, #4b634d 100%);
   border-radius: 50%;
   border: 3px solid white;
-  box-shadow: 0 0 0 3px #667eea;
+  box-shadow: 0 0 0 3px #8b5e34;
   z-index: 2;
 }
 
 .timeline-line {
   width: 2px;
   flex: 1;
-  background: #e0e0e0;
+  background: #dbcdb7;
   position: absolute;
   top: 25px;
   left: 50%;
@@ -48,10 +48,10 @@
 .timeline-year {
   font-size: 18px;
   font-weight: 700;
-  color: #667eea;
+  color: #8b5e34;
   margin-bottom: 8px;
   display: inline-block;
-  background: #f0f4ff;
+  background: #f0dfc6;
   padding: 4px 12px;
   border-radius: 20px;
 }
@@ -59,11 +59,11 @@
 .timeline-content h3 {
   margin: 12px 0 8px 0;
   font-size: 18px;
-  color: #2d3748;
+  color: #34261a;
 }
 
 .timeline-content p {
-  color: #666;
+  color: #746454;
   line-height: 1.6;
   margin: 10px 0;
   font-size: 15px;
@@ -87,28 +87,28 @@
 }
 
 .btn-edit {
-  background: #3b82f6;
+  background: #4b634d;
   color: white;
 }
 
 .btn-edit:hover {
-  background: #2563eb;
+  background: #35493a;
   transform: translateY(-2px);
 }
 
 .btn-delete {
-  background: #ef4444;
+  background: #b86a4b;
   color: white;
 }
 
 .btn-delete:hover {
-  background: #dc2626;
+  background: #9e5337;
   transform: translateY(-2px);
 }
 
 .no-data {
   text-align: center;
-  color: #999;
+  color: #9a8774;
   padding: 40px 20px;
   font-size: 16px;
 }
@@ -138,3 +138,5 @@
     font-size: 16px;
   }
 }
+
+
