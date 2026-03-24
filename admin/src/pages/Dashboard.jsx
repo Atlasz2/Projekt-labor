@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../firebaseConfig';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -46,7 +46,7 @@ function Dashboard() {
       setTopAchievements(achData);
     } catch (err) {
       console.error('Dashboard fetch error:', err);
-      setError('Nem sikerult betolteni az adatokat: ' + err.message);
+      setError('Nem sikerült betölteni az adatokat: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -55,33 +55,33 @@ function Dashboard() {
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
   const statItems = [
-    { key: 'trips',        label: 'Osszes tura',    value: stats.trips,        hint: 'Letrehozott utak',         tone: 'mint', badge: 'T' },
-    { key: 'stations',     label: 'Allomasok',      value: stats.stations,     hint: 'Pontok a terkepen',        tone: 'sky',  badge: 'A' },
-    { key: 'activeTrips',  label: 'Aktiv turak',    value: stats.activeTrips,  hint: 'Most aktiv',               tone: 'sun',  badge: 'V' },
-    { key: 'users',        label: 'Felhasznalok',   value: stats.users,        hint: 'users collection',         tone: 'sand', badge: 'F' },
-    { key: 'trackedUsers', label: 'Haladast kovet', value: stats.trackedUsers, hint: 'user_progress rekord',     tone: 'rose', badge: 'H' },
-    { key: 'achievements', label: 'Jutalmak',       value: stats.achievements, hint: 'Letrehozott jutalmak',     tone: 'mint', badge: 'J' },
-    { key: 'totalPoints',  label: 'Ossz pontok',    value: stats.totalPoints,  hint: 'Minden felhasznalotol',    tone: 'sky',  badge: 'P' },
-    { key: 'avgPoints',    label: 'Atlag pont',     value: stats.averagePoints,hint: 'Felhasznalonkent',         tone: 'sun',  badge: '~' },
+    { key: 'trips',        label: 'Összes túra',    value: stats.trips,        hint: 'Létrehozott utak',         tone: 'mint', badge: 'T' },
+    { key: 'stations',     label: 'Állomások',      value: stats.stations,     hint: 'Pontok a térképen',        tone: 'sky',  badge: 'A' },
+    { key: 'activeTrips',  label: 'Aktív túrák',    value: stats.activeTrips,  hint: 'Most aktív',               tone: 'sun',  badge: 'V' },
+    { key: 'users',        label: 'Felhasználók',   value: stats.users,        hint: 'users collection',         tone: 'sand', badge: 'F' },
+    { key: 'trackedUsers', label: 'Haladást követ', value: stats.trackedUsers, hint: 'user_progress rekord',     tone: 'rose', badge: 'H' },
+    { key: 'achievements', label: 'Jutalmak',       value: stats.achievements, hint: 'Létrehozott jutalmak',     tone: 'mint', badge: 'J' },
+    { key: 'totalPoints',  label: 'Össz. pontok',    value: stats.totalPoints,  hint: 'Minden felhasználótól',    tone: 'sky',  badge: 'P' },
+    { key: 'avgPoints',    label: 'Átlag pont',     value: stats.averagePoints,hint: 'Felhasználónként',         tone: 'sun',  badge: '~' },
   ];
 
   const quickActions = [
-    { to: '/trips',    title: 'Turak',        desc: 'Utvonalak, allomasok, szakaszok', badge: 'U' },
-    { to: '/stations', title: 'Allomasok',    desc: 'Helyszinek, pontok, leirasok',    badge: 'A' },
-    { to: '/map',      title: 'Terkep',       desc: 'Teljes terkep attekintes',        badge: 'T' },
-    { to: '/users',    title: 'Felhasznalok', desc: 'Haladas, statisztikak',           badge: 'F' },
+    { to: '/trips',    title: 'Túrák',        desc: 'Útvonalak, állomások, szakaszok', badge: 'U' },
+    { to: '/stations', title: 'Állomások',    desc: 'Helyszínek, pontok, leírások',    badge: 'A' },
+    { to: '/map',      title: 'Térkép',       desc: 'Teljes térkép áttekintés',        badge: 'T' },
+    { to: '/users',    title: 'Felhasználók', desc: 'Haladás, statisztikák',           badge: 'F' },
   ];
 
   return (
     <div className="dashboard-shell">
       <header className="dashboard-hero">
         <div className="hero-copy">
-          <p className="hero-kicker">Admin iranyitopult</p>
+          <p className="hero-kicker">Admin irányítópult</p>
           <h1>Dashboard</h1>
         </div>
         <div className="hero-cta">
           <button className="cta ghost" onClick={fetchStats} disabled={loading} style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>
-            {loading ? '⟳ Frissites...' : '⟳ Frissites'}
+            {loading ? '⟳ Frissítés...' : '⟳ Frissítés'}
           </button>
           <Link className="cta primary" to="/trips">Uj tura</Link>
           <Link className="cta ghost" to="/stations">Uj allomas</Link>
@@ -112,8 +112,8 @@ function Dashboard() {
           <section className="card kpi-card">
             <div className="card-header">
               <div>
-                <h2>Statisztikak</h2>
-                <p>Osszkep az adatbazisrol</p>
+                <h2>Statisztikák</h2>
+                <p>Összkép az adatbázisról</p>
               </div>
               <span className="card-chip">Most</span>
             </div>
@@ -134,8 +134,8 @@ function Dashboard() {
           <section className="card quick-card">
             <div className="card-header">
               <div>
-                <h2>Gyors muveletek</h2>
-                <p>Ugorj oda, ahova mennel</p>
+                <h2>Gyors műveletek</h2>
+                <p>Ugorj oda, ahová mennél</p>
               </div>
             </div>
             <div className="quick-grid">
@@ -155,10 +155,10 @@ function Dashboard() {
             <section className="card achievement-card">
               <div className="card-header">
                 <div>
-                  <h2>🏆 Legnepszerubb jutalmak</h2>
-                  <p>Legtobbet feloldott jutalmak</p>
+                  <h2>🏆 Legnépszerűbb jutalmak</h2>
+                  <p>Legtöbbet feloldott jutalmak</p>
                 </div>
-                <Link className="card-chip" to="/achievements">Osszes</Link>
+                <Link className="card-chip" to="/achievements">Összes</Link>
               </div>
               <div className="achievement-list">
                 {topAchievements.map((a, i) => (
@@ -179,22 +179,22 @@ function Dashboard() {
           <section className="card activity-card">
             <div className="card-header">
               <div>
-                <h2>Friss aktivitas</h2>
-                <p>Azonnali statusz a rendszerrol</p>
+                <h2>Friss aktivitás</h2>
+                <p>Azonnali státusz a rendszerről</p>
               </div>
             </div>
             <div className="activity-list">
               <div className="activity-row"><span className="activity-dot"></span>
-                <p>{stats.trips === 0 ? 'Meg nincs tura az adatbazisban.' : `${stats.trips} tura regisztralt, ${stats.activeTrips} aktiv.`}</p>
+                <p>{stats.trips === 0 ? 'Még nincs túra az adatbázisban.' : `${stats.trips} tura regisztralt, ${stats.activeTrips} aktiv.`}</p>
               </div>
               <div className="activity-row"><span className="activity-dot"></span>
-                <p>{stats.stations === 0 ? 'Nincsenek allomasok feltoltve.' : `${stats.stations} allomas aktiv.`}</p>
+                <p>{stats.stations === 0 ? 'Nincsenek állomások feltöltve.' : `${stats.stations} állomás aktív.`}</p>
               </div>
               <div className="activity-row"><span className="activity-dot"></span>
-                <p>{stats.trackedUsers === 0 ? 'Nincs haladasi rekord.' : `${stats.trackedUsers} jatekos kovet haladast, atlag ${stats.averagePoints} ponttal.`}</p>
+                <p>{stats.trackedUsers === 0 ? 'Nincs haladási rekord.' : `${stats.trackedUsers} játékos követ haladást, átlag ${stats.averagePoints} ponttal.`}</p>
               </div>
               <div className="activity-row"><span className="activity-dot"></span>
-                <p>{stats.achievements === 0 ? 'Nincsenek jutalmak beallitva.' : `${stats.achievements} jutalom letrehozva.`}</p>
+                <p>{stats.achievements === 0 ? 'Nincsenek jutalmak beállítva.' : `${stats.achievements} jutalom létrehozva.`}</p>
               </div>
             </div>
           </section>

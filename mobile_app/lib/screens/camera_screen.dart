@@ -239,6 +239,9 @@ class _CameraScreenState extends State<CameraScreen> {
               .collection('unlocked_achievements')
               .doc(id)
               .set({'unlockedAt': FieldValue.serverTimestamp()});
+          await _firestore.collection('achievements').doc(id).update({
+            'unlockedCount': FieldValue.increment(1),
+          });
           newlyUnlocked.add({'id': id, ...achData});
         }
       }

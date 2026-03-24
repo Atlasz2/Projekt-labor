@@ -391,6 +391,7 @@ class _MapTripsScreenState extends State<MapTripsScreen>
       final stationsSnap = results[1] as QuerySnapshot;
       final trips = tripsSnap.docs
           .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+          .where((t) => t['isActive'] != false)
           .toList();
       final stations = stationsSnap.docs
           .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
