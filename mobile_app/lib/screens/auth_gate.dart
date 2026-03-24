@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'name_screen.dart';
+import '../services/bootstrap_service.dart';
+import '../services/pending_qr_sync_service.dart';
 import 'main_menu_screen.dart';
 
 class AuthGate extends StatefulWidget {
@@ -33,11 +35,14 @@ class _AuthGateState extends State<AuthGate> {
 
         // No user logged in
         if (!snapshot.hasData || snapshot.data == null) {
+          PendingQrSyncService.stop().ignore();
           return const NameScreen();
         }
 
         _initialAuthResolved = true;
         final user = snapshot.data!;
+        BootstrapService.run().ignore(); // adatok frissitese hatterben
+        PendingQrSyncService.start().ignore();
 
         // User is logged in - show MainMenuScreen immediately without waiting for Firestore
         // Firestore updates will happen in background without blocking UI
@@ -77,10 +82,7 @@ class _LoadingSplashScreen extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/loading_screen.jpg',
-            fit: BoxFit.cover,
-          ),
+          Image.asset('assets/loading_screen.jpg', fit: BoxFit.cover),
           Container(color: Colors.black.withValues(alpha: 0.20)),
           const Center(
             child: SizedBox(
@@ -97,5 +99,3 @@ class _LoadingSplashScreen extends StatelessWidget {
     );
   }
 }
-
-

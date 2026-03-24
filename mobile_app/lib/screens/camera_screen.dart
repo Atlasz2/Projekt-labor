@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import '../services/local_cache.dart';
+import '../services/pending_qr_sync_service.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -25,6 +28,7 @@ class _CameraScreenState extends State<CameraScreen> {
   void initState() {
     super.initState();
     _loadHistory();
+    PendingQrSyncService.start();
   }
 
   @override
@@ -84,8 +88,46 @@ class _CameraScreenState extends State<CameraScreen> {
     }, SetOptions(merge: true));
   }
 
+  Future<bool> _isOnline() async {
+    try {
+      final r = await Connectivity().checkConnectivity();
+      return r.any((x) => x != ConnectivityResult.none);
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _onQrDetected(String code) async {
     if (!_scanning || _loading) return;
+
+    // Offline ellenorzes
+    if (!await _isOnline()) {
+      final queuedNow = await LocalCache.enqueuePendingQr(code);
+      final cachedStation = _findStationFromLocalCache(code);
+      if (!mounted) return;
+      setState(() {
+        _scanning = false;
+        _loading = false;
+        _errorMsg = null;
+        if (cachedStation != null) {
+          _station = {
+            ...cachedStation,
+            'alreadyDone': false,
+            'newAchievements': const <Map<String, dynamic>>[],
+            'offlineQueued': true,
+            'offlineQueuedNow': queuedNow,
+          };
+        } else {
+          _station = null;
+          _errorMsg = queuedNow
+              ? 'Offline: a QR kod sorba allt, online allapotban szinkronizal.'
+              : 'Ez a QR mar offline sorban van, online allapotban szinkronizal.';
+        }
+      });
+      _controller.stop();
+      return;
+    }
+
     setState(() {
       _scanning = false;
       _loading = true;
@@ -127,6 +169,20 @@ class _CameraScreenState extends State<CameraScreen> {
         _errorMsg = 'Hiba: ${e.toString().replaceAll('Exception: ', '')}';
       });
     }
+  }
+
+  Map<String, dynamic>? _findStationFromLocalCache(String code) {
+    final normalized = code.trim();
+    if (normalized.isEmpty) return null;
+    final allStations = LocalCache.getStations();
+    for (final station in allStations) {
+      final qr = station['qrCode']?.toString().trim();
+      final id = station['id']?.toString().trim();
+      if (qr == normalized || id == normalized) {
+        return station;
+      }
+    }
+    return null;
   }
 
   Future<void> _handleStationFound(
@@ -183,6 +239,7 @@ class _CameraScreenState extends State<CameraScreen> {
       _loading = false;
     });
     _loadHistory();
+    PendingQrSyncService.start();
   }
 
   Future<List<Map<String, dynamic>>> _checkAchievements(
@@ -402,6 +459,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final imageUrl = s['imageUrl']?.toString() ?? '';
     final newAch =
         (s['newAchievements'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final offlineQueued = s['offlineQueued'] == true;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -459,7 +517,11 @@ class _CameraScreenState extends State<CameraScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  alreadyDone ? 'Mar feloldott (+0 pt)' : '+$points pont',
+                  alreadyDone
+                      ? 'Mar feloldott (+0 pt)'
+                      : (offlineQueued
+                            ? ('Offline sorban (+' + points.toString() + ' pt)')
+                            : ('+' + points.toString() + ' pont')),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,

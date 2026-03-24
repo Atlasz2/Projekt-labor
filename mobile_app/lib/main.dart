@@ -1,4 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'services/local_cache.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
@@ -6,6 +8,8 @@ import 'screens/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  await LocalCache.init();
   try {
     if (Firebase.apps.isEmpty) {
       await Firebase.initializeApp(

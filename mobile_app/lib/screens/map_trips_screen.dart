@@ -8,6 +8,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart' as ll;
+
+import '../services/local_cache.dart';
+import '../services/offline_tiles_service.dart';
 
 class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
@@ -16,8 +20,7 @@ class MapTripsScreen extends StatefulWidget {
   State<MapTripsScreen> createState() => _MapTripsScreenState();
 }
 
-class _MapTripsScreenState extends State<MapTripsScreen>
-    {
+class _MapTripsScreenState extends State<MapTripsScreen> {
   static const LatLng _defaultCenter = LatLng(47.06, 17.715);
 
   final _firestore = FirebaseFirestore.instance;
@@ -25,8 +28,11 @@ class _MapTripsScreenState extends State<MapTripsScreen>
 
   bool _loading = true;
   bool _routeLoading = false;
+  bool _downloadingTiles = false;
+  bool _hasOfflineTiles = false;
   String? _error;
   String? _routeStatus;
+  String? _downloadStatus;
 
   List<Map<String, dynamic>> _trips = [];
   List<Map<String, dynamic>> _stations = [];
@@ -77,11 +83,12 @@ class _MapTripsScreenState extends State<MapTripsScreen>
   }
 
   List<Map<String, dynamic>> _tripStationsFor(String? tripId) {
-    final items = (tripId == null
-            ? _stations
-            : _stations.where((s) => s['tripId'] == tripId).toList())
-        .where((s) => _stationPoint(s) != null)
-        .toList();
+    final items =
+        (tripId == null
+                ? _stations
+                : _stations.where((s) => s['tripId'] == tripId).toList())
+            .where((s) => _stationPoint(s) != null)
+            .toList();
 
     items.sort((a, b) {
       final orderCompare = _stationOrder(a).compareTo(_stationOrder(b));
@@ -175,7 +182,10 @@ class _MapTripsScreenState extends State<MapTripsScreen>
     }
 
     final locations = waypoints
-        .map((p) => '{"lon": ${p.longitude}, "lat": ${p.latitude}, "type": "break"}')
+        .map(
+          (p) =>
+              '{"lon": ${p.longitude}, "lat": ${p.latitude}, "type": "break"}',
+        )
         .join(',');
     final body =
         '{"locations": [$locations], "costing": "pedestrian", "costing_options": {"pedestrian": {"use_tracks": 1.0, "walking_speed": 3.5}}, "directions_type": "none"}';
@@ -207,8 +217,7 @@ class _MapTripsScreenState extends State<MapTripsScreen>
               }
               final summary = trip['summary'] as Map?;
               if (points.length >= 2) {
-                final lengthKm =
-                    (summary?['length'] as num? ?? 0).toDouble();
+                final lengthKm = (summary?['length'] as num? ?? 0).toDouble();
                 final timeSec = (summary?['time'] as num? ?? 0).toDouble();
                 return {
                   'points': points,
@@ -225,8 +234,9 @@ class _MapTripsScreenState extends State<MapTripsScreen>
     } catch (_) {}
 
     // 2. Tartalek: OSRM foot (turazasi sebesseggel korrigalva)
-    final coords =
-        waypoints.map((pt) => '${pt.longitude},${pt.latitude}').join(';');
+    final coords = waypoints
+        .map((pt) => '${pt.longitude},${pt.latitude}')
+        .join(';');
     final osrmUri = Uri.parse(
       'https://router.project-osrm.org/route/v1/foot/$coords?overview=full&geometries=geojson&steps=false&continue_straight=false',
     );
@@ -362,9 +372,11 @@ class _MapTripsScreenState extends State<MapTripsScreen>
     }
     return bestIndex;
   }
+
   @override
   void initState() {
     super.initState();
+    _initOfflineTileState();
     _loadAll();
   }
 
@@ -374,6 +386,61 @@ class _MapTripsScreenState extends State<MapTripsScreen>
     super.dispose();
   }
 
+  Future<void> _initOfflineTileState() async {
+    final hasTiles = await OfflineTilesService.hasOfflineTiles();
+    if (!mounted) return;
+    setState(() {
+      _hasOfflineTiles = hasTiles;
+    });
+  }
+
+  Future<void> _downloadOfflineTiles() async {
+    if (_downloadingTiles) return;
+
+    final tripStations = _tripStationsFor(_selectedTripId);
+    final routePoints = _selectedTripId == null
+        ? const <LatLng>[]
+        : (_routeCache[_selectedTripId!] ?? const <LatLng>[]);
+
+    final focusPoints = routePoints.isNotEmpty
+        ? routePoints
+              .map((p) => ll.LatLng(p.latitude, p.longitude))
+              .toList(growable: false)
+        : tripStations
+              .map(_stationPoint)
+              .whereType<LatLng>()
+              .map((p) => ll.LatLng(p.latitude, p.longitude))
+              .toList(growable: false);
+
+    setState(() {
+      _downloadingTiles = true;
+      _downloadStatus = 'Offline csempék letöltése...';
+    });
+
+    final downloaded = await OfflineTilesService.downloadNagyvazsonyTiles(
+      focusPoints: focusPoints,
+      minZoom: 13,
+      maxZoom: 19,
+      onProgress: (done, total) async {
+        if (!mounted) return;
+        setState(() {
+          _downloadStatus = 'Letöltés: $done / $total';
+        });
+      },
+    );
+
+    final hasTiles = await OfflineTilesService.hasOfflineTiles();
+
+    if (!mounted) return;
+    setState(() {
+      _downloadingTiles = false;
+      _hasOfflineTiles = hasTiles;
+      _downloadStatus = downloaded > 0
+          ? 'Offline csempék készen az útvonal mentén'
+          : 'Nem sikerült letölteni csempéket';
+    });
+  }
+
   Future<void> _loadAll() async {
     setState(() {
       _loading = true;
@@ -381,39 +448,54 @@ class _MapTripsScreenState extends State<MapTripsScreen>
     });
     try {
       final uid = _auth.currentUser?.uid;
-      final results = await Future.wait([
-        _firestore.collection('trips').get(),
-        _firestore.collection('stations').get(),
-        if (uid != null) _firestore.collection('user_progress').doc(uid).get(),
-      ]);
-
-      final tripsSnap = results[0] as QuerySnapshot;
-      final stationsSnap = results[1] as QuerySnapshot;
-      final trips = tripsSnap.docs
-          .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
-          .where((t) => t['isActive'] != false)
-          .toList();
-      final stations = stationsSnap.docs
-          .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
-          .toList();
-
+      List<Map<String, dynamic>> trips = [];
+      List<Map<String, dynamic>> stations = [];
       Set<String> completed = {};
-      if (uid != null && results.length > 2) {
-        final progress = results[2] as DocumentSnapshot;
-        if (progress.exists) {
-          completed = Set<String>.from(
-            (progress.data() as Map)['completedStations'] ?? [],
-          );
+
+      try {
+        final results = await Future.wait([
+          _firestore.collection('trips').get(),
+          _firestore.collection('stations').get(),
+          if (uid != null)
+            _firestore.collection('user_progress').doc(uid).get(),
+        ]).timeout(const Duration(seconds: 15));
+
+        final tripsSnap = results[0] as QuerySnapshot;
+        final stationsSnap = results[1] as QuerySnapshot;
+        trips = tripsSnap.docs
+            .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+            .where((t) => t['isActive'] != false)
+            .toList();
+        stations = stationsSnap.docs
+            .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+            .toList();
+
+        if (uid != null && results.length > 2) {
+          final progress = results[2] as DocumentSnapshot;
+          if (progress.exists) {
+            completed = Set<String>.from(
+              (progress.data() as Map)['completedStations'] ?? [],
+            );
+          }
+
+          if (completed.isEmpty) {
+            final completedStationsSnap = await _firestore
+                .collection('user_progress')
+                .doc(uid)
+                .collection('completed_stations')
+                .get();
+            completed = completedStationsSnap.docs.map((doc) => doc.id).toSet();
+          }
         }
 
-        if (completed.isEmpty) {
-          final completedStationsSnap = await _firestore
-              .collection('user_progress')
-              .doc(uid)
-              .collection('completed_stations')
-              .get();
-          completed = completedStationsSnap.docs.map((doc) => doc.id).toSet();
-        }
+        if (trips.isNotEmpty) await LocalCache.saveTrips(trips);
+        if (stations.isNotEmpty) await LocalCache.saveStations(stations);
+      } catch (_) {
+        final cachedTrips = LocalCache.getTrips();
+        final cachedStations = LocalCache.getStations();
+        if (cachedTrips.isEmpty && cachedStations.isEmpty) rethrow;
+        trips = cachedTrips;
+        stations = cachedStations;
       }
 
       if (!mounted) return;
@@ -462,6 +544,29 @@ class _MapTripsScreenState extends State<MapTripsScreen>
       return;
     }
 
+    final persistedRoute = LocalCache.getRoute(tripId);
+    if (persistedRoute != null) {
+      final persistedPoints = _decodeStoredRoute(persistedRoute['points']);
+      final persistedMetrics = persistedRoute['metrics'];
+      if (persistedPoints.length >= 2) {
+        _routeCache[tripId] = persistedPoints;
+        if (persistedMetrics is Map) {
+          _routeMetrics[tripId] = persistedMetrics.map(
+            (k, v) => MapEntry(k.toString(), v.toString()),
+          );
+        }
+        if (!mounted) return;
+        setState(() {
+          _markers = markers;
+          _polylines = _buildPolylines(persistedPoints, visibleStations);
+          _routeLoading = false;
+          _routeStatus = _routeMetrics[tripId]?['status'] ?? 'Offline útvonal';
+        });
+        _fitRouteOrStations(persistedPoints, visibleStations);
+        return;
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _markers = markers;
@@ -471,9 +576,9 @@ class _MapTripsScreenState extends State<MapTripsScreen>
     });
 
     final trip = _trips.cast<Map<String, dynamic>?>().firstWhere(
-          (item) => item?['id'] == tripId,
-          orElse: () => null,
-        );
+      (item) => item?['id'] == tripId,
+      orElse: () => null,
+    );
 
     final stationPoints = visibleStations
         .map(_stationPoint)
@@ -494,7 +599,9 @@ class _MapTripsScreenState extends State<MapTripsScreen>
 
     if (routePoints.length < 2 && stationPoints.length >= 2) {
       final routeData = await _fetchHikingRoute(stationPoints);
-      routePoints = (routeData['points'] as List<dynamic>).whereType<LatLng>().toList();
+      routePoints = (routeData['points'] as List<dynamic>)
+          .whereType<LatLng>()
+          .toList();
       distanceLabel = routeData['distanceLabel']?.toString() ?? 'N/A';
       durationLabel = routeData['durationLabel']?.toString() ?? 'N/A';
       final fallback = routeData['fallback'] == true;
@@ -502,8 +609,8 @@ class _MapTripsScreenState extends State<MapTripsScreen>
       status = fallback
           ? 'Közelítő összekötés állomások között'
           : osrm
-              ? 'Gyalogos útvonal'
-              : 'OpenStreetMap turistaut';
+          ? 'Gyalogos útvonal'
+          : 'OpenStreetMap turistaut';
     }
 
     if (routePoints.length < 2) {
@@ -519,6 +626,17 @@ class _MapTripsScreenState extends State<MapTripsScreen>
       'distance': distanceLabel,
       'duration': durationLabel,
     };
+
+    if (routePoints.length >= 2 &&
+        status != 'Közelítő összekötés állomások között') {
+      await LocalCache.saveRoute(
+        tripId,
+        routePoints
+            .map((p) => ll.LatLng(p.latitude, p.longitude))
+            .toList(growable: false),
+        _routeMetrics[tripId]!,
+      );
+    }
 
     if (!mounted || _selectedTripId != tripId) return;
     setState(() {
@@ -542,14 +660,10 @@ class _MapTripsScreenState extends State<MapTripsScreen>
           position: point,
           infoWindow: InfoWindow(
             title: '$orderText ${s['name'] ?? 'Állomás'}',
-            snippet: done
-                ? '✅ Teljesítve'
-                : '${s['points'] ?? 10} pont',
+            snippet: done ? '✅ Teljesítve' : '${s['points'] ?? 10} pont',
           ),
           icon: done
-              ? BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueGreen,
-                )
+              ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen)
               : BitmapDescriptor.defaultMarkerWithHue(
                   BitmapDescriptor.hueViolet,
                 ),
@@ -570,7 +684,9 @@ class _MapTripsScreenState extends State<MapTripsScreen>
     final remainingColor = const Color(0xFF8D6E63);
 
     if (completedCount > 0 && completedCount <= visibleStations.length) {
-      final lastCompletedPoint = _stationPoint(visibleStations[completedCount - 1]);
+      final lastCompletedPoint = _stationPoint(
+        visibleStations[completedCount - 1],
+      );
       if (lastCompletedPoint != null) {
         final splitIndex = _nearestRouteIndex(routePoints, lastCompletedPoint);
         if (splitIndex >= 1) {
@@ -676,9 +792,7 @@ class _MapTripsScreenState extends State<MapTripsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Térkép és Túrák'),
-      ),
+      appBar: AppBar(title: const Text('Térkép és Túrák')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -693,7 +807,9 @@ class _MapTripsScreenState extends State<MapTripsScreen>
         ? _stationPoint(tripStations.first)
         : null;
     final center = firstStationPoint ?? _defaultCenter;
-    final metrics = _selectedTripId == null ? null : _routeMetrics[_selectedTripId!];
+    final metrics = _selectedTripId == null
+        ? null
+        : _routeMetrics[_selectedTripId!];
 
     return Column(
       children: [
@@ -737,7 +853,10 @@ class _MapTripsScreenState extends State<MapTripsScreen>
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  _infoChip(Icons.route, _routeStatus ?? 'Állomások összekötése'),
+                  _infoChip(
+                    Icons.route,
+                    _routeStatus ?? 'Állomások összekötése',
+                  ),
                   if (metrics != null && metrics['distance'] != null)
                     _infoChip(Icons.straighten, metrics['distance']!),
                   if (metrics != null && metrics['duration'] != null)
@@ -747,6 +866,33 @@ class _MapTripsScreenState extends State<MapTripsScreen>
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  SizedBox(
+                    width: 230,
+                    child: OutlinedButton.icon(
+                      onPressed: _downloadingTiles
+                          ? null
+                          : _downloadOfflineTiles,
+                      icon: Icon(
+                        _hasOfflineTiles
+                            ? Icons.check_circle
+                            : Icons.download_for_offline_outlined,
+                        color: _hasOfflineTiles ? Colors.green : null,
+                      ),
+                      label: Text(
+                        _downloadingTiles
+                            ? 'HD letöltés...'
+                            : 'Offline térkép HD',
+                      ),
+                    ),
+                  ),
+                  if (_downloadStatus != null)
+                    Text(
+                      _downloadStatus!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                      ),
                     ),
                 ],
               ),
@@ -785,8 +931,6 @@ class _MapTripsScreenState extends State<MapTripsScreen>
       ],
     );
   }
-
-
 
   Widget _infoChip(IconData icon, String label) {
     return Container(
