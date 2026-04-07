@@ -1,0 +1,30 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Flutter Mobile",
+			"type": "shell",
+			"command": "cd mobile_app && flutter run -d R3CT2069Q3A",
+			"isBackground": true
+		},
+		{
+			"label": "Run Flutter Mobile",
+			"type": "shell",
+			"command": "cd mobile_app && flutter run -d R3CT2069Q3A",
+			"isBackground": true
+		},
+		{
+			"label": "Run admin dev server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"admin",
+				"run",
+				"dev"
+			],
+			"isBackground": true,
+			"group": "build"
+		}
+	]
+}

@@ -82,6 +82,240 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     return station['name']?.toString() ?? 'Állomás';
   }
 
+
+  List<String> _stationPhotos(Map<String, dynamic> station) {
+    final photos = station['photos'];
+    if (photos is List && photos.isNotEmpty) {
+      return photos
+          .map((entry) {
+            if (entry is String) return entry;
+            if (entry is Map) return entry['url']?.toString() ?? '';
+            return '';
+          })
+          .where((url) => url.isNotEmpty)
+          .cast<String>()
+          .toList(growable: false);
+    }
+
+    final photoUrls = station['photoUrls'];
+    if (photoUrls is List && photoUrls.isNotEmpty) {
+      return photoUrls
+          .map((entry) => entry?.toString() ?? '')
+          .where((url) => url.isNotEmpty)
+          .cast<String>()
+          .toList(growable: false);
+    }
+
+    final imageUrl = station['imageUrl']?.toString();
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return [imageUrl];
+    }
+
+    return const [];
+  }
+
+  void _openImageViewer(BuildContext context, List<String> photos, int initialIndex) {
+    if (photos.isEmpty) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: PageController(initialPage: initialIndex),
+              itemCount: photos.length,
+              itemBuilder: (_, index) => InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Center(
+                  child: Image.network(
+                    photos[index],
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 16,
+              left: 16,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_currentPhotoIndex + 1}/${photos.length}',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  int _currentPhotoIndex = 0;
+  void _showStationSheet(Map<String, dynamic> station) {
+    final photos = _stationPhotos(station);
+    final isCompleted = _completedIds.contains(station['id'] as String? ?? '');
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.62,
+        maxChildSize: 0.9,
+        minChildSize: 0.42,
+        builder: (context, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF8F4EC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+            children: [
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD1C2AE),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_stationName(station), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 6),
+                        Text(
+                          isCompleted ? 'Teljesítve • ${station['points'] ?? 10} pont' : '${station['points'] ?? 10} pont szerezhető',
+                          style: TextStyle(color: isCompleted ? const Color(0xFF2E7D32) : const Color(0xFF8B5E34), fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (photos.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                      child: Text('${photos.length} fotó'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (photos.isNotEmpty)
+                SizedBox(
+                  height: 210,
+                  child: PageView.builder(
+                    controller: PageController(viewportFraction: 0.9),
+                    itemCount: photos.length,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              photos[index],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: const Color(0xFFEADFCC),
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.broken_image_outlined, size: 34),
+                              ),
+                            ),
+                            Positioned(
+                              top: 12,
+                              right: 12,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.56),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text('${index + 1}/${photos.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  height: 140,
+                  decoration: BoxDecoration(color: const Color(0xFFEADFCC), borderRadius: BorderRadius.circular(20)),
+                  alignment: Alignment.center,
+                  child: const Text('Ehhez az állomáshoz még nincs fotó.'),
+                ),
+              if ((station['description']?.toString() ?? '').isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const Text('Leírás', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                Text(station['description'].toString(), style: const TextStyle(height: 1.45)),
+              ],
+              if (isCompleted && (station['funFact']?.toString() ?? '').isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('✨', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Feloldott fun fact', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            Text(station['funFact'].toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.4)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   List<Map<String, dynamic>> _tripStationsFor(String? tripId) {
     final items =
         (tripId == null
@@ -658,6 +892,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         return Marker(
           markerId: MarkerId(s['id'] as String),
           position: point,
+          onTap: () => _showStationSheet(s),
           infoWindow: InfoWindow(
             title: '$orderText ${s['name'] ?? 'Állomás'}',
             snippet: done ? '✅ Teljesítve' : '${s['points'] ?? 10} pont',
@@ -899,33 +1134,112 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
             ),
           ),
         Expanded(
-          child: GoogleMap(
-            initialCameraPosition: CameraPosition(target: center, zoom: 13),
-            markers: _markers,
-            polylines: _polylines,
-            zoomControlsEnabled: true,
-            zoomGesturesEnabled: true,
-            scrollGesturesEnabled: true,
-            rotateGesturesEnabled: true,
-            tiltGesturesEnabled: true,
-            onMapCreated: (controller) {
-              _mapController = controller;
-              _fitRouteOrStations(
-                _selectedTripId == null
-                    ? const []
-                    : (_routeCache[_selectedTripId!] ?? const []),
-                tripStations,
-              );
-            },
-            myLocationButtonEnabled: true,
-            myLocationEnabled: true,
-            mapToolbarEnabled: false,
-            compassEnabled: true,
-            gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-              Factory<OneSequenceGestureRecognizer>(
-                () => EagerGestureRecognizer(),
+          child: Column(
+            children: [
+              Expanded(
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(target: center, zoom: 13),
+                  markers: _markers,
+                  polylines: _polylines,
+                  zoomControlsEnabled: true,
+                  zoomGesturesEnabled: true,
+                  scrollGesturesEnabled: true,
+                  rotateGesturesEnabled: true,
+                  tiltGesturesEnabled: true,
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    _fitRouteOrStations(
+                      _selectedTripId == null ? const [] : (_routeCache[_selectedTripId!] ?? const []),
+                      tripStations,
+                    );
+                  },
+                  myLocationButtonEnabled: true,
+                  myLocationEnabled: true,
+                  mapToolbarEnabled: false,
+                  compassEnabled: true,
+                  gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                    Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
+                  },
+                ),
               ),
-            },
+              if (tripStations.isNotEmpty)
+                SizedBox(
+                  height: 152,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: tripStations.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      final station = tripStations[index];
+                      final photos = _stationPhotos(station);
+                      final done = _completedIds.contains(station['id'] as String? ?? '');
+                      return SizedBox(
+                        width: 248,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () => _showStationSheet(station),
+                          child: Ink(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(18)),
+                                  child: SizedBox(
+                                    width: 88,
+                                    height: double.infinity,
+                                    child: photos.isNotEmpty
+                                        ? Image.network(
+                                            photos.first,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Container(
+                                              color: const Color(0xFFEADFCC),
+                                              alignment: Alignment.center,
+                                              child: const Icon(Icons.photo_library_outlined),
+                                            ),
+                                          )
+                                        : Container(
+                                            color: const Color(0xFFEADFCC),
+                                            alignment: Alignment.center,
+                                            child: const Icon(Icons.photo_library_outlined),
+                                          ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(_stationName(station), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                                        const SizedBox(height: 6),
+                                        Text(done ? 'Teljesítve' : '${station['points'] ?? 10} pont', style: TextStyle(color: done ? const Color(0xFF2E7D32) : const Color(0xFF8B5E34), fontWeight: FontWeight.w700)),
+                                        const SizedBox(height: 6),
+                                        Text('${photos.length} fotó', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
           ),
         ),
       ],
@@ -972,3 +1286,4 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     );
   }
 }
+

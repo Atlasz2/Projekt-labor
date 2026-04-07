@@ -28,14 +28,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   List<String> _safeFacts(dynamic value) {
     if (value is List) {
-      return value.map((e) => e.toString()).where((e) => e.trim().isNotEmpty).toList();
+      return value
+          .map((e) => e.toString())
+          .where((e) => e.trim().isNotEmpty)
+          .toList();
     }
     return const [];
   }
 
   Future<void> _loadHistory() async {
     try {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
       final snapshot = await _firestore
           .collection('about')
           .orderBy('year', descending: false)
@@ -68,6 +75,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5EFE4),
       body: Stack(
         children: [
           Positioned.fill(
@@ -75,40 +83,55 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           Positioned.fill(
             child: Container(
-              color: const Color(0xFFF2EBDD).withValues(alpha: 0.90),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.42),
+                    const Color(0xFFF5EFE4).withValues(alpha: 0.92),
+                    const Color(0xFFF5EFE4),
+                  ],
+                ),
+              ),
             ),
           ),
           CustomScrollView(
             slivers: [
               SliverAppBar(
-                expandedHeight: 220,
+                expandedHeight: 260,
                 pinned: true,
+                stretch: true,
+                backgroundColor: const Color(0xFF1F2937),
+                foregroundColor: Colors.white,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: const Text('Nagyvázsony története'),
+                  titlePadding: const EdgeInsetsDirectional.only(start: 56, bottom: 14, end: 14),
+                  expandedTitleScale: 1.18,
+                  title: const Text(
+                    'Nagyvázsony története',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      shadows: [
+                        Shadow(color: Colors.black54, blurRadius: 6),
+                      ],
+                    ),
+                  ),
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
                       Image.asset('assets/var.jpg', fit: BoxFit.cover),
-                      Container(
+                      DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
                             colors: [
                               Colors.black.withValues(alpha: 0.55),
                               Colors.transparent,
-                              const Color(0xFF2B2B2B).withValues(alpha: 0.75),
+                              Colors.black.withValues(alpha: 0.72),
                             ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
                           ),
-                        ),
-                      ),
-                      const Positioned(
-                        left: 20,
-                        right: 20,
-                        bottom: 56,
-                        child: Text(
-                          'Vár, végvári múlt, Kinizsi-emlékek és a település évszázados öröksége.',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
                         ),
                       ),
                     ],
@@ -131,7 +154,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           const SizedBox(height: 16),
                           Text(_error!, textAlign: TextAlign.center),
                           const SizedBox(height: 16),
-                          ElevatedButton(onPressed: _loadHistory, child: const Text('Újrapróbálás')),
+                          FilledButton(onPressed: _loadHistory, child: const Text('Újrapróbálás')),
                         ],
                       ),
                     ),
@@ -176,26 +199,28 @@ class _TimelineEntry extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 52,
+          width: 56,
           child: Column(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: const Color(0xFF6B4F2A),
                   borderRadius: BorderRadius.circular(999),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 8,
+                    ),
+                  ],
                 ),
                 child: Center(
                   child: Text(
                     (event['year']?.toString().isNotEmpty ?? false)
                         ? event['year'].toString().substring(0, event['year'].toString().length.clamp(0, 4))
                         : '?',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -203,13 +228,13 @@ class _TimelineEntry extends StatelessWidget {
               if (!isLast)
                 Container(
                   width: 3,
-                  height: 180,
+                  height: 195,
                   margin: const EdgeInsets.symmetric(vertical: 6),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        const Color(0xFF8B7355).withValues(alpha: 0.55),
-                        const Color(0xFF8B7355).withValues(alpha: 0.18),
+                        const Color(0xFF8B7355).withValues(alpha: 0.62),
+                        const Color(0xFF8B7355).withValues(alpha: 0.15),
                       ],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -220,18 +245,20 @@ class _TimelineEntry extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         Expanded(
           child: Card(
-            margin: const EdgeInsets.only(bottom: 16),
+            margin: const EdgeInsets.only(bottom: 18),
+            elevation: 5,
             clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (imageUrl.isNotEmpty)
                   Image.network(
                     imageUrl,
-                    height: 170,
+                    height: 180,
                     width: double.infinity,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => _placeholder(),
@@ -243,30 +270,15 @@ class _TimelineEntry extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        event['year']?.toString() ?? '',
-                        style: const TextStyle(
-                          color: Color(0xFF6B4F2A),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      Text(event['year']?.toString() ?? '', style: const TextStyle(color: Color(0xFF6B4F2A), fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text(
-                        event['title']?.toString() ?? '',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
+                      Text(event['title']?.toString() ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
                       if ((event['period']?.toString() ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Chip(
-                          label: Text(event['period'].toString()),
-                          visualDensity: VisualDensity.compact,
-                        ),
+                        const SizedBox(height: 8),
+                        Chip(label: Text(event['period'].toString()), visualDensity: VisualDensity.compact),
                       ],
                       const SizedBox(height: 10),
-                      Text(
-                        event['description']?.toString() ?? '',
-                        style: TextStyle(color: Colors.grey.shade700, height: 1.45),
-                      ),
+                      Text(event['description']?.toString() ?? '', style: TextStyle(color: Colors.grey.shade700, height: 1.5)),
                       if ((event['quote']?.toString() ?? '').isNotEmpty) ...[
                         const SizedBox(height: 14),
                         Container(
@@ -276,32 +288,27 @@ class _TimelineEntry extends StatelessWidget {
                             color: const Color(0xFF6B4F2A).withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Text(
-                            '"${event['quote']}"',
-                            style: const TextStyle(fontStyle: FontStyle.italic),
-                          ),
+                          child: Text('"${event['quote']}"', style: const TextStyle(fontStyle: FontStyle.italic)),
                         ),
                       ],
                       if (facts.isNotEmpty) ...[
                         const SizedBox(height: 14),
                         const Text('Érdekességek', style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        ...facts.map(
-                          (fact) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 6),
-                                  child: Icon(Icons.circle, size: 8, color: Color(0xFF6B4F2A)),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(fact)),
-                              ],
-                            ),
+                        ...facts.map((fact) => Padding(
+                          padding: const EdgeInsets.only(bottom: 7),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.only(top: 6),
+                                child: Icon(Icons.circle, size: 8, color: Color(0xFF6B4F2A)),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(fact)),
+                            ],
                           ),
-                        ),
+                        )),
                       ],
                     ],
                   ),
@@ -316,7 +323,7 @@ class _TimelineEntry extends StatelessWidget {
 
   Widget _placeholder() {
     return Container(
-      height: 120,
+      height: 130,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF8B7355), Color(0xFFC9A66B)],
@@ -325,7 +332,7 @@ class _TimelineEntry extends StatelessWidget {
         ),
       ),
       child: const Center(
-        child: Icon(Icons.account_balance, size: 48, color: Colors.white54),
+        child: Icon(Icons.account_balance_outlined, color: Colors.white, size: 34),
       ),
     );
   }

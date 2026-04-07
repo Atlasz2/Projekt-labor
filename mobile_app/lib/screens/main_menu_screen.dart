@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/offline_sync_service.dart';
 import 'accommodation_screen.dart';
 import 'camera_screen.dart';
 import 'contact_screen.dart';
@@ -23,6 +24,7 @@ class MainMenuScreen extends StatefulWidget {
 class _MainMenuScreenState extends State<MainMenuScreen> {
   late final ScrollController _scrollController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final OfflineSyncService _offlineSyncService = OfflineSyncService();
 
   bool _showTopAchievementBanner = false;
   String _bannerTitle = '';
@@ -79,16 +81,16 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Kijelentkezés'),
+        title: const Text('Kijelentkezes'),
         content: const Text('Biztosan kijelentkezel?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Mégse'),
+            child: const Text('Megse'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Kijelentkezés'),
+            child: const Text('Kijelentkezes'),
           ),
         ],
       ),
@@ -99,62 +101,13 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   @override
   Widget build(BuildContext context) {
     final items = <_MenuItem>[
-      _MenuItem(
-        'Térkép és túrák',
-        'GPS, útvonal és állomások',
-        Icons.map_outlined,
-        const Color(0xFF667EEA),
-        const MapTripsScreen(),
-      ),
-      _MenuItem(
-        'QR beolvasás',
-        'Pontok és esemény pecsétek',
-        Icons.qr_code_scanner,
-        const Color(0xFF4CAF50),
-        const CameraScreen(),
-      ),
-      _MenuItem(
-        'Rendezvények',
-        'Képek, részletek, pecsétvadászat',
-        Icons.celebration_outlined,
-        const Color(0xFFFF9800),
-        const EventsScreen(),
-      ),
-      _MenuItem(
-        'Nagyvázsony története',
-        'Idővonal és helytörténet',
-        Icons.history_edu_outlined,
-        const Color(0xFF8E44AD),
-        const HistoryScreen(),
-      ),
-      _MenuItem(
-        'Kapcsolat',
-        'Elérhetőségek és iroda',
-        Icons.call_outlined,
-        const Color(0xFF0097A7),
-        const ContactScreen(),
-      ),
-      _MenuItem(
-        'Szállás és étterem',
-        'Képek, linkek, hívás',
-        Icons.hotel_outlined,
-        const Color(0xFFE91E63),
-        const AccommodationScreen(),
-      ),
-      _MenuItem(
-        'Feloldott Tartalmak',
-        'Gyűjtött élmények és jelzések',
-        Icons.collections_outlined,
-        const Color(0xFFFF6B6B),
-        const UnlockedContentScreen(),
-      ),
-      _MenuItem(
-        'Fiókom',
-        'Ranglista és achievementek',
-        Icons.person_outline,
-        const Color(0xFF2196F3),
-        const ProfileScreen(),
-      ),
+      _MenuItem('Terkep es turak', 'GPS, utvonal es allomasok', Icons.map_outlined, const Color(0xFF667EEA), const MapTripsScreen()),
+      _MenuItem('QR beolvasas', 'Pontok es esemeny pecsetek', Icons.qr_code_scanner, const Color(0xFF4CAF50), const CameraScreen()),
+      _MenuItem('Rendezvenyek', 'Kepek, reszletek, pecsetvadaszat', Icons.celebration_outlined, const Color(0xFFFF9800), const EventsScreen()),
+      _MenuItem('Nagyvazsony tortenete', 'Idovonal es helytortenet', Icons.history_edu_outlined, const Color(0xFF8E44AD), const HistoryScreen()),
+      _MenuItem('Szallas es etterem', 'Kepek, arak, hivas', Icons.hotel_outlined, const Color(0xFFE91E63), const AccommodationScreen()),
+      _MenuItem('Feloldott tartalmak', 'Gyujtott elmenyek es jelzesek', Icons.collections_outlined, const Color(0xFFFF6B6B), const UnlockedContentScreen()),
+      _MenuItem('Kapcsolat', 'Elerhetosegek es iroda', Icons.call_outlined, const Color(0xFF0097A7), const ContactScreen()),
     ];
 
     final width = MediaQuery.of(context).size.width;
@@ -167,7 +120,12 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         shadowColor: Colors.transparent,
-        title: const Text('Nagyvázsony'),
+        leading: IconButton(
+          icon: const Icon(Icons.account_circle_outlined, size: 28),
+          tooltip: 'Fiokom',
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+        ),
+        title: const Text('Nagyvazsony'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_outlined),
@@ -200,64 +158,63 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (_showTopAchievementBanner)
                     Container(
                       width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFF7C3AED), Color(0xFFEC4899)],
                         ),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.pink.withValues(alpha: 0.35),
-                            blurRadius: 14,
+                            blurRadius: 10,
                           ),
                         ],
                       ),
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.emoji_events,
-                            color: Colors.amberAccent,
-                          ),
+                          const Icon(Icons.emoji_events, color: Colors.amberAccent),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _bannerTitle,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  _bannerSubtitle,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                  ),
-                                ),
+                                Text(_bannerTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                Text(_bannerSubtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
                               ],
                             ),
                           ),
                         ],
                       ),
                     ),
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _offlineSyncService.onlineNotifier,
+                    builder: (context, online, _) => Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Icon(
+                          online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                          size: 16,
+                          color: online ? const Color(0xFF2D6A4F) : const Color(0xFFA16207),
+                        ),
+                      ),
+                    ),
+                  ),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.10),
@@ -267,15 +224,11 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       ],
                     ),
                     child: const Text(
-                      'Fedezd fel Nagyvázsonyt',
-                      style: TextStyle(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1F2937),
-                      ),
+                      'Fedezd fel Nagyvazsonyt',
+                      style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   Expanded(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -289,19 +242,17 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           child: GridView.builder(
                             key: const PageStorageKey('main-menu-grid'),
                             controller: _scrollController,
-                            padding: const EdgeInsets.only(top: 4, bottom: 6),
+                            padding: const EdgeInsets.all(4),
                             physics: const ClampingScrollPhysics(),
                             clipBehavior: Clip.hardEdge,
                             itemCount: items.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: width < 420 ? 2.45 : 1.2,
-                                ),
-                            itemBuilder: (_, index) =>
-                                _MenuCard(item: items[index]),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              crossAxisSpacing: 2,
+                              mainAxisSpacing: 2,
+                              childAspectRatio: width < 420 ? 2.9 : 1.28,
+                            ),
+                            itemBuilder: (_, index) => _MenuCard(item: items[index]),
                           ),
                         ),
                       ),
@@ -333,59 +284,42 @@ class _MenuCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: () => Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => item.page)),
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.page)),
       child: Ink(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFD1D5DB), width: 1.8),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 14,
+              blurRadius: 10,
               offset: const Offset(0, 5),
             ),
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(10),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 24,
+                radius: 20,
                 backgroundColor: const Color(0xFFF3F4F6),
                 child: Icon(item.icon, color: item.color),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
+                    Text(item.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF111827))),
                     const SizedBox(height: 4),
-                    Text(
-                      item.subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF374151),
-                      ),
-                    ),
+                    Text(item.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280))),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: Color(0xFF374151)),
             ],
           ),
         ),
@@ -398,11 +332,13 @@ class _NoGlowScrollBehavior extends ScrollBehavior {
   const _NoGlowScrollBehavior();
 
   @override
-  Widget buildOverscrollIndicator(
-    BuildContext context,
-    Widget child,
-    ScrollableDetails details,
-  ) {
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) {
     return child;
   }
 }
+
+
+
+
+
+

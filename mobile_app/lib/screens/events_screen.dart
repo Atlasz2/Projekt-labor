@@ -23,50 +23,117 @@ class _EventsScreenState extends State<EventsScreen> {
   String _safeString(dynamic v, {String fallback = ''}) {
     if (v == null) return fallback;
     if (v is String) return v.isEmpty ? fallback : v;
-    if (v is Map && v.containsKey('seconds')) return fallback;
     return v.toString().trim().isEmpty ? fallback : v.toString().trim();
+  }
+
+  List<String> _photoUrls(Map<String, dynamic> data) {
+    final photos = data['photos'];
+    if (photos is List && photos.isNotEmpty) {
+      return photos
+          .map((entry) {
+            if (entry is String) return entry;
+            if (entry is Map && entry['url'] != null) {
+              return entry['url'].toString();
+            }
+            return '';
+          })
+          .where((url) => url.isNotEmpty)
+          .cast<String>()
+          .toList();
+    }
+    final photoUrls = data['photoUrls'];
+    if (photoUrls is List && photoUrls.isNotEmpty) {
+      return photoUrls.map((entry) => entry.toString()).toList();
+    }
+    final single = _safeString(data['imageUrl']);
+    return single.isEmpty ? <String>[] : <String>[single];
   }
 
   DateTime _sortDateKey(dynamic raw) {
     final s = _safeString(raw);
     if (s.isEmpty) return DateTime(9999);
-    try {
-      final dt = DateTime.tryParse(s);
-      if (dt != null) return dt;
-      final p = s.split('-');
-      if (p.length >= 3) {
-        final y = int.tryParse(p[0]) ?? 9999;
-        final m = int.tryParse(p[1]) ?? 12;
-        final d = int.tryParse(p[2]) ?? 31;
-        return DateTime(y, m, d);
-      }
-    } catch (_) {}
-    return DateTime(9999);
+    return DateTime.tryParse(s) ?? DateTime(9999);
   }
 
-  Map<String, String> _parseDate(dynamic raw) {
-    final s = _safeString(raw);
-    if (s.isEmpty) return {'day': '?', 'month': '?', 'full': 'Ismeretlen dátum'};
-    try {
-      final parts = s.split('-');
-      if (parts.length >= 3) {
-        final months = [
-          '', 'jan', 'febr', 'márc', 'ápr', 'máj', 'jún',
-          'júl', 'aug', 'szept', 'okt', 'nov', 'dec'
-        ];
-        final m = int.tryParse(parts[1]) ?? 0;
-        return {
-          'day': parts[2].padLeft(2, '0'),
-          'month': m > 0 && m <= 12 ? months[m] : parts[1],
-          'full': s,
-        };
-      }
-    } catch (_) {}
-    return {'day': '?', 'month': '?', 'full': s};
+  void _openImageViewer(BuildContext context, List<String> photos, int initialIndex) {
+    if (photos.isEmpty) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            PageView.builder(
+              controller: PageController(initialPage: initialIndex),
+              itemCount: photos.length,
+              itemBuilder: (_, index) => InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Center(
+                  child: Image.network(
+                    photos[index],
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 18,
+              right: 18,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _gallery(BuildContext context, List<String> photos, {double height = 180}) {
+    if (photos.isEmpty) {
+      return Container(
+        height: height,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+          ),
+        ),
+        child: const Center(
+          child: Icon(Icons.event, size: 64, color: Colors.white38),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: height,
+      child: PageView.builder(
+        itemCount: photos.length,
+        itemBuilder: (_, index) => GestureDetector(
+          onTap: () => _openImageViewer(context, photos, index),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.network(
+                photos[index],
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: const Color(0xFFE5E7EB),
+                  child: const Icon(Icons.broken_image_outlined),
+                ),
+              ),
+
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showDetails(BuildContext context, Map<String, dynamic> event, Color accent) {
-    final dateInfo = _parseDate(event['date']);
+    final photos = _photoUrls(event);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -76,61 +143,51 @@ class _EventsScreenState extends State<EventsScreen> {
       ),
       builder: (_) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.6,
+          initialChildSize: 0.7,
           minChildSize: 0.4,
-          maxChildSize: 0.92,
+          maxChildSize: 0.94,
           expand: false,
           builder: (ctx, scroll) {
-            final imageUrl = _safeString(event['imageUrl']);
             return SingleChildScrollView(
               controller: scroll,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (imageUrl.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(20)),
-                      child: Image.network(
-                        imageUrl,
-                        height: 200,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (ctx, err, st) => _imagePlaceholder(accent, 180),
-                      ),
-                    )
-                  else
-                    _imagePlaceholder(accent, 140),
+                  _gallery(context, photos, height: 220),
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _safeString(event['title'], fallback: 'Esemény'),
-                          style: const TextStyle(
-                              fontSize: 22, fontWeight: FontWeight.bold),
+                          _safeString(event['title'], fallback: 'Esemeny'),
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 12),
-                        _infoRow(Icons.calendar_today_outlined, accent,
-                            dateInfo['full']!),
-                        const SizedBox(height: 8),
-                        if (_safeString(event['location']).isNotEmpty)
-                          _infoRow(Icons.location_on_outlined, accent,
-                              _safeString(event['location'])),
-                        const SizedBox(height: 16),
-                        if (_safeString(event['description']).isNotEmpty) ...[
-                          const Text('Leírás',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15)),
-                          const SizedBox(height: 6),
-                          Text(
-                            _safeString(event['description']),
-                            style: TextStyle(
-                                color: Colors.grey.shade700, height: 1.5),
+                        Row(
+                          children: [
+                            Icon(Icons.calendar_today_outlined, size: 18, color: accent),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(_safeString(event['date'], fallback: 'Ismeretlen datum'))),
+                          ],
+                        ),
+                        if (_safeString(event['location']).isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.location_on_outlined, size: 18, color: accent),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(_safeString(event['location']))),
+                            ],
                           ),
                         ],
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
+                        Text(
+                          _safeString(event['description'], fallback: 'Nincs tovabbi leiras.'),
+                          style: TextStyle(color: Colors.grey.shade700, height: 1.55),
+                        ),
+                        const SizedBox(height: 12),
+                        Text('${photos.length} foto kapcsolodik ehhez a rendezvenyhez.', style: TextStyle(color: Colors.grey.shade600)),
                       ],
                     ),
                   ),
@@ -140,33 +197,6 @@ class _EventsScreenState extends State<EventsScreen> {
           },
         );
       },
-    );
-  }
-
-  Widget _infoRow(IconData icon, Color color, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 8),
-        Expanded(
-            child: Text(text, style: TextStyle(color: Colors.grey.shade700))),
-      ],
-    );
-  }
-
-  Widget _imagePlaceholder(Color color, double height) {
-    return Container(
-      height: height,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color, color.withValues(alpha: 0.6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: const Icon(Icons.event, size: 64, color: Colors.white54),
     );
   }
 
@@ -180,16 +210,7 @@ class _EventsScreenState extends State<EventsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-                  const SizedBox(height: 16),
-                  Text('Hiba: ${snapshot.error}'),
-                ],
-              ),
-            );
+            return Center(child: Text('Hiba: ${snapshot.error}'));
           }
 
           final docs = snapshot.data?.docs ?? [];
@@ -198,13 +219,13 @@ class _EventsScreenState extends State<EventsScreen> {
             return {
               'id': entry.value.id,
               'index': entry.key,
-              'title': _safeString(data['name'], fallback: 'Esemény'),
+              'title': _safeString(data['name'], fallback: 'Esemeny'),
               'description': _safeString(data['description']),
               'date': data['date'],
               'location': _safeString(data['location']),
+              'photos': data['photos'],
+              'photoUrls': data['photoUrls'],
               'imageUrl': _safeString(data['imageUrl']),
-              'category': _safeString(data['category']),
-              'qrCode': _safeString(data['qrCode']),
             };
           }).toList();
 
@@ -216,8 +237,7 @@ class _EventsScreenState extends State<EventsScreen> {
                 expandedHeight: 140,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: const Text('Rendezvények',
-                      style: TextStyle(color: Colors.white)),
+                  title: const Text('Rendezvenyek', style: TextStyle(color: Colors.white)),
                   background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -230,14 +250,9 @@ class _EventsScreenState extends State<EventsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.celebration,
-                              size: 44, color: Colors.white54),
+                          const Icon(Icons.celebration, size: 44, color: Colors.white54),
                           const SizedBox(height: 6),
-                          Text(
-                            '${events.length} esemény',
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 13),
-                          ),
+                          Text('${events.length} esemeny', style: const TextStyle(color: Colors.white70, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -245,266 +260,75 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               ),
               if (events.isEmpty)
-                const SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.event_busy,
-                            size: 72, color: Colors.black26),
-                        SizedBox(height: 16),
-                        Text('Jelenleg nincsenek rendezvények.',
-                            style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                )
+                const SliverFillRemaining(child: Center(child: Text('Jelenleg nincsenek rendezvenyek.')))
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) {
-                        final event = events[i];
-                        final accent =
-                            _accentColors[i % _accentColors.length];
-                        final dateInfo = _parseDate(event['date']);
-                        final imageUrl = event['imageUrl'] as String;
-                        return _EventCard(
-                          event: event,
-                          accent: accent,
-                          dateInfo: dateInfo,
-                          imageUrl: imageUrl,
-                          onTap: () => _showDetails(context, event, accent),
-                        );
-                      },
-                      childCount: events.length,
-                    ),
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverList.builder(
+                    itemCount: events.length,
+                    itemBuilder: (context, index) {
+                      final event = events[index];
+                      final accent = _accentColors[index % _accentColors.length];
+                      final photos = _photoUrls(event);
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Card(
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => _showDetails(context, event, accent),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _gallery(context, photos, height: 190),
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(_safeString(event['title'], fallback: 'Esemeny'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Icon(Icons.calendar_today_outlined, size: 16, color: accent),
+                                          const SizedBox(width: 8),
+                                          Text(_safeString(event['date'], fallback: 'Ismeretlen datum')),
+                                        ],
+                                      ),
+                                      if (_safeString(event['location']).isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.location_on_outlined, size: 16, color: accent),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(_safeString(event['location']))),
+                                          ],
+                                        ),
+                                      ],
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        _safeString(event['description'], fallback: 'Erintsd meg a reszletekhez.'),
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(color: Colors.grey.shade700, height: 1.45),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text('${photos.length} foto', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
             ],
           );
         },
       ),
-    );
-  }
-}
-
-class _EventCard extends StatelessWidget {
-  final Map<String, dynamic> event;
-  final Color accent;
-  final Map<String, String> dateInfo;
-  final String imageUrl;
-  final VoidCallback onTap;
-
-  const _EventCard({
-    required this.event,
-    required this.accent,
-    required this.dateInfo,
-    required this.imageUrl,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final title = event['title'] as String;
-    final location = event['location'] as String;
-    final description = event['description'] as String;
-    final category = event['category'] as String;
-    final qrCode = (event['qrCode'] ?? '') as String;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 14),
-      elevation: 2,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (imageUrl.isNotEmpty)
-              Stack(
-                children: [
-                  Image.network(
-                    imageUrl,
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (ctx, err, st) => _headerGradient(),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: _dateBadge(),
-                  ),
-                  if (category.isNotEmpty)
-                    Positioned(
-                      bottom: 12,
-                      left: 12,
-                      child: _categoryChip(category),
-                    ),
-                  if (qrCode.isNotEmpty)
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: _qrChip(),
-                    ),
-                ],
-              )
-            else
-              Stack(
-                children: [
-                  _headerGradient(),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: _dateBadge(),
-                  ),
-                  if (category.isNotEmpty)
-                    Positioned(
-                      bottom: 12,
-                      left: 12,
-                      child: _categoryChip(category),
-                    ),
-                  if (qrCode.isNotEmpty)
-                    Positioned(
-                      bottom: 12,
-                      right: 12,
-                      child: _qrChip(),
-                    ),
-                ],
-              ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (location.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined,
-                            size: 14, color: accent),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            location,
-                            style: TextStyle(
-                                color: Colors.grey.shade600, fontSize: 13),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      description,
-                      style: TextStyle(
-                          color: Colors.grey.shade700, fontSize: 13),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: onTap,
-                      icon: Icon(Icons.info_outline, size: 16, color: accent),
-                      label: Text('Részletek',
-                          style: TextStyle(color: accent, fontSize: 13)),
-                      style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _headerGradient() {
-    return Container(
-      height: 120,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [accent, accent.withValues(alpha:0.6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: const Center(
-        child: Icon(Icons.celebration, size: 48, color: Colors.white54),
-      ),
-    );
-  }
-
-  Widget _dateBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha:0.15), blurRadius: 6),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            dateInfo['day']!,
-            style: TextStyle(
-                color: accent,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                height: 1),
-          ),
-          Text(
-            dateInfo['month']!,
-            style: TextStyle(
-                color: Colors.grey.shade600, fontSize: 11, height: 1),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _qrChip() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF166534).withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text('QR pecsét', style: TextStyle(color: Colors.white, fontSize: 11)),
-    );
-  }
-
-  Widget _categoryChip(String cat) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(cat,
-          style: const TextStyle(color: Colors.white, fontSize: 11)),
     );
   }
 }
