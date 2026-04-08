@@ -94,6 +94,7 @@ function Layout() {
 
               <li className="nav-header">Nézetek</li>
               {renderNavLink("/achievements", "AC", "Achievementek")}
+              {renderNavLink("/bug-reports", "HB", "Hibajelentések")}
               {renderNavLink("/map", "TE", "Térkép")}
               {renderNavLink("/users", "FU", "Felhasználók")}
 

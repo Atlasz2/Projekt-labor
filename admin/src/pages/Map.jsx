@@ -9,6 +9,7 @@ import {
 import { db } from "../firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import "../styles/Map.css";
+import { getValhallaRouteData } from "../utils/routeService";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: "100vh", width: "100%" };
@@ -37,38 +38,7 @@ const getStationCoords = (station) => {
   return [lat, lon];
 };
 
-const getRouteData = async (coordinates) => {
-  if (coordinates.length < 2) {
-    return { coords: [], distanceMeters: 0, durationSeconds: 0 };
-  }
-
-  try {
-    const osmCoords = coordinates.map(([lat, lon]) => `${lon},${lat}`).join(";");
-    const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${osmCoords}?geometries=geojson`;
-
-    const response = await fetch(osrmUrl);
-    const data = await response.json();
-
-    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
-      const route = data.routes[0];
-      const distanceMeters = route.distance || 0;
-      const durationSeconds = route.duration || 0;
-
-      if (
-        route.geometry &&
-        route.geometry.coordinates &&
-        route.geometry.coordinates.length > 0
-      ) {
-        const coords = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
-        return { coords, distanceMeters, durationSeconds };
-      }
-    }
-  } catch (error) {
-    console.error("Route error:", error);
-  }
-
-  return { coords: [], distanceMeters: 0, durationSeconds: 0 };
-};
+const getRouteData = getValhallaRouteData;
 
 const formatDistance = (meters) => {
   if (!meters || meters <= 0) return "N/A";

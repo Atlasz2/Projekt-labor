@@ -1,9 +1,41 @@
-import React, { useState, useEffect } from "react";
-import { db } from "../firebaseConfig";
+import React, { useEffect, useMemo, useState } from "react";
+import { db, storage } from "../firebaseConfig";
 import { collection, addDoc, updateDoc, deleteDoc, getDocs, doc } from "firebase/firestore";
+import { uploadImageWithFallback } from '../utils/imageUpload';
 import "../styles/Content.css";
 import { safeString } from "../utils/safeString";
 import ConfirmDialog from "../components/ConfirmDialog";
+
+const EMPTY_FORM = {
+  name: "",
+  type: "hungarian",
+  cuisine: "",
+  priceRange: "",
+  description: "",
+  imageUrl: "",
+};
+
+const extractPrimaryImage = (data) => {
+  const photos = data?.photos;
+  if (Array.isArray(photos) && photos.length > 0) {
+    const first = photos[0];
+    if (typeof first === "string") return safeString(first);
+    if (first && typeof first === "object") return safeString(first.url);
+  }
+
+  const photoUrls = data?.photoUrls;
+  if (Array.isArray(photoUrls) && photoUrls.length > 0) {
+    return safeString(photoUrls[0]);
+  }
+
+  return safeString(data?.imageUrl);
+};
+
+const buildPhotoFields = (photos) => {
+  const urls = Array.isArray(photos) ? photos.filter(Boolean) : [];
+  if (!urls.length) return { imageUrl: "", photoUrls: [], photos: [] };
+  return { imageUrl: urls[0], photoUrls: urls, photos: urls.map(url => ({ url })) };
+};
 
 function Restaurants() {
   const [restaurants, setRestaurants] = useState([]);
@@ -11,32 +43,41 @@ function Restaurants() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadFeedback, setUploadFeedback] = useState({ type: "idle", text: "" });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
-  const [formData, setFormData] = useState({
-    name: "",
-    type: "hungarian",
-    cuisine: "",
-    priceRange: "",
-    description: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
 
   useEffect(() => {
     fetchRestaurants();
   }, []);
 
+  const subtitle = useMemo(
+    () => `${restaurants.length} vendéglátóhely • képfeltöltés támogatva`,
+    [restaurants.length],
+  );
+
   const fetchRestaurants = async () => {
     try {
       setLoading(true);
+      setError(null);
       const snapshot = await getDocs(collection(db, "restaurants"));
       const data = snapshot.docs.map((item) => {
-        const docData = item.data();
+        const d = item.data();
+        const rawPhotos = Array.isArray(d.photos) ? d.photos.map(p => typeof p === "string" ? p : p?.url).filter(Boolean) : [];
+        const rawPhotoUrls = Array.isArray(d.photoUrls) ? d.photoUrls.filter(Boolean) : [];
+        const rawUrl = safeString(d.imageUrl);
+        const photos = [...new Set([...rawPhotos, ...rawPhotoUrls, ...(rawUrl ? [rawUrl] : [])])].slice(0, 6);
+
         return {
           id: item.id,
-          name: safeString(docData.name),
-          type: safeString(docData.type) || "hungarian",
-          cuisine: safeString(docData.cuisine),
-          priceRange: safeString(docData.priceRange),
-          description: safeString(docData.description),
+          name: safeString(d.name),
+          type: safeString(d.type) || "hungarian",
+          cuisine: safeString(d.cuisine),
+          priceRange: safeString(d.priceRange),
+          description: safeString(d.description),
+          photos,
+          imageUrl: photos[0] || "",
         };
       });
       setRestaurants(data);
@@ -47,35 +88,56 @@ function Restaurants() {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const closeEditor = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setUploading(false);
+    setFormData(EMPTY_FORM);
+  };
+
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+    if (formData.photos.length >= 6) { setUploadFeedback({ type: "error", text: "Maximum 6 kép tölthető fel." }); return; }
+    try {
+      setError(null);
+      setUploadFeedback({ type: "info", text: `Feltöltés: ${file.name}` });
+      setUploading(true);
+      const result = await uploadImageWithFallback({ file, storage, folder: "content-images" });
+      setFormData((prev) => ({ ...prev, photos: [...prev.photos, result.url] }));
+      setUploadFeedback({ type: "success", text: result.message });
+    } catch (err) {
+      const message = err?.message || "Kép feltöltése sikertelen";
+      setUploadFeedback({ type: "error", text: message });
+      setError(message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemovePhoto = (index) => {
+    setFormData((prev) => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      setError(null);
       const cleanData = {
         name: safeString(formData.name),
         type: safeString(formData.type),
         cuisine: safeString(formData.cuisine),
         priceRange: safeString(formData.priceRange),
         description: safeString(formData.description),
+        ...buildPhotoFields(formData.photos),
       };
+
       if (editingId) {
         await updateDoc(doc(db, "restaurants", editingId), cleanData);
       } else {
         await addDoc(collection(db, "restaurants"), cleanData);
       }
-      setFormData({
-        name: "",
-        type: "hungarian",
-        cuisine: "",
-        priceRange: "",
-        description: "",
-      });
-      setShowForm(false);
-      setEditingId(null);
+
+      closeEditor();
       fetchRestaurants();
     } catch {
       setError("Hiba a mentéskor");
@@ -90,12 +152,9 @@ function Restaurants() {
       cuisine: item.cuisine || "",
       priceRange: item.priceRange || "",
       description: item.description || "",
+      photos: item.photos || (item.imageUrl ? [item.imageUrl] : []),
     });
     setShowForm(true);
-  };
-
-  const handleDelete = (id) => {
-    setDeleteDialog({ open: true, id });
   };
 
   const confirmDelete = async () => {
@@ -105,7 +164,7 @@ function Restaurants() {
       setDeleteDialog({ open: false, id: null });
       fetchRestaurants();
     } catch {
-      setError("Hiba a törlékor");
+      setError("Hiba a törléskor");
       setDeleteDialog({ open: false, id: null });
     }
   };
@@ -116,38 +175,88 @@ function Restaurants() {
     <div className="content-page">
       <div className="page-header">
         <h1>Vendéglátás</h1>
-        <p>Éttermek és vendéglátóhelyek kezelése</p>
+        <p>{subtitle}</p>
       </div>
 
       {error && <div className="error-message">{error}</div>}
 
-      {!showForm && (
-        <button className="btn-primary" onClick={() => setShowForm(true)}>
-          + Új étterem
-        </button>
-      )}
+      <button className="btn-primary" onClick={() => setShowForm(true)}>
+        + Új vendéglátóhely
+      </button>
 
       {showForm && (
-        <div className="form-container">
-          <h2>{editingId ? "Szerkesztés" : "Új étterem"}</h2>
-          <form onSubmit={handleSubmit}>
-            <input type="text" name="name" placeholder="Étterem neve" value={formData.name} onChange={handleInputChange} required />
-            <select name="type" value={formData.type} onChange={handleInputChange}>
-              <option value="hungarian">Magyar konyha</option>
-              <option value="fish">Halételek</option>
-              <option value="cafe">Kávézó</option>
-              <option value="pizzeria">Pizzéria</option>
-              <option value="icecream">Fagylaltozó</option>
-              <option value="bar">Bár</option>
-            </select>
-            <input type="text" name="cuisine" placeholder="Konyha típusa" value={formData.cuisine} onChange={handleInputChange} required />
-            <input type="text" name="priceRange" placeholder="Árszint" value={formData.priceRange} onChange={handleInputChange} required />
-            <textarea name="description" placeholder="Leírás" value={formData.description} onChange={handleInputChange} rows="3" />
-            <button type="submit" className="btn-primary">{editingId ? "Frissítés" : "Hozzáadás"}</button>
-            <button type="button" className="btn-secondary" onClick={() => { setShowForm(false); setEditingId(null); }}>
-              Mégse
-            </button>
-          </form>
+        <div className="editor-overlay" onClick={(e) => e.target === e.currentTarget && closeEditor()}>
+          <div className="editor-modal">
+            <div className="editor-header">
+              <div>
+                <p className="editor-kicker">Vendéglátás szerkesztő</p>
+                <h2>{editingId ? "Vendéglátóhely frissítése" : "Új vendéglátóhely"}</h2>
+              </div>
+              <button className="editor-close" onClick={closeEditor}>✕</button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="editor-grid">
+              {error && <div className="error-message editor-error">{error}</div>}
+              <div className="editor-main">
+                <div className="editor-field">
+                  <label>Név *</label>
+                  <input type="text" value={formData.name} onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))} required />
+                </div>
+                <div className="editor-row">
+                  <div className="editor-field">
+                    <label>Kategória</label>
+                    <select value={formData.type} onChange={(e) => setFormData((prev) => ({ ...prev, type: e.target.value }))}>
+                      <option value="hungarian">Magyar konyha</option>
+                      <option value="fish">Halételek</option>
+                      <option value="cafe">Kávézó</option>
+                      <option value="pizzeria">Pizzéria</option>
+                      <option value="icecream">Fagylaltozó</option>
+                      <option value="bar">Bár</option>
+                    </select>
+                  </div>
+                  <div className="editor-field">
+                    <label>Árszint</label>
+                    <input type="text" value={formData.priceRange} onChange={(e) => setFormData((prev) => ({ ...prev, priceRange: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="editor-field">
+                  <label>Konyha típusa</label>
+                  <input type="text" value={formData.cuisine} onChange={(e) => setFormData((prev) => ({ ...prev, cuisine: e.target.value }))} />
+                </div>
+                <div className="editor-field">
+                  <label>Leírás</label>
+                  <textarea rows="4" value={formData.description} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="editor-side">
+                <div className="editor-upload-box">
+                  <label>Képek <span className="upload-count">{formData.photos.length}/6</span></label>
+                  <div className="photo-grid">
+                    {formData.photos.map((url, i) => (
+                      <div key={i} className="photo-thumb">
+                        <img src={url} alt="" />
+                        <button type="button" className="photo-remove" onClick={() => handleRemovePhoto(i)}>✕</button>
+                        {i === 0 && <span className="thumb-badge">Borítókép</span>}
+                      </div>
+                    ))}
+                    {formData.photos.length < 6 && (
+                      <label className="photo-add-btn">
+                        <input type="file" accept="image/*" disabled={uploading} onChange={(e) => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0]); e.target.value = ""; }} />
+                        {uploading ? "Feltöltés..." : "+ Kép"}
+                      </label>
+                    )}
+                  </div>
+                  {uploadFeedback.type !== "idle" && <p className={"upload-note upload-note-" + uploadFeedback.type}>{uploadFeedback.text}</p>}
+                </div>
+              </div>
+
+              <div className="editor-actions">
+                <button type="button" className="btn-secondary" onClick={closeEditor}>Mégse</button>
+                <button type="submit" className="btn-primary" disabled={uploading}>{uploading ? "Feltöltés folyamatban..." : editingId ? "Frissítés" : "Mentés"}</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -155,12 +264,14 @@ function Restaurants() {
         {restaurants.map((rest) => (
           <div key={rest.id} className="card">
             <h3>{rest.name || "Nincs név"}</h3>
+            {rest.imageUrl && <img src={rest.imageUrl} alt={rest.name} loading="lazy" className="content-cover" />}
+            {rest.type && <p><strong>Kategória:</strong> {rest.type}</p>}
             {rest.cuisine && <p><strong>Konyha:</strong> {rest.cuisine}</p>}
             {rest.priceRange && <p><strong>Árszint:</strong> {rest.priceRange}</p>}
             {rest.description && <p>{rest.description}</p>}
             <div className="card-actions">
               <button className="btn-edit" onClick={() => handleEdit(rest)}>Szerkesztés</button>
-              <button className="btn-delete" onClick={() => handleDelete(rest.id)}>Törlés</button>
+              <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: rest.id })}>Törlés</button>
             </div>
           </div>
         ))}
@@ -168,8 +279,8 @@ function Restaurants() {
 
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Étterem törlése"
-        message="Biztosan törlöd ezt az éttermet?"
+        title="Vendéglátóhely törlése"
+        message="Biztosan törlöd ezt a vendéglátóhelyet?"
         confirmText="Törlés"
         onClose={() => setDeleteDialog({ open: false, id: null })}
         onConfirm={confirmDelete}
@@ -179,4 +290,3 @@ function Restaurants() {
 }
 
 export default Restaurants;
-

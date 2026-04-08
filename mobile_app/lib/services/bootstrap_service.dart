@@ -17,7 +17,7 @@ class BootstrapService {
         db.collection('trips').get(),
         db.collection('stations').get(),
         db.collection('achievements').get(),
-      ]);
+      ]).timeout(const Duration(seconds: 20));
 
       final trips = (results[0] as QuerySnapshot)
           .docs

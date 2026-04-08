@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
+import '../widgets/offline_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AccommodationScreen extends StatefulWidget {
@@ -79,10 +81,10 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                 minScale: 1,
                 maxScale: 4,
                 child: Center(
-                  child: Image.network(
+                  child: OfflineImage.network(
                     photos[index],
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
                   ),
                 ),
               ),
@@ -123,10 +125,10 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.network(
+              OfflineImage.network(
                 photos[index],
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: const Color(0xFFE5E7EB),
                   child: const Icon(Icons.broken_image_outlined),
                 ),

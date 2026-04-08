@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/offline_image.dart';
+
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
@@ -256,7 +258,7 @@ class _TimelineEntry extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (imageUrl.isNotEmpty)
-                  Image.network(
+                  OfflineImage.network(
                     imageUrl,
                     height: 180,
                     width: double.infinity,

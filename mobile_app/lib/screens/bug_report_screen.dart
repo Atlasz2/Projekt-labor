@@ -156,7 +156,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: _severity,
+                    initialValue: _severity,
                     items: const [
                       DropdownMenuItem(value: 'low', child: Text('Alacsony')),
                       DropdownMenuItem(value: 'medium', child: Text('Kozepes')),

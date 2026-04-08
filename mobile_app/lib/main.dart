@@ -1,4 +1,8 @@
+import 'dart:ui';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_performance/firebase_performance.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'services/local_cache.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +20,12 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+    await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
   } catch (e) {
     debugPrint('Firebase init error (hot reload esetén elvárt lehet): $e');
   }

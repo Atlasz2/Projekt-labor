@@ -18,6 +18,7 @@ const Restaurants = lazy(() => import("./pages/Restaurants"));
 const Contact = lazy(() => import("./pages/Contact"));
 const SeedDatabase = lazy(() => import("./pages/SeedDatabase"));
 const Achievements = lazy(() => import('./pages/Achievements'));
+const BugReports = lazy(() => import('./pages/BugReports'));
 
 function FullPageLoader() {
   return (
@@ -117,6 +118,7 @@ function App() {
               <Route path="contact" element={adminOnly(<Contact />)} />
 
               <Route path='achievements' element={adminOnly(<Achievements />)} />
+              <Route path='bug-reports' element={adminOnly(<BugReports />)} />
               <Route path="seed-database" element={adminOnly(<SeedDatabase />)} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>

@@ -18,6 +18,7 @@ import {
 import { jsPDF } from "jspdf";
 import "../styles/Trips.css";
 import ConfirmDialog from "../components/ConfirmDialog";
+import { getValhallaRouteData } from "../utils/routeService";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 
@@ -123,38 +124,7 @@ const getStoredTripMetrics = (trip, currentMetrics) => {
   };
 };
 
-const getRouteData = async (coordinates) => {
-  if (coordinates.length < 2) {
-    return { coords: [], distanceMeters: 0, durationSeconds: 0 };
-  }
-
-  try {
-    const osmCoords = coordinates.map(([lat, lon]) => `${lon},${lat}`).join(";");
-    const osrmUrl = `https://router.project-osrm.org/route/v1/foot/${osmCoords}?geometries=geojson`;
-
-    const response = await fetch(osrmUrl);
-    const data = await response.json();
-
-    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
-      const route = data.routes[0];
-      const distanceMeters = route.distance || 0;
-      const durationSeconds = route.duration || 0;
-
-      if (
-        route.geometry &&
-        route.geometry.coordinates &&
-        route.geometry.coordinates.length > 0
-      ) {
-        const coords = route.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
-        return { coords, distanceMeters, durationSeconds };
-      }
-    }
-  } catch (error) {
-    console.error("Route error:", error);
-  }
-
-  return { coords: [], distanceMeters: 0, durationSeconds: 0 };
-};
+const getRouteData = getValhallaRouteData;
 
 const getStationCoords = (station) => {
   const lat = station?.location?.latitude ?? station?.latitude;
@@ -368,7 +338,7 @@ function Trips() {
       const coords = tripStations.map(getStationCoords).filter(Boolean);
 
       if (!routeCoordinates[tripId] && coords.length > 1) {
-        const routeData = await getRouteData(coords);
+        routeData = await getRouteData(coords);
         setRouteCoordinates((prev) => ({ ...prev, [tripId]: routeData.coords }));
 
         if (routeData.distanceMeters > 0) {
@@ -494,10 +464,12 @@ function Trips() {
       const coords = tripStations.map(getStationCoords).filter(Boolean);
 
       let nextRoute = routeCoordinates[trip.id];
+      let routeData = null;
       let distanceValue =
         tripMetrics[trip.id]?.distanceValue ?? getDistanceValue(trip.distance);
       let durationLabel =
         tripMetrics[trip.id]?.durationLabel ?? getDurationLabel(trip.duration);
+      let routeSource = trip.routeSource || "valhalla-pedestrian";
 
       if ((!nextRoute || nextRoute.length === 0) && coords.length < 2) {
         showMsg("Legalább két állomás szükséges az útvonal mentéséhez");
@@ -513,6 +485,7 @@ function Trips() {
         }
 
         nextRoute = routeData.coords;
+        routeSource = routeData.source || routeSource;
 
         if (routeData.distanceMeters > 0) {
           distanceValue = Number((routeData.distanceMeters / 1000).toFixed(1));
@@ -525,7 +498,7 @@ function Trips() {
 
       const payload = {
         routeCoordinates: nextRoute,
-        routeSource: "osrm-foot",
+        routeSource,
       };
 
       if (distanceValue != null) {

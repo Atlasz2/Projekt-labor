@@ -1,5 +1,6 @@
 import 'dart:async';
 
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -51,11 +52,12 @@ class OfflineSyncService {
   late Box<Map> _pendingActionsBox;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  Timer? _connectivityTimer;
   bool _initialized = false;
   bool _syncInProgress = false;
-  bool _isOnline = true;
+  bool _isOnline = false;
 
-  final ValueNotifier<bool> onlineNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> onlineNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<int> pendingCountNotifier = ValueNotifier<int>(0);
 
   bool get isOnline => _isOnline;
@@ -69,21 +71,52 @@ class OfflineSyncService {
     _refreshPendingCount();
 
     final initialConnectivity = await Connectivity().checkConnectivity();
-    _updateConnectivity(initialConnectivity);
+    await _updateConnectivity(initialConnectivity);
 
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
       results,
-    ) {
-      _updateConnectivity(results);
+    ) async {
+      await _updateConnectivity(results);
+      if (_isOnline) {
+        syncPendingActions();
+      }
+    });
+
+    _connectivityTimer = Timer.periodic(const Duration(seconds: 12), (
+      _,
+    ) async {
+      final latestConnectivity = await Connectivity().checkConnectivity();
+      await _updateConnectivity(latestConnectivity);
       if (_isOnline) {
         syncPendingActions();
       }
     });
   }
 
-  void _updateConnectivity(List<ConnectivityResult> results) {
-    _isOnline = results.any((item) => item != ConnectivityResult.none);
-    onlineNotifier.value = _isOnline;
+  Future<void> _updateConnectivity(List<ConnectivityResult> results) async {
+    final hasInterface = results.any((item) => item != ConnectivityResult.none);
+    if (!hasInterface) {
+      _setOnline(false);
+      return;
+    }
+
+    try {
+      await _firestore
+          .collection('trips')
+          .limit(1)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 4));
+      _setOnline(true);
+    } catch (_) {
+      _setOnline(false);
+    }
+  }
+
+  void _setOnline(bool value) {
+    _isOnline = value;
+    if (onlineNotifier.value != value) {
+      onlineNotifier.value = value;
+    }
   }
 
   void _refreshPendingCount() {
@@ -168,5 +201,7 @@ class OfflineSyncService {
   Future<void> dispose() async {
     await _connectivitySubscription?.cancel();
     _connectivitySubscription = null;
+    _connectivityTimer?.cancel();
+    _connectivityTimer = null;
   }
 }

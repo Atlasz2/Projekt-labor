@@ -1,0 +1,72 @@
+name: Flutter Release
+
+on:
+  push:
+    branches:
+      - main        # prod release
+      - develop     # test build
+  pull_request:
+    branches:
+      - develop     # dev build (PR check)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17 setup
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter setup
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Flutter pub get
+        working-directory: mobile_app
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: mobile_app
+        run: flutter analyze --no-fatal-infos
+
+      - name: Flutter test
+        working-directory: mobile_app
+        run: flutter test
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "env=prod" >> $GITHUB_OUTPUT
+            echo "suffix=" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "env=test" >> $GITHUB_OUTPUT
+            echo "suffix=-test" >> $GITHUB_OUTPUT
+          else
+            echo "env=dev" >> $GITHUB_OUTPUT
+            echo "suffix=-dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build APK (${{ steps.env.outputs.env }})
+        working-directory: mobile_app
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          mv mobile_app/build/app/outputs/flutter-apk/app-release.apk \
+             mobile_app/build/app/outputs/flutter-apk/nagyvazsony${{ steps.env.outputs.suffix }}.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nagyvazsony-${{ steps.env.outputs.env }}-${{ github.run_number }}
+          path: mobile_app/build/app/outputs/flutter-apk/nagyvazsony*.apk
+          retention-days: 30

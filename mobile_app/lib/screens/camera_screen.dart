@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../widgets/offline_image.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/local_cache.dart';
@@ -23,6 +25,39 @@ class _CameraScreenState extends State<CameraScreen> {
   Map<String, dynamic>? _station;
   String? _errorMsg;
   List<Map<String, dynamic>> _history = [];
+
+  String _primaryImageUrl(Map<String, dynamic> item) {
+    final photos = item['photos'];
+    if (photos is List && photos.isNotEmpty) {
+      for (final entry in photos) {
+        if (entry is String && entry.trim().isNotEmpty) {
+          return entry.trim();
+        }
+        if (entry is Map) {
+          final url = entry['url']?.toString().trim() ?? '';
+          if (url.isNotEmpty) return url;
+        }
+      }
+    }
+
+    final photoUrls = item['photoUrls'];
+    if (photoUrls is List && photoUrls.isNotEmpty) {
+      for (final entry in photoUrls) {
+        final url = entry?.toString().trim() ?? '';
+        if (url.isNotEmpty) return url;
+      }
+    }
+
+    return item['imageUrl']?.toString().trim() ?? '';
+  }
+
+  Map<String, dynamic> _normalizeStation(Map<String, dynamic> item) {
+    final imageUrl = _primaryImageUrl(item);
+    return {
+      ...item,
+      'imageUrl': imageUrl,
+    };
+  }
 
   @override
   void initState() {
@@ -111,7 +146,7 @@ class _CameraScreenState extends State<CameraScreen> {
         _errorMsg = null;
         if (cachedStation != null) {
           _station = {
-            ...cachedStation,
+            ..._normalizeStation(cachedStation),
             'alreadyDone': false,
             'newAchievements': const <Map<String, dynamic>>[],
             'offlineQueued': true,
@@ -232,7 +267,7 @@ class _CameraScreenState extends State<CameraScreen> {
     if (!mounted) return;
     setState(() {
       _station = {
-        ...data,
+        ..._normalizeStation(data),
         'alreadyDone': alreadyDone,
         'newAchievements': newAch,
       };
@@ -456,7 +491,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final name = s['name']?.toString() ?? 'Allomas';
     final unlockContent = s['unlockContent']?.toString() ?? '';
     final extraInfo = s['extraInfo']?.toString() ?? '';
-    final imageUrl = s['imageUrl']?.toString() ?? '';
+    final imageUrl = _primaryImageUrl(s);
     final newAch =
         (s['newAchievements'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final offlineQueued = s['offlineQueued'] == true;
@@ -469,7 +504,7 @@ class _CameraScreenState extends State<CameraScreen> {
           if (imageUrl.isNotEmpty)
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Image.network(
+              child: OfflineImage.network(
                 imageUrl,
                 height: 180,
                 width: double.infinity,
@@ -520,8 +555,8 @@ class _CameraScreenState extends State<CameraScreen> {
                   alreadyDone
                       ? 'Mar feloldott (+0 pt)'
                       : (offlineQueued
-                            ? ('Offline sorban (+' + points.toString() + ' pt)')
-                            : ('+' + points.toString() + ' pont')),
+                            ? ('Offline sorban (+$points pt)')
+                            : ('+$points pont')),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -749,3 +784,4 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
+

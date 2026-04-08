@@ -1,16 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { db, storage } from '../firebaseConfig';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { uploadImageWithFallback } from '../utils/imageUpload';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
 import { jsPDF } from 'jspdf';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import '../styles/Stations.css';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { safeString } from '../utils/safeString';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: '220px', width: '100%' };
+
+const getPhotoUrls = (item) => {
+  const photos = Array.isArray(item?.photos) ? item.photos : [];
+  const fromPhotos = photos
+    .map((entry) => {
+      if (typeof entry === "string") return entry;
+      if (entry && typeof entry === "object" && entry.url) return String(entry.url);
+      return "";
+    })
+    .filter(Boolean);
+
+  const photoUrls = Array.isArray(item?.photoUrls) ? item.photoUrls.map((v) => String(v || "")).filter(Boolean) : [];
+  const imageUrl = safeString(item?.imageUrl);
+  return [...fromPhotos, ...photoUrls, ...(imageUrl ? [imageUrl] : [])];
+};
+
+const getPrimaryImage = (item) => getPhotoUrls(item)[0] || "";
 
 const getQrValue = (station) => station.qrCode || station.id;
 const getQrImageUrl = (value, size = 140) => {
@@ -54,7 +72,7 @@ const EMPTY_FORM = {
   longitude: null,
   description: '',
   points: 10,
-  imageUrl: '',
+  photos: [],
   qrCode: '',
   tripId: '',
   funFact: '',
@@ -118,7 +136,7 @@ export default function Stations() {
       longitude: station.longitude ?? null,
       description: station.description || '',
       points: station.points || 10,
-      imageUrl: station.imageUrl || '',
+      photos: getPhotoUrls(station).slice(0, 6),
       qrCode: station.qrCode || '',
       tripId: station.tripId || '',
       funFact: station.funFact || '',
@@ -146,27 +164,32 @@ export default function Stations() {
 
   const handleImageUpload = async (file) => {
     if (!file) return;
+    if (formData.photos.length >= 6) { showMsg('Maximum 6 kép tölthető fel.', 'warning'); return; }
     try {
       setUploading(true);
-      const url = await uploadImageToStorage(file, 'stations');
-      setFormData((current) => ({ ...current, imageUrl: url }));
-      showMsg('Kép sikeresen feltöltve! ✅', 'success');
-    } catch {
-      showMsg('Hiba a kép feltöltésekor');
+      const result = await uploadImageWithFallback({ file, storage, folder: 'stations' });
+      setFormData((current) => ({ ...current, photos: [...current.photos, result.url] }));
+      showMsg(result.mode === 'inline' ? result.message : 'Kép sikeresen feltöltve! ✅', result.mode === 'inline' ? 'warning' : 'success');
+    } catch (err) {
+      showMsg(`Hiba a kép feltöltésekor: ${err?.message || 'ismeretlen hiba'}`);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleRemovePhoto = (index) => {
+    setFormData((current) => ({ ...current, photos: current.photos.filter((_, i) => i !== index) }));
   };
 
   const handleUnlockImageUpload = async (file) => {
     if (!file) return;
     try {
       setUploading(true);
-      const url = await uploadImageToStorage(file, 'stations/unlocked');
-      setFormData((current) => ({ ...current, unlockContentImageUrl: url }));
-      showMsg('Feloldott tartalom képe feltöltve! ✅', 'success');
-    } catch {
-      showMsg('Hiba a feloldott tartalom képének feltöltésekor');
+      const result = await uploadImageWithFallback({ file, storage, folder: 'stations/unlocked' });
+      setFormData((current) => ({ ...current, unlockContentImageUrl: result.url }));
+      showMsg(result.mode === 'inline' ? result.message : 'Feloldott tartalom képe feltöltve! ✅', result.mode === 'inline' ? 'warning' : 'success');
+    } catch (err) {
+      showMsg(`Hiba a feloldott tartalom képének feltöltésekor: ${err?.message || 'ismeretlen hiba'}`);
     } finally {
       setUploading(false);
     }
@@ -205,7 +228,9 @@ export default function Stations() {
         longitude: Number(formData.longitude),
         description: formData.description.trim(),
         points: parseInt(formData.points, 10) || 10,
-        imageUrl: formData.imageUrl || '',
+        photos: formData.photos.map(url => ({ url })),
+        photoUrls: formData.photos,
+        imageUrl: formData.photos[0] || '',
         qrCode: formData.qrCode.trim() || '',
         tripId: formData.tripId || '',
         funFact: formData.funFact.trim(),
@@ -324,7 +349,7 @@ export default function Stations() {
           return (
             <div key={station.id} className="station-card">
               <div className="station-media">
-                {station.imageUrl ? <img src={station.imageUrl} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
+                {getPrimaryImage(station) ? <img src={getPrimaryImage(station)} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
                 <span className="station-points">⭐ {station.points} pont</span>
               </div>
               <div className="station-body">
@@ -395,11 +420,22 @@ export default function Stations() {
                   </div>
                   <div className="field-group">
                     <label>🖼️ Borítókép</label>
-                    <div className="upload-zone">
-                      <input type="file" id="img-upload" accept="image/*" onChange={(e) => handleImageUpload(e.target.files?.[0])} style={{ display: 'none' }} />
-                      <label htmlFor="img-upload" className="upload-btn">{uploading ? '⏳ Feltöltés...' : '📁 Kép kiválasztása'}</label>
-                      {formData.imageUrl && !uploading && <img className="image-preview" src={formData.imageUrl} alt="Előnézet" loading="lazy" />}
+                    <div className="photo-grid station-photo-grid">
+                      {formData.photos.map((url, i) => (
+                        <div key={i} className="photo-thumb">
+                          <img src={url} alt="" />
+                          <button type="button" className="photo-remove" onClick={() => handleRemovePhoto(i)}>✕</button>
+                          {i === 0 && <span className="thumb-badge">Borítókép</span>}
+                        </div>
+                      ))}
+                      {formData.photos.length < 6 && (
+                        <label className="photo-add-btn">
+                          <input type="file" accept="image/*" disabled={uploading} onChange={(e) => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0]); e.target.value = ""; }} />
+                          {uploading ? "Feltöltés..." : "+ Kép"}
+                        </label>
+                      )}
                     </div>
+                    <span className="field-hint">{formData.photos.length}/6 kép • az első lesz a borítókép</span>
                   </div>
                 </div>
               )}
@@ -450,11 +486,22 @@ export default function Stations() {
                   </div>
                   <div className="field-group">
                     <label>🖼️ Feloldott tartalom képe</label>
-                    <div className="upload-zone">
-                      <input type="file" id="unlock-img-upload" accept="image/*" onChange={(e) => handleUnlockImageUpload(e.target.files?.[0])} style={{ display: 'none' }} />
-                      <label htmlFor="unlock-img-upload" className="upload-btn">{uploading ? '⏳ Feltöltés...' : '📁 Kép kiválasztása'}</label>
-                      {formData.unlockContentImageUrl && !uploading && <img className="image-preview" src={formData.unlockContentImageUrl} alt="Feloldott tartalom" loading="lazy" />}
+                    <div className="photo-grid station-photo-grid">
+                      {formData.photos.map((url, i) => (
+                        <div key={i} className="photo-thumb">
+                          <img src={url} alt="" />
+                          <button type="button" className="photo-remove" onClick={() => handleRemovePhoto(i)}>✕</button>
+                          {i === 0 && <span className="thumb-badge">Borítókép</span>}
+                        </div>
+                      ))}
+                      {formData.photos.length < 6 && (
+                        <label className="photo-add-btn">
+                          <input type="file" accept="image/*" disabled={uploading} onChange={(e) => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0]); e.target.value = ""; }} />
+                          {uploading ? "Feltöltés..." : "+ Kép"}
+                        </label>
+                      )}
                     </div>
+                    <span className="field-hint">{formData.photos.length}/6 kép • az első lesz a borítókép</span>
                   </div>
                   <div className="field-group">
                     <label>ℹ️ Extra információ</label>

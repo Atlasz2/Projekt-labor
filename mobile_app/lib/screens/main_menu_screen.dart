@@ -35,6 +35,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _offlineSyncService.init().ignore();
     _loadPendingAchievementBanner();
   }
 

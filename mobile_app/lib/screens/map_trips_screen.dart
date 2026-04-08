@@ -1,16 +1,17 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import '../widgets/offline_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:latlong2/latlong.dart' as ll;
 
 import '../services/local_cache.dart';
+import '../services/offline_image_service.dart';
 import '../services/offline_tiles_service.dart';
 
 class MapTripsScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
   bool _loading = true;
   bool _routeLoading = false;
   bool _downloadingTiles = false;
-  bool _hasOfflineTiles = false;
+  final Set<String> _offlineTileTripIds = <String>{};
   String? _error;
   String? _routeStatus;
   String? _downloadStatus;
@@ -82,7 +83,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     return station['name']?.toString() ?? 'Állomás';
   }
 
-
   List<String> _stationPhotos(Map<String, dynamic> station) {
     final photos = station['photos'];
     if (photos is List && photos.isNotEmpty) {
@@ -114,62 +114,80 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     return const [];
   }
 
-  void _openImageViewer(BuildContext context, List<String> photos, int initialIndex) {
+  void _openImageViewer(
+    BuildContext context,
+    List<String> photos,
+    int initialIndex,
+  ) {
     if (photos.isEmpty) return;
-    showDialog<void>(
+    var currentIndex = initialIndex;
+    final pageController = PageController(initialPage: initialIndex);
+
+    final dialogFuture = showDialog<void>(
       context: context,
-      builder: (_) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: PageController(initialPage: initialIndex),
-              itemCount: photos.length,
-              itemBuilder: (_, index) => InteractiveViewer(
-                minScale: 1,
-                maxScale: 4,
-                child: Center(
-                  child: Image.network(
-                    photos[index],
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog.fullscreen(
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: pageController,
+                itemCount: photos.length,
+                onPageChanged: (index) =>
+                    setDialogState(() => currentIndex = index),
+                itemBuilder: (_, index) => InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: OfflineImage.network(
+                      photos[index],
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              top: 16,
-              left: 16,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.pop(context),
+              Positioned(
+                top: 16,
+                left: 16,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(dialogContext),
+                ),
               ),
-            ),
-            Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Center(
+              Positioned(
+                top: 16,
+                right: 16,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    '${_currentPhotoIndex + 1}/${photos.length}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    '${currentIndex + 1}/${photos.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+    dialogFuture.whenComplete(pageController.dispose);
   }
 
-  int _currentPhotoIndex = 0;
   void _showStationSheet(Map<String, dynamic> station) {
     final photos = _stationPhotos(station);
     final isCompleted = _completedIds.contains(station['id'] as String? ?? '');
@@ -209,19 +227,38 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_stationName(station), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                        Text(
+                          _stationName(station),
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                         const SizedBox(height: 6),
                         Text(
-                          isCompleted ? 'Teljesítve • ${station['points'] ?? 10} pont' : '${station['points'] ?? 10} pont szerezhető',
-                          style: TextStyle(color: isCompleted ? const Color(0xFF2E7D32) : const Color(0xFF8B5E34), fontWeight: FontWeight.w700),
+                          isCompleted
+                              ? 'Teljesítve • ${station['points'] ?? 10} pont'
+                              : '${station['points'] ?? 10} pont szerezhető',
+                          style: TextStyle(
+                            color: isCompleted
+                                ? const Color(0xFF2E7D32)
+                                : const Color(0xFF8B5E34),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   if (photos.isNotEmpty)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                       child: Text('${photos.length} fotó'),
                     ),
                 ],
@@ -235,33 +272,48 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                     itemCount: photos.length,
                     itemBuilder: (context, index) => Padding(
                       padding: const EdgeInsets.only(right: 10),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(
-                              photos[index],
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: const Color(0xFFEADFCC),
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.broken_image_outlined, size: 34),
-                              ),
-                            ),
-                            Positioned(
-                              top: 12,
-                              right: 12,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.56),
-                                  borderRadius: BorderRadius.circular(999),
+                      child: GestureDetector(
+                        onTap: () => _openImageViewer(context, photos, index),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              OfflineImage.network(
+                                photos[index],
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Container(
+                                  color: const Color(0xFFEADFCC),
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.broken_image_outlined,
+                                    size: 34,
+                                  ),
                                 ),
-                                child: Text('${index + 1}/${photos.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                               ),
-                            ),
-                          ],
+                              Positioned(
+                                top: 12,
+                                right: 12,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.56),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '${index + 1}/${photos.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -270,17 +322,27 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
               else
                 Container(
                   height: 140,
-                  decoration: BoxDecoration(color: const Color(0xFFEADFCC), borderRadius: BorderRadius.circular(20)),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEADFCC),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   alignment: Alignment.center,
                   child: const Text('Ehhez az állomáshoz még nincs fotó.'),
                 ),
               if ((station['description']?.toString() ?? '').isNotEmpty) ...[
                 const SizedBox(height: 18),
-                const Text('Leírás', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                const Text(
+                  'Leírás',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
                 const SizedBox(height: 8),
-                Text(station['description'].toString(), style: const TextStyle(height: 1.45)),
+                Text(
+                  station['description'].toString(),
+                  style: const TextStyle(height: 1.45),
+                ),
               ],
-              if (isCompleted && (station['funFact']?.toString() ?? '').isNotEmpty) ...[
+              if (isCompleted &&
+                  (station['funFact']?.toString() ?? '').isNotEmpty) ...[
                 const SizedBox(height: 18),
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -299,9 +361,23 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Feloldott fun fact', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                            const Text(
+                              'Feloldott fun fact',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             const SizedBox(height: 4),
-                            Text(station['funFact'].toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.4)),
+                            Text(
+                              station['funFact'].toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                height: 1.4,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -374,38 +450,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     return points.length >= 2 ? points : const [];
   }
 
-  List<LatLng> _extractTripRoute(Map<String, dynamic> trip) {
-    final directCandidates = [
-      trip['routeCoordinates'],
-      trip['routePoints'],
-      trip['path'],
-      trip['waypoints'],
-    ];
-
-    for (final candidate in directCandidates) {
-      final points = _decodeStoredRoute(candidate);
-      if (points.length >= 2) return points;
-    }
-
-    final geometry = trip['geometry'];
-    if (geometry is Map && geometry['coordinates'] is List) {
-      final coords = geometry['coordinates'] as List;
-      final points = <LatLng>[];
-      for (final item in coords) {
-        if (item is List && item.length >= 2) {
-          final lng = item[0];
-          final lat = item[1];
-          if (lat is num && lng is num) {
-            points.add(LatLng(lat.toDouble(), lng.toDouble()));
-          }
-        }
-      }
-      if (points.length >= 2) return points;
-    }
-
-    return const [];
-  }
-
   Future<Map<String, dynamic>> _fetchHikingRoute(List<LatLng> waypoints) async {
     if (waypoints.length < 2) {
       return {
@@ -422,7 +466,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         )
         .join(',');
     final body =
-        '{"locations": [$locations], "costing": "pedestrian", "costing_options": {"pedestrian": {"use_tracks": 1.0, "walking_speed": 3.5}}, "directions_type": "none"}';
+        '{"locations": [$locations], "costing": "pedestrian", "costing_options": {"pedestrian": {"use_tracks": 1.0, "use_hills": 0.6, "walking_speed": 3.5, "transit_start_end_max_distance": 0}}, "directions_type": "none"}';
 
     // 1. Valhalla: OSM-alapu erdei/turaoszvenyek
     try {
@@ -434,9 +478,9 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         );
         request.headers.contentType = ContentType('application', 'json');
         request.write(body);
-        final response = await request.close();
+        final response = await request.close().timeout(const Duration(seconds: 12));
         if (response.statusCode == 200) {
-          final responseBody = await response.transform(utf8.decoder).join();
+          final responseBody = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
           final data = jsonDecode(responseBody);
           if (data is Map && data['trip'] is Map) {
             final trip = data['trip'] as Map;
@@ -478,9 +522,9 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       ..connectionTimeout = const Duration(seconds: 12);
     try {
       final request = await osrmClient.getUrl(osrmUri);
-      final response = await request.close();
+      final response = await request.close().timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
-        final responseBody = await response.transform(utf8.decoder).join();
+        final responseBody = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 8));
         final data = jsonDecode(responseBody);
         if (data is Map &&
             data['code'] == 'Ok' &&
@@ -621,20 +665,28 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
   }
 
   Future<void> _initOfflineTileState() async {
-    final hasTiles = await OfflineTilesService.hasOfflineTiles();
+    final tripIds = LocalCache.getOfflineTileTripIds();
     if (!mounted) return;
     setState(() {
-      _hasOfflineTiles = hasTiles;
+      _offlineTileTripIds
+        ..clear()
+        ..addAll(tripIds);
     });
   }
 
   Future<void> _downloadOfflineTiles() async {
     if (_downloadingTiles) return;
 
+    final selectedTripId = _selectedTripId;
+
     final tripStations = _tripStationsFor(_selectedTripId);
     final routePoints = _selectedTripId == null
         ? const <LatLng>[]
         : (_routeCache[_selectedTripId!] ?? const <LatLng>[]);
+    final photoUrls = tripStations
+        .expand(_stationPhotos)
+        .toSet()
+        .toList(growable: false);
 
     final focusPoints = routePoints.isNotEmpty
         ? routePoints
@@ -658,20 +710,36 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       onProgress: (done, total) async {
         if (!mounted) return;
         setState(() {
-          _downloadStatus = 'Letöltés: $done / $total';
+          _downloadStatus = 'Térkép: $done / $total';
         });
       },
     );
 
-    final hasTiles = await OfflineTilesService.hasOfflineTiles();
+    var downloadedImages = 0;
+    if (photoUrls.isNotEmpty) {
+      downloadedImages = await OfflineImageService.cacheImages(
+        photoUrls,
+        onProgress: (done, total) async {
+          if (!mounted) return;
+          setState(() {
+            _downloadStatus = 'Képek: $done / $total';
+          });
+        },
+      );
+    }
+
+    if ((downloaded > 0 || downloadedImages > 0) && selectedTripId != null) {
+      await LocalCache.markTripOfflineTilesDownloaded(selectedTripId);
+    }
 
     if (!mounted) return;
     setState(() {
       _downloadingTiles = false;
-      _hasOfflineTiles = hasTiles;
-      _downloadStatus = downloaded > 0
-          ? 'Offline csempék készen az útvonal mentén'
-          : 'Nem sikerült letölteni csempéket';
+      if ((downloaded > 0 || downloadedImages > 0) && selectedTripId != null) {
+        _offlineTileTripIds.add(selectedTripId);
+      }
+      _downloadStatus =
+          'Offline kész: $downloaded térképcsempe, $downloadedImages kép';
     });
   }
 
@@ -809,11 +877,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       _routeStatus = 'Túraútvonal keresése...';
     });
 
-    final trip = _trips.cast<Map<String, dynamic>?>().firstWhere(
-      (item) => item?['id'] == tripId,
-      orElse: () => null,
-    );
-
     final stationPoints = visibleStations
         .map(_stationPoint)
         .whereType<LatLng>()
@@ -823,28 +886,32 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     String status = 'Turistaútvonal';
     String distanceLabel = 'N/A';
     String durationLabel = 'N/A';
+    bool isValhallaRoute = false;
 
-    if (trip != null) {
-      routePoints = _extractTripRoute(trip);
-      if (routePoints.length >= 2) {
-        status = 'Tárolt túraútvonal';
+    // Elsodlegesen Valhalla-t hasznalunk, hogy turistautak/foldutak legyenek preferalva.
+    if (stationPoints.length >= 2) {
+      try {
+        final routeData = await _fetchHikingRoute(stationPoints);
+        final fetchedPoints = (routeData['points'] as List<dynamic>)
+            .whereType<LatLng>()
+            .toList();
+        final fallback = routeData['fallback'] == true;
+        final osrm = routeData['osrm'] == true;
+
+        if (fetchedPoints.length >= 2) {
+          routePoints = fetchedPoints;
+          distanceLabel = routeData['distanceLabel']?.toString() ?? 'N/A';
+          durationLabel = routeData['durationLabel']?.toString() ?? 'N/A';
+          isValhallaRoute = !fallback && !osrm;
+          status = fallback
+              ? 'Közelítő összekötés állomások között'
+              : osrm
+              ? 'Gyalogos útvonal'
+              : 'OpenStreetMap turistaút';
+        }
+      } catch (_) {
+        // timeout vagy halozati hiba
       }
-    }
-
-    if (routePoints.length < 2 && stationPoints.length >= 2) {
-      final routeData = await _fetchHikingRoute(stationPoints);
-      routePoints = (routeData['points'] as List<dynamic>)
-          .whereType<LatLng>()
-          .toList();
-      distanceLabel = routeData['distanceLabel']?.toString() ?? 'N/A';
-      durationLabel = routeData['durationLabel']?.toString() ?? 'N/A';
-      final fallback = routeData['fallback'] == true;
-      final osrm = routeData['osrm'] == true;
-      status = fallback
-          ? 'Közelítő összekötés állomások között'
-          : osrm
-          ? 'Gyalogos útvonal'
-          : 'OpenStreetMap turistaut';
     }
 
     if (routePoints.length < 2) {
@@ -862,7 +929,8 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     };
 
     if (routePoints.length >= 2 &&
-        status != 'Közelítő összekötés állomások között') {
+        status != 'Közelítő összekötés állomások között' &&
+        isValhallaRoute) {
       await LocalCache.saveRoute(
         tripId,
         routePoints
@@ -1045,6 +1113,10 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     final metrics = _selectedTripId == null
         ? null
         : _routeMetrics[_selectedTripId!];
+    final selectedTripId = _selectedTripId;
+    final tripHasOfflineTiles = selectedTripId != null
+        ? _offlineTileTripIds.contains(selectedTripId)
+        : false;
 
     return Column(
       children: [
@@ -1109,10 +1181,10 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                           ? null
                           : _downloadOfflineTiles,
                       icon: Icon(
-                        _hasOfflineTiles
+                        tripHasOfflineTiles
                             ? Icons.check_circle
                             : Icons.download_for_offline_outlined,
-                        color: _hasOfflineTiles ? Colors.green : null,
+                        color: tripHasOfflineTiles ? Colors.green : null,
                       ),
                       label: Text(
                         _downloadingTiles
@@ -1138,7 +1210,10 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
             children: [
               Expanded(
                 child: GoogleMap(
-                  initialCameraPosition: CameraPosition(target: center, zoom: 13),
+                  initialCameraPosition: CameraPosition(
+                    target: center,
+                    zoom: 13,
+                  ),
                   markers: _markers,
                   polylines: _polylines,
                   zoomControlsEnabled: true,
@@ -1149,7 +1224,9 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                   onMapCreated: (controller) {
                     _mapController = controller;
                     _fitRouteOrStations(
-                      _selectedTripId == null ? const [] : (_routeCache[_selectedTripId!] ?? const []),
+                      _selectedTripId == null
+                          ? const []
+                          : (_routeCache[_selectedTripId!] ?? const []),
                       tripStations,
                     );
                   },
@@ -1157,9 +1234,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                   myLocationEnabled: true,
                   mapToolbarEnabled: false,
                   compassEnabled: true,
-                  gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-                    Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
-                  },
                 ),
               ),
               if (tripStations.isNotEmpty)
@@ -1169,11 +1243,13 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                     scrollDirection: Axis.horizontal,
                     itemCount: tripStations.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       final station = tripStations[index];
                       final photos = _stationPhotos(station);
-                      final done = _completedIds.contains(station['id'] as String? ?? '');
+                      final done = _completedIds.contains(
+                        station['id'] as String? ?? '',
+                      );
                       return SizedBox(
                         width: 248,
                         child: InkWell(
@@ -1194,24 +1270,34 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                             child: Row(
                               children: [
                                 ClipRRect(
-                                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(18)),
+                                  borderRadius: const BorderRadius.horizontal(
+                                    left: Radius.circular(18),
+                                  ),
                                   child: SizedBox(
                                     width: 88,
                                     height: double.infinity,
                                     child: photos.isNotEmpty
-                                        ? Image.network(
+                                        ? OfflineImage.network(
                                             photos.first,
                                             fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) => Container(
-                                              color: const Color(0xFFEADFCC),
-                                              alignment: Alignment.center,
-                                              child: const Icon(Icons.photo_library_outlined),
-                                            ),
+                                            errorBuilder: (_, _, _) =>
+                                                Container(
+                                                  color: const Color(
+                                                    0xFFEADFCC,
+                                                  ),
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(
+                                                    Icons
+                                                        .photo_library_outlined,
+                                                  ),
+                                                ),
                                           )
                                         : Container(
                                             color: const Color(0xFFEADFCC),
                                             alignment: Alignment.center,
-                                            child: const Icon(Icons.photo_library_outlined),
+                                            child: const Icon(
+                                              Icons.photo_library_outlined,
+                                            ),
                                           ),
                                   ),
                                 ),
@@ -1219,14 +1305,39 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                                   child: Padding(
                                     padding: const EdgeInsets.all(12),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
-                                        Text(_stationName(station), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                                        Text(
+                                          _stationName(station),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
                                         const SizedBox(height: 6),
-                                        Text(done ? 'Teljesítve' : '${station['points'] ?? 10} pont', style: TextStyle(color: done ? const Color(0xFF2E7D32) : const Color(0xFF8B5E34), fontWeight: FontWeight.w700)),
+                                        Text(
+                                          done
+                                              ? 'Teljesítve'
+                                              : '${station['points'] ?? 10} pont',
+                                          style: TextStyle(
+                                            color: done
+                                                ? const Color(0xFF2E7D32)
+                                                : const Color(0xFF8B5E34),
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
                                         const SizedBox(height: 6),
-                                        Text('${photos.length} fotó', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                        Text(
+                                          '${photos.length} fotó',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1286,4 +1397,5 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     );
   }
 }
+
 

@@ -14,6 +14,10 @@ class _NameScreenState extends State<NameScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
 
+  String _normalizeDisplayName(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
   @override
   void dispose() {
     _displayNameController.dispose();
@@ -34,26 +38,45 @@ class _NameScreenState extends State<NameScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final firestore = FirebaseFirestore.instance;
+      final normalizedName = _normalizeDisplayName(displayName);
+      final usernameRef = firestore.collection('usernames').doc(normalizedName);
+      final existingName = await usernameRef.get();
+      if (existingName.exists) {
+        throw Exception('Ez a név már foglalt. Válassz másikat.');
+      }
+
       final userCredential = await FirebaseAuth.instance.signInAnonymously();
       final user = userCredential.user!;
       final email = _emailController.text.trim();
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'displayName': displayName,
-        'name': displayName,
-        'email': email.isEmpty ? null : email,
-        'role': 'user',
-        'createdAt': FieldValue.serverTimestamp(),
-        'points': 0,
-        'completedTrips': 0,
-        'visitedStations': <String>[],
-        'achievements': <String>[],
-      }, SetOptions(merge: true));
+      await firestore.runTransaction((transaction) async {
+        final reservedName = await transaction.get(usernameRef);
+        if (reservedName.exists) {
+          throw Exception('Ez a név már foglalt. Válassz másikat.');
+        }
 
-      await FirebaseFirestore.instance
-          .collection('user_progress')
-          .doc(user.uid)
-          .set({
+        transaction.set(usernameRef, {
+          'uid': user.uid,
+          'displayName': displayName,
+          'normalized': normalizedName,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.set(firestore.collection('users').doc(user.uid), {
+          'displayName': displayName,
+          'name': displayName,
+          'email': email.isEmpty ? null : email,
+          'createdAt': FieldValue.serverTimestamp(),
+          'points': 0,
+          'completedTrips': 0,
+          'visitedStations': <String>[],
+          'achievements': <String>[],
+        }, SetOptions(merge: true));
+
+        transaction.set(
+          firestore.collection('user_progress').doc(user.uid),
+          {
             'name': displayName,
             'email': email,
             'completedStations': <String>[],
@@ -63,18 +86,22 @@ class _NameScreenState extends State<NameScreen> {
             'currentTrip': 'Nincs túra',
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+          },
+          SetOptions(merge: true),
+        );
 
-      await FirebaseFirestore.instance
-          .collection('public_leaderboard')
-          .doc(user.uid)
-          .set({
+        transaction.set(
+          firestore.collection('public_leaderboard').doc(user.uid),
+          {
             'displayName': displayName,
             'points': 0,
             'completedStationsCount': 0,
             'completedEventsCount': 0,
             'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+          },
+          SetOptions(merge: true),
+        );
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -179,3 +206,4 @@ class _NameScreenState extends State<NameScreen> {
     );
   }
 }
+

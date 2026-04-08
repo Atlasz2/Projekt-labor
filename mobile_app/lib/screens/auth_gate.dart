@@ -15,13 +15,45 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   bool _initialAuthResolved = FirebaseAuth.instance.currentUser != null;
+  String? _lastBootstrappedUid;
+  bool _servicesStoppedForSignedOut = false;
+  Future<DocumentSnapshot>? _userDocFuture;
+  String? _userDocFutureUid;
+
+  Future<DocumentSnapshot> _userDocByUid(String uid) {
+    if (_userDocFuture != null && _userDocFutureUid == uid) {
+      return _userDocFuture!;
+    }
+    _userDocFutureUid = uid;
+    _userDocFuture = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
+    return _userDocFuture!;
+  }
+
+  void _startBackgroundServices(String uid) {
+    if (_lastBootstrappedUid == uid) return;
+    _lastBootstrappedUid = uid;
+    _servicesStoppedForSignedOut = false;
+    BootstrapService.run().ignore();
+    PendingQrSyncService.start().ignore();
+  }
+
+  Future<void> _stopBackgroundServices() async {
+    if (_servicesStoppedForSignedOut) return;
+    _servicesStoppedForSignedOut = true;
+    _lastBootstrappedUid = null;
+    _userDocFuture = null;
+    _userDocFutureUid = null;
+    await PendingQrSyncService.stop();
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Only allow the splash on cold start before auth is resolved once.
         if (!_initialAuthResolved &&
             snapshot.connectionState == ConnectionState.waiting &&
             snapshot.data == null) {
@@ -33,38 +65,26 @@ class _AuthGateState extends State<AuthGate> {
           _initialAuthResolved = true;
         }
 
-        // No user logged in
         if (!snapshot.hasData || snapshot.data == null) {
-          PendingQrSyncService.stop().ignore();
+          _stopBackgroundServices().ignore();
           return const NameScreen();
         }
 
         _initialAuthResolved = true;
         final user = snapshot.data!;
-        BootstrapService.run().ignore(); // adatok frissitese hatterben
-        PendingQrSyncService.start().ignore();
+        _startBackgroundServices(user.uid);
 
-        // User is logged in - show MainMenuScreen immediately without waiting for Firestore
-        // Firestore updates will happen in background without blocking UI
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .get(),
+          future: _userDocByUid(user.uid),
           builder: (context, docSnapshot) {
-            // Show MainMenuScreen immediately even if Firestore data is loading
-            // This prevents the loading spinner from blocking the UI
             if (!docSnapshot.hasData) {
-              // Still loading, but show menu anyway
               return const MainMenuScreen();
             }
 
-            // Check if user document exists
             if (!docSnapshot.data!.exists) {
               return const NameScreen();
             }
 
-            // User has profile, show main menu
             return const MainMenuScreen();
           },
         );
