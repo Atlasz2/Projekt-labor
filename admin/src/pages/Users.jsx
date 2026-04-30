@@ -41,14 +41,8 @@ function Users() {
           if (Array.isArray(progressData.completedStations)) {
             completedStations = progressData.completedStations.length;
           } else {
-            try {
-              const completedSnapshot = await getDocs(
-                collection(db, "user_progress", progressDoc.id, "completed_stations")
-              );
-              completedStations = completedSnapshot.size;
-            } catch {
-              completedStations = Number(progressData.completedStationsCount || 0);
-            }
+            // Avoid N+1 subcollection query: use the denormalized count field if available
+            completedStations = Number(progressData.completedStationsCount || 0);
           }
 
           const totalStations = Number(progressData.totalStations || 0);

@@ -12,6 +12,14 @@ function Dashboard() {
   const [topAchievements, setTopAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
+
+  const toggleDarkMode = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('adminDarkMode', String(next));
+  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -85,6 +93,14 @@ function Dashboard() {
           </button>
           <Link className="cta primary" to="/trips">Uj tura</Link>
           <Link className="cta ghost" to="/stations">Uj allomas</Link>
+          <button
+            className="cta ghost"
+            onClick={toggleDarkMode}
+            title={darkMode ? 'Vilagos mod' : 'Sotet mod'}
+            style={{ fontSize: '1.1rem', padding: '8px 14px', lineHeight: 1 }}
+          >
+            {darkMode ? '☀' : '☾'}
+          </button>
         </div>
       </header>
 

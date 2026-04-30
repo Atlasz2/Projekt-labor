@@ -1,11 +1,11 @@
-/* ========== Map Page Container ========== */
+﻿/* ========== Map Page Container ========== */
 .map-page {
   width: 100%;
   height: 100vh;
   display: flex;
   position: relative;
   overflow: hidden;
-  background: #f4efe6;
+  background: #f1f5f9;
 }
 
 /* ========== Loading State ========== */
@@ -19,7 +19,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f4efe6 0%, #ebe2d4 100%);
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   z-index: 100;
   gap: 20px;
 }
@@ -27,8 +27,8 @@
 .spinner {
   width: 50px;
   height: 50px;
-  border: 4px solid #dbcdb7;
-  border-top-color: #4b634d;
+  border: 4px solid #e2e8f0;
+  border-top-color: #1e40af;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -41,7 +41,7 @@
 
 .map-loading p {
   font-size: 1.1em;
-  color: #34261a;
+  color: #0f172a;
   font-weight: 500;
 }
 
@@ -60,12 +60,12 @@
 }
 
 .map-error h2 {
-  color: #b86a4b;
+  color: #dc2626;
   margin-top: 0;
 }
 
 .map-error p {
-  color: #7d6b57;
+  color: #64748b;
   font-size: 1.05em;
 }
 
@@ -84,7 +84,7 @@
 }
 
 .map-empty p {
-  color: #7d6b57;
+  color: #64748b;
   font-size: 1.1em;
   margin: 0;
 }
@@ -121,14 +121,14 @@
 .legend-header {
   padding: 20px;
   border-bottom: 2px solid #f0f2f5;
-  background: linear-gradient(135deg, #f7f2e9 0%, #f0f2f5 100%);
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f2f5 100%);
   border-radius: 12px 12px 0 0;
 }
 
 .legend-header h3 {
   margin: 0;
   font-size: 1.2em;
-  color: #34261a;
+  color: #0f172a;
   font-weight: 600;
 }
 
@@ -151,8 +151,8 @@
 }
 
 .legend-item:hover {
-  background: #e6dccd;
-  border-color: #4b634d;
+  background: #e2e8f0;
+  border-color: #1e40af;
 }
 
 .legend-color {
@@ -172,7 +172,7 @@
 
 .legend-name {
   font-weight: 600;
-  color: #34261a;
+  color: #0f172a;
   font-size: 0.95em;
   margin-bottom: 6px;
 }
@@ -189,9 +189,9 @@
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 0.8em;
-  color: #4f4030;
+  color: #374151;
   font-weight: 500;
-  border: 1px solid #e6dccd;
+  border: 1px solid #e2e8f0;
   width: fit-content;
 }
 
@@ -203,19 +203,19 @@
 
 .infowindow-content strong {
   display: block;
-  color: #34261a;
+  color: #0f172a;
   margin-bottom: 6px;
 }
 
 .infowindow-content p {
-  color: #4f4030;
+  color: #374151;
   font-size: 0.9em;
   line-height: 1.4;
 }
 
 .infowindow-content em {
   display: block;
-  color: #8a7a67;
+  color: #94a3b8;
   font-size: 0.85em;
   margin-top: 6px;
 }

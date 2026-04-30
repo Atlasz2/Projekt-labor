@@ -1,172 +1,179 @@
+﻿/* ── Users page ───────────────────────────────────────────── */
 .users-page {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 36px 24px;
-  background: linear-gradient(135deg, #f4efe6 0%, #ebe2d4 100%);
+  padding: 32px 24px;
   min-height: 100vh;
 }
 
-.page-header {
-  margin-bottom: 28px;
-}
+/* Header */
+.page-header { margin-bottom: 24px; }
 
 .page-header h1 {
-  font-size: 2.2em;
-  color: #34261a;
-  margin: 0 0 10px 0;
-  font-weight: 700;
+  font-size: 1.6rem;
+  color: #0f172a;
+  margin: 0 0 6px;
+  font-weight: 800;
 }
 
-.page-header p {
-  font-size: 1.05em;
-  color: #7d6b57;
-  margin: 0;
+.page-header p { font-size: 0.9rem; color: #64748b; margin: 0; }
+
+/* Error */
+.error {
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  border-left: 4px solid #dc2626;
+  font-weight: 500;
+  font-size: 0.9rem;
 }
 
-.users-ranking {
-  background: white;
+/* Stats row */
+.users-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.stat-box {
+  background: #fff;
   border-radius: 12px;
+  padding: 18px 16px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.07);
+  border: 1px solid #e2e8f0;
+}
+
+.stat-number {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: #2563eb;
+  margin: 0 0 4px;
+  line-height: 1;
+}
+
+.stat-label { font-size: 0.82rem; color: #64748b; font-weight: 500; }
+
+/* Ranking table */
+.users-ranking {
+  background: #fff;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  margin-bottom: 28px;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.07);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 24px;
 }
 
 .users-header {
   display: grid;
   grid-template-columns: 70px 1.3fr 120px 120px 230px 1.2fr;
   gap: 14px;
-  padding: 16px 18px;
-  background: linear-gradient(135deg, #8b5e34 0%, #4b634d 100%);
-  color: white;
+  padding: 12px 18px;
+  background: #0f172a;
+  color: #e2e8f0;
   font-weight: 600;
-  font-size: 0.92em;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .user-row {
   display: grid;
   grid-template-columns: 70px 1.3fr 120px 120px 230px 1.2fr;
   gap: 14px;
-  padding: 16px 18px;
-  border-bottom: 1px solid #ebe2d4;
+  padding: 14px 18px;
+  border-bottom: 1px solid #f1f5f9;
   align-items: center;
-  transition: all 0.2s ease;
+  transition: background 0.12s;
 }
 
-.user-row:hover {
-  background: #f7f2e9;
-}
+.user-row:hover { background: #f8fafc; }
+.user-row:last-child { border-bottom: none; }
 
-.user-row:last-child {
-  border-bottom: none;
-}
-
-.rank-col {
-  display: flex;
-  justify-content: center;
-}
+/* Rank */
+.rank-col { display: flex; justify-content: center; }
 
 .rank-badge {
-  font-size: 1.1em;
+  font-size: 1rem;
   font-weight: 700;
-  color: #8b5e34;
-  min-width: 40px;
+  color: #64748b;
+  min-width: 36px;
   text-align: center;
 }
 
-.name-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+/* Name */
+.name-col { display: flex; flex-direction: column; gap: 2px; }
+.name-col strong { font-size: 0.92rem; color: #0f172a; font-weight: 600; }
+.name-col small  { font-size: 0.78rem; color: #94a3b8; }
 
-.name-col strong {
-  font-size: 0.98em;
-  color: #34261a;
-}
-
-.name-col small {
-  font-size: 0.82em;
-  color: #8a7a67;
-}
-
+/* Role badge */
 .role-badge {
   display: inline-block;
   text-align: center;
-  padding: 6px 10px;
-  border-radius: 14px;
-  font-size: 0.82em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .role-badge.admin {
-  background: #efe7da;
-  color: #6f4725;
-  border: 1px solid #dbcdb7;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
 }
 
 .role-badge.user {
-  background: #e4ecde;
-  color: #4b634d;
-  border: 1px solid #bfd0b4;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
 }
 
-.points-col {
-  text-align: center;
-}
+/* Points */
+.points-col { text-align: center; }
 
 .points-badge {
   display: inline-block;
-  background: linear-gradient(135deg, #8b5e34 0%, #4b634d 100%);
-  color: white;
-  padding: 7px 12px;
-  border-radius: 18px;
-  font-weight: 600;
-  font-size: 0.9em;
+  background: #2563eb;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
 }
 
-.progress-col {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.progress-text {
-  font-size: 0.88em;
-  color: #4f4030;
-  font-weight: 500;
-}
+/* Progress */
+.progress-col { display: flex; flex-direction: column; gap: 4px; }
+.progress-text { font-size: 0.84rem; color: #374151; font-weight: 500; }
 
 .progress-bar {
-  height: 8px;
-  background: #e6dccd;
+  height: 6px;
+  background: #e2e8f0;
   border-radius: 4px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #8b5e34 0%, #4b634d 100%);
+  background: #2563eb;
+  border-radius: 4px;
   transition: width 0.3s ease;
 }
 
-.progress-percent {
-  font-size: 0.82em;
-  color: #7d6b57;
-  font-weight: 600;
-}
+.progress-percent { font-size: 0.78rem; color: #94a3b8; font-weight: 600; }
 
-.server-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+/* Server col */
+.server-col { display: flex; flex-direction: column; gap: 3px; }
 
 .server-col code {
-  font-size: 0.78em;
-  color: #4f4030;
-  background: #f1e8db;
-  border: 1px solid #d8ccb8;
+  font-size: 0.74rem;
+  color: #374151;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   padding: 3px 7px;
   width: fit-content;
@@ -174,111 +181,34 @@
   overflow-wrap: anywhere;
 }
 
-.server-col small {
-  font-size: 0.78em;
-  color: #7d6b57;
-}
+.server-col small { font-size: 0.74rem; color: #94a3b8; }
 
-.users-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 16px;
-}
-
-.stat-box {
-  background: white;
-  border-radius: 12px;
-  padding: 22px 16px;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border: 1px solid #ebe2d4;
-}
-
-.stat-number {
-  font-size: 2.1em;
-  font-weight: 700;
-  background: linear-gradient(135deg, #8b5e34 0%, #4b634d 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 6px 0;
-}
-
-.stat-label {
-  font-size: 0.9em;
-  color: #7d6b57;
-  font-weight: 500;
-}
-
-.error {
-  background: #f3dfd4;
-  color: #9e5337;
-  padding: 16px 20px;
-  border-radius: 8px;
-  margin-bottom: 24px;
-  border-left: 4px solid #9e5337;
-  font-weight: 500;
-}
-
+/* ---- Responsive ---- */
 @media (max-width: 1200px) {
   .users-header,
-  .user-row {
-    grid-template-columns: 60px 1.3fr 110px 110px 1fr;
-  }
-
-  .server-col {
-    display: none;
-  }
-
+  .user-row { grid-template-columns: 60px 1.3fr 110px 110px 1fr; }
+  .server-col,
   .users-header > div:last-child,
-  .user-row > div:last-child {
-    display: none;
-  }
+  .user-row > div:last-child { display: none; }
 }
 
 @media (max-width: 860px) {
   .users-header,
-  .user-row {
-    grid-template-columns: 50px 1fr 100px;
-    gap: 10px;
-  }
-
+  .user-row { grid-template-columns: 50px 1fr 100px; gap: 10px; }
   .role-col,
-  .progress-col {
-    display: none;
-  }
-
+  .progress-col,
   .users-header > div:nth-child(3),
   .user-row > div:nth-child(3),
   .users-header > div:nth-child(5),
-  .user-row > div:nth-child(5) {
-    display: none;
-  }
+  .user-row > div:nth-child(5) { display: none; }
 }
 
 @media (max-width: 560px) {
-  .users-page {
-    padding: 16px 12px;
-  }
-
+  .users-page { padding: 16px 12px; }
   .users-header,
-  .user-row {
-    grid-template-columns: 1fr;
-    padding: 12px;
-  }
-
-  .rank-col {
-    display: none;
-  }
-
+  .user-row { grid-template-columns: 1fr; padding: 12px; }
+  .rank-col,
   .users-header > div:first-child,
-  .user-row > div:first-child {
-    display: none;
-  }
-
-  .points-badge {
-    width: 100%;
-  }
+  .user-row > div:first-child { display: none; }
+  .points-badge { width: 100%; }
 }
-
-

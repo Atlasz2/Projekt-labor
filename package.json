@@ -1,50 +1,17 @@
 {
   "name": "tour-trail-app",
   "version": "1.0.0",
-  "description": "Interaktív túraútvonal applikáció",
+  "description": "Nagyvazsony turisztikai app monorepo (admin + mobile)",
   "private": true,
-  "dependencies": {
-    "ajv": "^8.17.1",
-    "axios": "^1.3.0",
-    "firebase": "^9.23.0",
-    "jsqr": "^1.4.0",
-    "leaflet": "^1.9.4",
-    "leaflet-routing-machine": "^3.2.12",
-    "qrcode.react": "^4.2.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-firebase-hooks": "^5.1.1",
-    "react-leaflet": "^4.2.1",
-    "react-router-dom": "^6.8.0",
-    "zustand": "^4.3.5"
-  },
-  "devDependencies": {
-    "@testing-library/jest-dom": "^5.16.5",
-    "@testing-library/react": "^14.0.0",
-    "@testing-library/user-event": "^13.5.0",
-    "react-scripts": "5.0.1"
-  },
   "scripts": {
-    "start": "npm --prefix admin run dev",
-    "build": "npm --prefix admin run build",
-    "test": "echo \"No root test suite configured. Run admin or mobile_app tests explicitly.\"",
-    "eject": "echo \"Root CRA app is not active in this workspace.\""
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "start": "npm run admin:dev",
+    "build": "npm run admin:build",
+    "test": "echo \"No root test suite configured. Use admin/mobile commands explicitly.\"",
+    "admin:dev": "npm --prefix admin run dev",
+    "admin:build": "npm --prefix admin run build",
+    "admin:preview": "npm --prefix admin run preview",
+    "mobile:analyze": "flutter analyze mobile_app",
+    "mobile:test": "flutter test mobile_app",
+    "mobile:run": "flutter run --project-dir mobile_app"
   }
 }

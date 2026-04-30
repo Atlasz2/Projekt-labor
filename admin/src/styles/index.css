@@ -1,34 +1,62 @@
-* {
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
 :root {
-  --admin-bg: #f4efe6;
-  --admin-bg-soft: #ebe2d4;
-  --admin-surface: #fffaf2;
-  --admin-surface-muted: #f7f2e9;
-  --admin-border: #dbcdb7;
-  --admin-border-strong: #c9b59d;
-  --admin-text: #34261a;
-  --admin-text-muted: #746454;
-  --admin-accent: #8b5e34;
-  --admin-accent-deep: #6f4725;
-  --admin-accent-soft: #f0dfc6;
-  --admin-forest: #4b634d;
-  --admin-forest-deep: #35493a;
-  --admin-forest-soft: #e4ecde;
-  --admin-danger: #b86a4b;
-  --admin-danger-deep: #9e5337;
-  --admin-danger-soft: #f3dfd4;
-  --admin-shadow: 0 18px 42px rgba(52, 38, 26, 0.10);
+  /* Backgrounds */
+  --admin-bg:           #f1f5f9;
+  --admin-bg-soft:      #e2e8f0;
+  --admin-surface:      #ffffff;
+  --admin-surface-muted:#f8fafc;
+
+  /* Borders */
+  --admin-border:       #e2e8f0;
+  --admin-border-strong:#cbd5e1;
+
+  /* Text */
+  --admin-text:         #0f172a;
+  --admin-text-muted:   #64748b;
+
+  /* Primary accent — blue */
+  --admin-accent:       #2563eb;
+  --admin-accent-deep:  #1d4ed8;
+  --admin-accent-soft:  #eff6ff;
+  --admin-accent-border:#bfdbfe;
+
+  /* Success green */
+  --admin-green:        #059669;
+  --admin-green-soft:   #ecfdf5;
+
+  /* Danger red */
+  --admin-danger:       #dc2626;
+  --admin-danger-deep:  #b91c1c;
+  --admin-danger-soft:  #fef2f2;
+
+  /* Warning amber */
+  --admin-warning:      #d97706;
+  --admin-warning-soft: #fffbeb;
+
+  /* Shadows */
+  --admin-shadow-sm:    0 1px 3px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04);
+  --admin-shadow:       0 4px 16px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.04);
+  --admin-shadow-lg:    0 10px 32px rgba(15,23,42,0.10), 0 4px 12px rgba(15,23,42,0.06);
+
+  /* Radius */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
 }
 
 body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(180deg, var(--admin-bg) 0%, var(--admin-bg-soft) 100%);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--admin-bg);
   color: var(--admin-text);
+  -webkit-font-smoothing: antialiased;
 }
 
 .loading {
@@ -36,34 +64,307 @@ body {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  font-size: 1.2rem;
-  color: var(--admin-forest);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--admin-text-muted);
+  gap: 12px;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--admin-accent) 0%, var(--admin-forest) 100%);
-  color: white;
-  padding: 12px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--admin-accent);
+  color: #fff;
+  padding: 10px 20px;
   border: none;
-  border-radius: 10px;
-  font-size: 1rem;
+  border-radius: var(--r-md);
+  font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
   margin-bottom: 20px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
-  box-shadow: 0 10px 24px rgba(111, 71, 37, 0.18);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: var(--admin-shadow-sm);
+  letter-spacing: 0.01em;
 }
 
 .btn-primary:hover {
+  background: var(--admin-accent-deep);
   transform: translateY(-1px);
-  filter: brightness(1.03);
-  box-shadow: 0 14px 28px rgba(111, 71, 37, 0.22);
+  box-shadow: var(--admin-shadow);
 }
 
 .page-container {
-  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+/* ================================================================
+   DARK MODE — activated by html.dark class
+   ================================================================ */
+html.dark {
+  --admin-bg:            #0c1526;
+  --admin-bg-soft:       #1e293b;
+  --admin-surface:       #182234;
+  --admin-surface-muted: #1e293b;
+  --admin-border:        #2d3f55;
+  --admin-border-strong: #3d5068;
+  --admin-text:          #e2e8f0;
+  --admin-text-muted:    #94a3b8;
+  --admin-accent-soft:   rgba(37,99,235,0.18);
+  --admin-accent-border: rgba(96,165,250,0.4);
+  --admin-shadow-sm:     0 1px 3px rgba(0,0,0,0.3);
+  --admin-shadow:        0 4px 16px rgba(0,0,0,0.35);
+  --admin-shadow-lg:     0 10px 32px rgba(0,0,0,0.45);
 }
 
-.page-container h1 {
-  margin-bottom: 24px;
+html.dark body {
+  background: var(--admin-bg);
   color: var(--admin-text);
 }
+
+html.dark .main-content { background: var(--admin-bg); }
+
+html.dark .card,
+html.dark .form-container,
+html.dark .timeline-content,
+html.dark .no-data {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+
+html.dark .form-group input,
+html.dark .form-group textarea,
+html.dark .form-group select,
+html.dark .form-container input,
+html.dark .form-container textarea,
+html.dark .form-container select {
+  background: var(--admin-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+
+html.dark .form-group input::placeholder,
+html.dark .form-group textarea::placeholder { color: #475569; }
+
+html.dark .page-header h1,
+html.dark .form-container h2,
+html.dark .timeline-content h3,
+html.dark .card h3 { color: var(--admin-text); }
+
+html.dark .page-header p,
+html.dark .timeline-content p,
+html.dark .card p { color: var(--admin-text-muted); }
+
+html.dark .meta-chip {
+  background: var(--admin-bg-soft);
+  border-color: var(--admin-border);
+  color: var(--admin-text-muted);
+}
+
+html.dark .content-page { background: var(--admin-bg); }
+
+/* Dashboard dark */
+html.dark .dashboard-shell { --card: var(--admin-surface); --ink: var(--admin-text); --muted: var(--admin-text-muted); --stroke: var(--admin-border); --shadow: 0 1px 4px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.25); }
+html.dark .cta.ghost { background: var(--admin-surface); color: var(--admin-text); border-color: var(--admin-border); }
+html.dark .kpi-item { background: var(--admin-bg-soft); border-color: var(--admin-border); }
+html.dark .tone-mint { background: rgba(5,150,105,0.12); border-color: rgba(5,150,105,0.25); }
+html.dark .tone-sky  { background: rgba(37,99,235,0.12); border-color: rgba(37,99,235,0.25); }
+html.dark .tone-sand { background: rgba(217,119,6,0.12); border-color: rgba(217,119,6,0.25); }
+html.dark .tone-sun  { background: rgba(234,88,12,0.12); border-color: rgba(234,88,12,0.25); }
+html.dark .tone-rose { background: rgba(225,29,72,0.12); border-color: rgba(225,29,72,0.25); }
+html.dark .quick-tile { background: var(--admin-surface); border-color: var(--admin-border); color: var(--admin-text); }
+html.dark .quick-tile:hover { background: rgba(37,99,235,0.12); border-color: rgba(37,99,235,0.3); }
+html.dark .activity-row,
+html.dark .achievement-row { background: var(--admin-surface); border-color: var(--admin-border); }
+html.dark .status-card { background: var(--admin-surface); border-color: var(--admin-border); }
+html.dark .pulse-line { background: linear-gradient(90deg, var(--admin-bg-soft), var(--admin-border), var(--admin-bg-soft)); }
+/* Login dark */
+html.dark .login-card-surface { background: #182234; border-color: #2d3f55; }
+html.dark .login-header h2, html.dark .login-header .panel-subtitle { color: var(--admin-text); }
+html.dark .form-group label { color: #94a3b8; }
+html.dark .login-form .form-group input { background: #0c1526; border-color: #2d3f55; color: #e2e8f0; }
+html.dark .meta-chip { background: #182234; border-color: #2d3f55; color: #94a3b8; }
+/* Users dark */
+html.dark .users-header { background: #0a1628 !important; }
+html.dark .users-stats .stat-card { background: var(--admin-surface); border-color: var(--admin-border); }
+/* Timeline dark */
+html.dark .timeline-year { background: rgba(37,99,235,0.18); border-color: rgba(37,99,235,0.3); }
+html.dark .btn-edit { background: rgba(37,99,235,0.15); color: #93c5fd; border-color: rgba(37,99,235,0.3); }
+html.dark .btn-delete { background: rgba(220,38,38,0.12); color: #fca5a5; border-color: rgba(220,38,38,0.25); }
+/* BugReports dark */
+html.dark .MuiCard-root { background: var(--admin-surface) !important; }
+html.dark .MuiPaper-root { background: var(--admin-surface) !important; }
+html.dark .MuiInputBase-root { background: var(--admin-bg) !important; }
+/* ================================================================
+   DARK MODE — Trips, Stations, Users, Map, SeedDatabase
+   ================================================================ */
+
+/* ── Shared shells / backgrounds ──────────────────────────────── */
+html.dark .trips-shell,
+html.dark .stations-shell,
+html.dark .users-page,
+html.dark .map-page { background: var(--admin-bg); }
+
+/* ── Page / hero text ─────────────────────────────────────────── */
+html.dark .trips-hero,
+html.dark .stations-hero { color: var(--admin-text); border-color: var(--admin-border); }
+
+html.dark .hero-copy h1,
+html.dark .trips-hero h1,
+html.dark .stations-hero h1 { color: var(--admin-text); }
+
+html.dark .hero-subtitle { color: var(--admin-text-muted); }
+
+/* ── Stat boxes (Trips hero stats) ───────────────────────────── */
+html.dark .stat {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  border-left-color: #2563eb;
+}
+html.dark .stat-label { color: var(--admin-text-muted); }
+
+/* ── Users stat boxes ─────────────────────────────────────────── */
+html.dark .stat-box {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+html.dark .users-ranking {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+html.dark .user-row { border-color: var(--admin-border); }
+html.dark .user-row:hover { background: var(--admin-bg-soft); }
+html.dark .name-col strong { color: var(--admin-text); }
+html.dark .name-col small  { color: var(--admin-text-muted); }
+html.dark .progress-text   { color: var(--admin-text-muted); }
+html.dark .progress-bar    { background: var(--admin-border); }
+html.dark .server-col code {
+  background: var(--admin-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text-muted);
+}
+
+/* ── Trips form wrapper ───────────────────────────────────────── */
+html.dark .form-wrapper {
+  background: var(--admin-surface);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+}
+html.dark .beautiful-form .form-group label { color: var(--admin-text-muted); }
+html.dark .form-group input,
+html.dark .form-group textarea {
+  background: var(--admin-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+html.dark .form-group input:focus,
+html.dark .form-group textarea:focus { background: var(--admin-bg-soft); }
+html.dark .form-note {
+  background: var(--admin-bg-soft);
+  border-left-color: #2563eb;
+  color: var(--admin-text-muted);
+}
+html.dark .btn-cancel { background: var(--admin-bg-soft); color: var(--admin-text); }
+
+/* ── Trip cards ───────────────────────────────────────────────── */
+html.dark .trip-card {
+  background: var(--admin-surface);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+html.dark .trip-header {
+  background: var(--admin-bg-soft);
+  border-color: var(--admin-border);
+}
+html.dark .trip-header:hover { background: var(--admin-border); }
+html.dark .trip-title-content h3 { color: var(--admin-text); }
+html.dark .trip-desc-preview { color: var(--admin-text-muted); }
+html.dark .empty-state {
+  background: var(--admin-surface);
+  color: var(--admin-text);
+}
+html.dark .empty-state h3 { color: var(--admin-text); }
+html.dark .empty-state p  { color: var(--admin-text-muted); }
+
+/* ── Stations cards & modal ───────────────────────────────────── */
+html.dark .station-card {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+html.dark .station-card:hover { border-color: #3d5068; }
+html.dark .station-title h3 { color: var(--admin-text); }
+html.dark .station-desc     { color: var(--admin-text-muted); }
+html.dark .station-fun-fact { background: rgba(37,99,235,0.12); border-left-color: #2563eb; color: #93c5fd; }
+html.dark .station-qr       { background: var(--admin-bg); }
+html.dark .qr-label         { color: var(--admin-text-muted); }
+html.dark .trip-badge       { background: rgba(37,99,235,0.15); color: #93c5fd; }
+
+html.dark .station-modal {
+  background: var(--admin-surface);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+html.dark .modal-header {
+  border-color: var(--admin-border);
+}
+html.dark .modal-header h2 { color: var(--admin-text); }
+html.dark .modal-close     { color: var(--admin-text-muted); }
+html.dark .modal-close:hover { color: var(--admin-text); }
+html.dark .section-tabs    { background: var(--admin-bg); border-color: var(--admin-border); }
+html.dark .section-tab     { color: var(--admin-text-muted); }
+html.dark .section-tab:hover  { background: rgba(37,99,235,0.12); color: #93c5fd; }
+html.dark .section-tab.active { background: var(--admin-surface); color: #60a5fa; border-bottom-color: #2563eb; }
+html.dark .modal-body      { background: var(--admin-surface); }
+html.dark .modal-footer    { background: var(--admin-bg); border-top-color: var(--admin-border); }
+html.dark .field-group label  { color: var(--admin-text-muted); }
+html.dark .field-group input,
+html.dark .field-group textarea,
+html.dark .field-group select {
+  background: var(--admin-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+html.dark .field-group input:focus,
+html.dark .field-group textarea:focus,
+html.dark .field-group select:focus { background: var(--admin-bg-soft); }
+html.dark .field-hint      { color: var(--admin-text-muted); }
+html.dark .btn-nav         { background: var(--admin-bg-soft); color: var(--admin-text); }
+html.dark .btn-cancel      { background: var(--admin-bg-soft); color: var(--admin-text); }
+html.dark .btn-edit        { background: rgba(37,99,235,0.15); color: #93c5fd; }
+html.dark .btn-delete      { background: rgba(220,38,38,0.12); color: #fca5a5; }
+html.dark .unlock-info-box { background: rgba(37,99,235,0.1); border-color: rgba(37,99,235,0.3); }
+html.dark .unlock-info-box strong { color: #93c5fd; }
+html.dark .unlock-info-box p      { color: var(--admin-text-muted); }
+html.dark .image-preview          { border-color: var(--admin-border); }
+
+/* ── Map legend ───────────────────────────────────────────────── */
+html.dark .map-legend {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+html.dark .legend-header {
+  background: var(--admin-bg-soft);
+  border-color: var(--admin-border);
+}
+html.dark .legend-header h3 { color: var(--admin-text); }
+html.dark .legend-item  { background: var(--admin-bg); border-color: transparent; }
+html.dark .legend-item:hover { background: var(--admin-bg-soft); border-color: #2563eb; }
+html.dark .legend-name  { color: var(--admin-text); }
+html.dark .detail-badge { background: var(--admin-bg-soft); border-color: var(--admin-border); color: var(--admin-text-muted); }
+html.dark .map-error,
+html.dark .map-empty    { background: var(--admin-surface); }
+html.dark .map-error p  { color: var(--admin-text-muted); }
+html.dark .map-empty p  { color: var(--admin-text-muted); }
+html.dark .map-loading  { background: var(--admin-bg); }
+html.dark .map-loading p { color: var(--admin-text); }
+html.dark .spinner       { border-color: var(--admin-border); border-top-color: #2563eb; }
+
+/* ── SeedDatabase (uses Content.css classes) ──────────────────── */
+html.dark .seed-actions .btn-secondary { background: var(--admin-bg-soft); color: var(--admin-text); border-color: var(--admin-border); }
+html.dark .stat-card {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+html.dark .stats-grid .stat-card strong { color: var(--admin-text-muted); }
+html.dark .message.success { background: rgba(5,150,105,0.15); color: #6ee7b7; border-color: rgba(5,150,105,0.3); }
+html.dark .message.error   { background: rgba(220,38,38,0.12); color: #fca5a5; border-color: rgba(220,38,38,0.25); }

@@ -5,6 +5,7 @@ import {
   getDocs, serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
 import "../styles/Achievements.css";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 const CONDITION_TYPES = [
   { value: "station_count",    label: "Allomast latogasson meg (>= N db)" },
@@ -256,24 +257,14 @@ export default function Achievements() {
           </div>
         </div>
       )}
-      {confirmDeleteId && (
-        <div className="ach-overlay" onClick={() => setConfirmDeleteId(null)}>
-          <div className="ach-modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
-            <div className="ach-modal-header">
-              <h2>Torles megerositese</h2>
-              <button className="ach-modal-x" onClick={() => setConfirmDeleteId(null)}>&#x2715;</button>
-            </div>
-            <p style={{ padding: '16px 0', color: '#374151' }}>Biztosan torolni szeretned ezt a jutalmat? Ez a muvelet nem vonhato vissza.</p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button className="ach-cancel-btn" onClick={() => setConfirmDeleteId(null)}>Megse</button>
-              <button className="ach-row-btn del" onClick={doDelete}>Torles</button>
-            </div>
-          </div>
-        </div>
-      )}    </div>
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Torles megerositese"
+        message="Biztosan torolni szeretned ezt a jutalmat? Ez a muvelet nem vonhato vissza."
+        confirmText="Torles"
+        onConfirm={doDelete}
+        onClose={() => setConfirmDeleteId(null)}
+      />
+    </div>
   );
 }
-
-
-
-

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { db, storage } from '../firebaseConfig';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
-import { uploadImageWithFallback } from '../utils/imageUpload';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { uploadImageWithFallback, fetchDataUrl } from '../utils/imageUpload';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
 import { jsPDF } from 'jspdf';
 import Snackbar from '@mui/material/Snackbar';
@@ -9,42 +10,11 @@ import Alert from '@mui/material/Alert';
 import '../styles/Stations.css';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { safeString } from '../utils/safeString';
+import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
+import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: '220px', width: '100%' };
-
-const getPhotoUrls = (item) => {
-  const photos = Array.isArray(item?.photos) ? item.photos : [];
-  const fromPhotos = photos
-    .map((entry) => {
-      if (typeof entry === "string") return entry;
-      if (entry && typeof entry === "object" && entry.url) return String(entry.url);
-      return "";
-    })
-    .filter(Boolean);
-
-  const photoUrls = Array.isArray(item?.photoUrls) ? item.photoUrls.map((v) => String(v || "")).filter(Boolean) : [];
-  const imageUrl = safeString(item?.imageUrl);
-  return [...fromPhotos, ...photoUrls, ...(imageUrl ? [imageUrl] : [])];
-};
-
-const getPrimaryImage = (item) => getPhotoUrls(item)[0] || "";
-
-const getQrValue = (station) => station.qrCode || station.id;
-const getQrImageUrl = (value, size = 140) => {
-  const data = encodeURIComponent(value || '');
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${data}`;
-};
-
-const fetchDataUrl = async (url) => {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.readAsDataURL(blob);
-  });
-};
 
 function MapPicker({ value, onChange }) {
   const markerPosition = value?.lat != null && value?.lon != null ? { lat: value.lat, lng: value.lon } : null;
@@ -82,9 +52,21 @@ const EMPTY_FORM = {
 };
 
 export default function Stations() {
-  const [stations, setStations] = useState([]);
-  const [trips, setTrips] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: stations = [], isLoading } = useQuery({
+    queryKey: ['stations'],
+    queryFn: async () => {
+      const snapshot = await getDocs(collection(db, 'stations'));
+      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    },
+  });
+  const { data: trips = [] } = useQuery({
+    queryKey: ['trips'],
+    queryFn: async () => {
+      const snapshot = await getDocs(collection(db, 'trips'));
+      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    },
+  });
   const [editingId, setEditingId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -96,32 +78,6 @@ export default function Stations() {
 
   const showMsg = (msg, severity = 'error') => setSnack({ open: true, msg, severity });
   const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY });
-
-  useEffect(() => {
-    fetchStations();
-    fetchTrips();
-  }, []);
-
-  const fetchStations = async () => {
-    try {
-      setLoading(true);
-      const snapshot = await getDocs(collection(db, 'stations'));
-      setStations(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    } catch {
-      showMsg('Hiba az állomások betöltésekor');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTrips = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, 'trips'));
-      setTrips(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-    } catch {
-      // silent
-    }
-  };
 
   const getTripName = (tripId) => {
     if (!tripId) return null;
@@ -136,7 +92,7 @@ export default function Stations() {
       longitude: station.longitude ?? null,
       description: station.description || '',
       points: station.points || 10,
-      photos: getPhotoUrls(station).slice(0, 6),
+      photos: normalizePhotosFromDoc(station),
       qrCode: station.qrCode || '',
       tripId: station.tripId || '',
       funFact: station.funFact || '',
@@ -153,13 +109,6 @@ export default function Stations() {
     setFormData(EMPTY_FORM);
     setActiveSection(0);
     setShowModal(true);
-  };
-
-  const uploadImageToStorage = async (file, folder) => {
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storageRef = ref(storage, `${folder}/${Date.now()}_${safeName}`);
-    await uploadBytes(storageRef, file);
-    return getDownloadURL(storageRef);
   };
 
   const handleImageUpload = async (file) => {
@@ -179,20 +128,6 @@ export default function Stations() {
 
   const handleRemovePhoto = (index) => {
     setFormData((current) => ({ ...current, photos: current.photos.filter((_, i) => i !== index) }));
-  };
-
-  const handleUnlockImageUpload = async (file) => {
-    if (!file) return;
-    try {
-      setUploading(true);
-      const result = await uploadImageWithFallback({ file, storage, folder: 'stations/unlocked' });
-      setFormData((current) => ({ ...current, unlockContentImageUrl: result.url }));
-      showMsg(result.mode === 'inline' ? result.message : 'Feloldott tartalom képe feltöltve! ✅', result.mode === 'inline' ? 'warning' : 'success');
-    } catch (err) {
-      showMsg(`Hiba a feloldott tartalom képének feltöltésekor: ${err?.message || 'ismeretlen hiba'}`);
-    } finally {
-      setUploading(false);
-    }
   };
 
   const handleSave = async () => {
@@ -247,7 +182,7 @@ export default function Stations() {
 
       setShowModal(false);
       showMsg('Állomás mentve!', 'success');
-      fetchStations();
+      queryClient.invalidateQueries({ queryKey: ['stations'] });
     } catch {
       showMsg('Hiba mentés közben');
     }
@@ -258,7 +193,7 @@ export default function Stations() {
     try {
       await deleteDoc(doc(db, 'stations', deleteDialog.id));
       setDeleteDialog({ open: false, id: null });
-      fetchStations();
+      queryClient.invalidateQueries({ queryKey: ['stations'] });
     } catch {
       showMsg('Hiba törlés közben');
       setDeleteDialog({ open: false, id: null });
@@ -313,7 +248,7 @@ export default function Stations() {
       || getTripName(station.tripId)?.toLowerCase().includes(query);
   });
 
-  if (loading) {
+  if (isLoading) {
     return <div className="stations-shell"><p className="empty-state">Betöltés...</p></div>;
   }
 
@@ -349,7 +284,7 @@ export default function Stations() {
           return (
             <div key={station.id} className="station-card">
               <div className="station-media">
-                {getPrimaryImage(station) ? <img src={getPrimaryImage(station)} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
+                {(normalizePhotosFromDoc(station)[0] || '') ? <img src={(normalizePhotosFromDoc(station)[0] || '')} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
                 <span className="station-points">⭐ {station.points} pont</span>
               </div>
               <div className="station-body">
@@ -539,3 +474,4 @@ export default function Stations() {
     </div>
   );
 }
+

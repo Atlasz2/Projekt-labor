@@ -111,10 +111,10 @@ function SeedDatabase() {
     setStats(null);
 
     try {
-      const collections_to_clear = ["about", "contact", "events", "accommodations", "restaurants", "trips", "stations"];
+      const collectionsToClear = ["about", "contact", "events", "accommodations", "restaurants", "trips", "stations"];
       let itemsDeleted = 0;
 
-      for (const collectionName of collections_to_clear) {
+      for (const collectionName of collectionsToClear) {
         const snapshot = await getDocs(collection(db, collectionName));
         for (const docSnap of snapshot.docs) {
           await deleteDoc(doc(db, collectionName, docSnap.id));

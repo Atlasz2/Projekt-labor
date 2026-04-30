@@ -9,7 +9,7 @@ import {
 import { db } from "../firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import "../styles/Map.css";
-import { getValhallaRouteData } from "../utils/routeService";
+import { getValhallaRouteData, formatDistance, formatDuration } from "../utils/routeService";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: "100vh", width: "100%" };
@@ -36,23 +36,6 @@ const getStationCoords = (station) => {
       : station.location?.longitude;
   if (typeof lat !== "number" || typeof lon !== "number") return null;
   return [lat, lon];
-};
-
-const getRouteData = getValhallaRouteData;
-
-const formatDistance = (meters) => {
-  if (!meters || meters <= 0) return "N/A";
-  const km = meters / 1000;
-  return `${km.toFixed(1)} km`;
-};
-
-const formatDuration = (seconds) => {
-  if (!seconds || seconds <= 0) return "N/A";
-  const totalMinutes = Math.max(1, Math.round(seconds / 60));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours} ó ${minutes} p`;
-  return `${minutes} p`;
 };
 
 function Map() {
@@ -109,7 +92,7 @@ function Map() {
 
         if (tripStations.length > 1) {
           const coords = tripStations.map((s) => s._coords);
-          const routeResult = await getRouteData(coords);
+          const routeResult = await getValhallaRouteData(coords);
           routes[trip.id] = {
             ...routeResult,
             stations: tripStations,

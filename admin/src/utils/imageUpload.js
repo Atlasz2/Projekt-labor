@@ -94,3 +94,12 @@ export async function uploadImageWithFallback({ file, storage, folder }) {
   const url = await fileToOptimizedDataUrl(file);
   return { url, mode: "inline", message: "Kep beagyazva." };
 }
+export const fetchDataUrl = async (url) => {
+  const response = await fetch(url);
+  const blob = await response.blob();
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+};

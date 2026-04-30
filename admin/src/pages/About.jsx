@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from "firebase/firestore";
 import "../styles/About.css";
 import { safeString } from "../utils/safeString";
 import ConfirmDialog from "../components/ConfirmDialog";
+import { fileToOptimizedDataUrl } from "../utils/imageUpload";
 
 function About() {
   const [events, setEvents] = useState([]);
@@ -15,8 +16,11 @@ function About() {
     year: "",
     title: "",
     description: "",
+    imageUrl: "",
   });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
+  const [imagePreview, setImagePreview] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     fetchEvents();
@@ -31,6 +35,7 @@ function About() {
         year: safeString(item.data().year),
         title: safeString(item.data().title),
         description: safeString(item.data().description),
+        imageUrl: safeString(item.data().imageUrl ?? ""),
       }));
       data.sort((a, b) => (parseInt(a.year) || 0) - (parseInt(b.year) || 0));
       setEvents(data);
@@ -46,6 +51,21 @@ function About() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const url = await fileToOptimizedDataUrl(file);
+      setFormData((prev) => ({ ...prev, imageUrl: url }));
+      setImagePreview(url);
+    } catch (err) {
+      setError("Képfeltöltési hiba: " + err.message);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -53,6 +73,7 @@ function About() {
         year: safeString(formData.year),
         title: safeString(formData.title),
         description: safeString(formData.description),
+        imageUrl: safeString(formData.imageUrl),
       };
 
       if (editingId) {
@@ -61,9 +82,10 @@ function About() {
         await addDoc(collection(db, "about"), cleanData);
       }
 
-      setFormData({ year: "", title: "", description: "" });
+      setFormData({ year: "", title: "", description: "", imageUrl: "" });
       setShowForm(false);
       setEditingId(null);
+      setImagePreview("");
       fetchEvents();
     } catch {
       setError("Hiba a mentéskor");
@@ -76,7 +98,9 @@ function About() {
       year: event.year,
       title: event.title,
       description: event.description,
+      imageUrl: event.imageUrl ?? "",
     });
+    setImagePreview(event.imageUrl ?? "");
     setShowForm(true);
   };
 
@@ -91,12 +115,12 @@ function About() {
       setDeleteDialog({ open: false, id: null });
       fetchEvents();
     } catch {
-      setError("Hiba a törlékor");
+      setError("Hiba a törlésnél");
       setDeleteDialog({ open: false, id: null });
     }
   };
 
-  if (loading) return <p>Betöltés...</p>;
+  if (loading) return <div className="loading">Betöltés...</div>;
 
   return (
     <div className="content-page">
@@ -154,6 +178,24 @@ function About() {
               />
             </div>
 
+            <div className="form-group">
+              <label>Kép (opcionális)</label>
+              <div className="about-img-upload-wrap">
+                {imagePreview ? (
+                  <div className="about-img-preview">
+                    <img src={imagePreview} alt="Előnézet" />
+                    <button type="button" className="about-img-remove" onClick={() => { setImagePreview(""); setFormData(prev => ({ ...prev, imageUrl: "" })); }}>✕</button>
+                  </div>
+                ) : (
+                  <label className="about-img-dropzone" htmlFor="about-img-input">
+                    <span className="about-img-icon">🖼</span>
+                    <span>{uploadingImage ? "Feltöltés..." : "Kattints a képfeltöltéshez"}</span>
+                  </label>
+                )}
+                <input id="about-img-input" type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageChange} disabled={uploadingImage} />
+              </div>
+            </div>
+
             <div className="form-actions">
               <button type="submit" className="btn-primary">
                 {editingId ? "Frissítés" : "Hozzáadás"}
@@ -164,7 +206,8 @@ function About() {
                 onClick={() => {
                   setShowForm(false);
                   setEditingId(null);
-                  setFormData({ year: "", title: "", description: "" });
+                  setFormData({ year: "", title: "", description: "", imageUrl: "" });
+                  setImagePreview("");
                 }}
               >
                 Mégse
@@ -186,6 +229,11 @@ function About() {
               </div>
               <div className="timeline-content">
                 <div className="timeline-year">{event.year}</div>
+                {event.imageUrl && (
+                  <div className="timeline-img">
+                    <img src={event.imageUrl} alt={event.title} />
+                  </div>
+                )}
                 <h3>{event.title}</h3>
                 {event.description && <p>{event.description}</p>}
                 <div className="timeline-actions">
@@ -215,4 +263,3 @@ function About() {
 }
 
 export default About;
-

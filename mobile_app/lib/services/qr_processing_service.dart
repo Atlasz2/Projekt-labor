@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
 
 class QrProcessResult {
   const QrProcessResult({
@@ -169,6 +169,7 @@ class QrProcessingService {
       );
       final newlyUnlocked = <Map<String, dynamic>>[];
 
+      final batch = _firestore.batch();
       for (final doc in achSnap.docs) {
         final id = doc.id;
         if (alreadyUnlocked.contains(id)) continue;
@@ -191,33 +192,38 @@ class QrProcessingService {
         }
 
         if (met) {
-          await _firestore
-              .collection('user_progress')
-              .doc(uid)
-              .collection('unlocked_achievements')
-              .doc(id)
-              .set({'unlockedAt': FieldValue.serverTimestamp()});
-
-          await _firestore.collection('achievements').doc(id).update({
-            'unlockedCount': FieldValue.increment(1),
-          });
-
+          batch.set(
+            _firestore
+                .collection('user_progress')
+                .doc(uid)
+                .collection('unlocked_achievements')
+                .doc(id),
+            {'unlockedAt': FieldValue.serverTimestamp()},
+          );
+          batch.update(
+            _firestore.collection('achievements').doc(id),
+            {'unlockedCount': FieldValue.increment(1)},
+          );
           newlyUnlocked.add({'id': id, ...achData});
         }
       }
 
       if (newlyUnlocked.isNotEmpty) {
         final first = newlyUnlocked.first;
-        await _firestore.collection('user_progress').doc(uid).set({
-          'pendingAchievementBanner': {
-            'title': first['name']?.toString() ?? 'Jutalom feloldva! 🏆',
-            'subtitle': newlyUnlocked.length == 1
-                ? (first['description']?.toString() ?? '')
-                : '${newlyUnlocked.length} uj jutalom feloldva!',
+        batch.set(
+          _firestore.collection('user_progress').doc(uid),
+          {
+            'pendingAchievementBanner': {
+              'title': first['name']?.toString() ?? 'Jutalom feloldva!',
+              'subtitle': newlyUnlocked.length == 1
+                  ? (first['description']?.toString() ?? '')
+                  : "${newlyUnlocked.length} uj jutalom feloldva!",
+            },
           },
-        }, SetOptions(merge: true));
+          SetOptions(merge: true),
+        );
       }
-
+      await batch.commit();
       return newlyUnlocked;
     } catch (_) {
       return [];

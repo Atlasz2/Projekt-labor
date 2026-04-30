@@ -25,10 +25,10 @@ function Contact() {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "contact"));
       if (snapshot.size > 0) {
-        const doc = snapshot.docs[0];
-        const data = doc.data();
+        const contactDoc = snapshot.docs[0];
+        const data = contactDoc.data();
         const office = data.mainOffice || {};
-        setDocId(doc.id);
+        setDocId(contactDoc.id);
         setContact({
           name: safeString(office.name),
           address: safeString(office.address),

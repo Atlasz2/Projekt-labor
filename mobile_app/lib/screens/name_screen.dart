@@ -41,19 +41,20 @@ class _NameScreenState extends State<NameScreen> {
       final firestore = FirebaseFirestore.instance;
       final normalizedName = _normalizeDisplayName(displayName);
       final usernameRef = firestore.collection('usernames').doc(normalizedName);
-      final existingName = await usernameRef.get();
-      if (existingName.exists) {
-        throw Exception('Ez a név már foglalt. Válassz másikat.');
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final user = currentUser ?? (await FirebaseAuth.instance.signInAnonymously()).user;
+      if (user == null) {
+        throw Exception('Nem sikerült bejelentkezni.');
       }
-
-      final userCredential = await FirebaseAuth.instance.signInAnonymously();
-      final user = userCredential.user!;
       final email = _emailController.text.trim();
 
       await firestore.runTransaction((transaction) async {
         final reservedName = await transaction.get(usernameRef);
         if (reservedName.exists) {
-          throw Exception('Ez a név már foglalt. Válassz másikat.');
+          final reservedUid = reservedName.data()?['uid']?.toString();
+          if (reservedUid != user.uid) {
+            throw Exception('Ez a név már foglalt. Válassz másikat.');
+          }
         }
 
         transaction.set(usernameRef, {
@@ -114,6 +115,16 @@ class _NameScreenState extends State<NameScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('Hiba: ${e.message}')));
       }
+    } on FirebaseException catch (e) {
+      if (!mounted) return;
+      final code = e.code.toLowerCase();
+      var message = 'Váratlan hiba történt.';
+      if (code.contains('permission-denied') || code.contains('insufficient')) {
+        message = 'Nincs jogosultság a profil létrehozásához. Ellenőrizd a hálózatot és próbáld újra.';
+      } else if (code.contains('unavailable') || code.contains('network')) {
+        message = 'Nincs kapcsolat a Firebase szolgáltatással. Ellenőrizd az internetet.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -206,4 +217,9 @@ class _NameScreenState extends State<NameScreen> {
     );
   }
 }
+
+
+
+
+
 

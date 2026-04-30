@@ -1,31 +1,54 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function isSignedIn() {
       return request.auth != null;
     }
 
+    // Primary admin check: UID-based only (cannot be spoofed by creating a doc)
     function adminByUid() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Email-doc fallback: also requires a uid field in the doc matching the caller
     function adminByEmailDoc() {
       return isSignedIn()
         && request.auth.token.email != null
         && exists(/databases/$(database)/documents/users/$(request.auth.token.email))
         && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.email == request.auth.token.email
-        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin';
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.uid == request.auth.uid;
     }
 
     function isAdmin() {
       return adminByUid() || adminByEmailDoc();
     }
 
+    // Validates a user's self-write to their own progress document:
+    // - totalPoints can only increase (no direct point reduction)
+    // - completedStations can only grow (no removing completed stations)
+    function isValidProgressUpdate() {
+      let incoming = request.resource.data;
+      let existing = resource.data;
+      let pointsOk = !incoming.keys().hasAny(['totalPoints'])
+        || incoming.totalPoints >= (existing.get('totalPoints', 0));
+      let stationsOk = !incoming.keys().hasAny(['completedStations'])
+        || incoming.completedStations.hasAll(existing.get('completedStations', []));
+      return pointsOk && stationsOk;
+    }
+
     match /user_progress/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Admin: unrestricted write
+      allow write: if isAdmin();
+
+      // User: can only write to their own doc, with monotonic constraints
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidProgressUpdate();
 
       match /completed_stations/{stationId} {
         allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
@@ -59,7 +82,11 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         request.auth.uid == userId
         || (request.auth.token.email != null && request.auth.token.email == userId)
-      ) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']);
+      ) && (
+        !request.resource.data.keys().hasAny(['role'])
+        || !resource.data.keys().hasAny(['role'])
+        || request.resource.data.role == resource.data.role
+      );
       allow create, update, delete: if isAdmin();
     }
 
@@ -71,10 +98,20 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
     }
 
+    // Leaderboard: anyone can read; users can only update their own entry
+    // with display name only — points must match their stored user_progress
     match /public_leaderboard/{userId} {
       allow read: if true;
-      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Admin: full write access
+      allow create, update: if isAdmin();
+
+      // User: can write their own entry, but points must match user_progress.totalPoints
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.points ==
+             get(/databases/$(database)/documents/user_progress/$(userId)).data.totalPoints;
     }
 
     match /trips/{tripId} {

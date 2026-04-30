@@ -304,36 +304,30 @@ firebase deploy --only hosting
 
 ```
 negyes/
+├── admin/                     ✅ Aktív React + Vite admin
+│   ├── src/
+│   │   ├── pages/
+│   │   ├── components/
+│   │   ├── utils/
+│   │   └── styles/
+│   └── package.json
+├── mobile_app/                ✅ Aktív Flutter alkalmazás
+│   ├── lib/
+│   │   ├── screens/
+│   │   ├── services/
+│   │   ├── widgets/
+│   │   └── main.dart
+│   ├── web/
+│   ├── android/
+│   ├── ios/
+│   └── pubspec.yaml
 ├── docs/                      ✅ Dokumentáció
-│   ├── SZAKIRODALOM.md        - Szakirodalmi áttekintés
-│   ├── DATA_MODEL.md          - Adatmodell dokumentáció
-│   ├── TESTING.md             - Tesztelési terv
-│   └── PWA_DEPLOYMENT.md      - Publikálási útmutató
-├── src/                       ✅ React alkalmazás
-│   ├── components/
-│   ├── pages/
-│   ├── services/
-│   ├── models/
-│   ├── store/
-│   └── firebase.js
-├── lib/                       ✅ Flutter alkalmazás
-│   ├── screens/
-│   ├── services/
-│   ├── models/
-│   └── main.dart
-├── public/                    ✅ Static assets
-│   ├── manifest.json          - PWA manifest
-│   ├── service-worker.js      - Service Worker
-│   └── icons/
-├── admin/                     ✅ Admin panel
-│   ├── admin.html
-│   ├── admin.js
-│   └── admin.css
-├── test/                      ✅ Flutter tesztek
-├── firebase.json              ✅ Firebase konfig
+├── scripts/                   ✅ Segédszkriptek
+├── legacy/                    ✅ Archivált, nem aktív gyökér elemek
+├── firebase.json              ✅ Firebase konfiguráció
 ├── firestore.rules            ✅ Security rules
-├── package.json               ✅ React dependencies
-├── pubspec.yaml               ✅ Flutter dependencies
+├── storage.rules              ✅ Storage rules
+├── package.json               ✅ Monorepo root scripts
 └── README.md                  ✅ Projekt dokumentáció
 ```
 
@@ -399,3 +393,5 @@ negyes/
 *Utolsó frissítés: 2026. február 3.*
 *Verzió: 1.0.0*
 *Készítette: Interaktív Túraútvonal Projekt Csapat*
+
+

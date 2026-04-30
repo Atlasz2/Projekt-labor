@@ -18,26 +18,13 @@ import {
 import { jsPDF } from "jspdf";
 import "../styles/Trips.css";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { getValhallaRouteData } from "../utils/routeService";
+import { getValhallaRouteData, formatDistance, formatDuration } from "../utils/routeService";
+import { getQrValue, getQrImageUrl } from "../utils/qrHelpers";
+import { fetchDataUrl } from "../utils/imageUpload";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
-
-const formatDuration = (seconds) => {
-  if (!seconds || seconds <= 0) return "N/A";
-  const totalMinutes = Math.max(1, Math.round(seconds / 60));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours} ó ${minutes} p`;
-  return `${minutes} p`;
-};
-
-const formatDistance = (meters) => {
-  if (!meters || meters <= 0) return "N/A";
-  const km = meters / 1000;
-  return `${km.toFixed(1)} km`;
-};
 
 const normalizeCoordinatePair = (pair, reverse = false) => {
   if (!Array.isArray(pair) || pair.length < 2) return null;
@@ -124,8 +111,6 @@ const getStoredTripMetrics = (trip, currentMetrics) => {
   };
 };
 
-const getRouteData = getValhallaRouteData;
-
 const getStationCoords = (station) => {
   const lat = station?.location?.latitude ?? station?.latitude;
   const lon = station?.location?.longitude ?? station?.longitude;
@@ -136,23 +121,6 @@ const getStationLatLng = (station) => {
   const lat = station?.location?.latitude ?? station?.latitude;
   const lon = station?.location?.longitude ?? station?.longitude;
   return typeof lat === "number" && typeof lon === "number" ? { lat, lng: lon } : null;
-};
-
-const getQrValue = (station) => station.qrCode || station.id;
-
-const getQrImageUrl = (value, size = 120) => {
-  const data = encodeURIComponent(value || "");
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${data}`;
-};
-
-const fetchDataUrl = async (url) => {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.readAsDataURL(blob);
-  });
 };
 
 function TripMap({ center, routePath, stations, isLoaded, loadError }) {
@@ -338,7 +306,7 @@ function Trips() {
       const coords = tripStations.map(getStationCoords).filter(Boolean);
 
       if (!routeCoordinates[tripId] && coords.length > 1) {
-        routeData = await getRouteData(coords);
+        const routeData = await getValhallaRouteData(coords);
         setRouteCoordinates((prev) => ({ ...prev, [tripId]: routeData.coords }));
 
         if (routeData.distanceMeters > 0) {
@@ -360,11 +328,8 @@ function Trips() {
   };
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleToggleStatus = () => {
@@ -464,7 +429,6 @@ function Trips() {
       const coords = tripStations.map(getStationCoords).filter(Boolean);
 
       let nextRoute = routeCoordinates[trip.id];
-      let routeData = null;
       let distanceValue =
         tripMetrics[trip.id]?.distanceValue ?? getDistanceValue(trip.distance);
       let durationLabel =
@@ -477,7 +441,7 @@ function Trips() {
       }
 
       if (!nextRoute || nextRoute.length === 0) {
-        const routeData = await getRouteData(coords);
+        const routeData = await getValhallaRouteData(coords);
 
         if (!routeData.coords.length) {
           showMsg("Nem sikerült útvonalat számolni a túrához");

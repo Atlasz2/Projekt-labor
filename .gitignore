@@ -9,3 +9,10 @@ dist/
 
 mobile_app/android/app/google-services.json
 mobile_app/ios/Runner/GoogleService-Info.plist
+
+# Flutter generated artifacts
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+mobile_app/build/
+mobile_app/windows/flutter/ephemeral/

@@ -1,21 +1,12 @@
-/* ========== Trips Page Container ========== */
+﻿/* ========== Trips Page Container ========== */
 .trips-shell {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f4efe6 0%, #ebe2d4 100%);
+  background: #f1f5f9;
   padding: 0;
 }
 
 /* ========== Hero Section ========== */
-.trips-hero {
-  background: linear-gradient(135deg, #34261a 0%, #35493a 100%);
-  color: white;
-  padding: 60px 40px;
-  border-bottom: 4px solid #4b634d;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 60px;
-}
+.trips-hero { background: none; color: #0f172a; padding: 0 40px 28px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; margin-bottom: 8px; }
 
 .hero-content {
   flex: 1;
@@ -31,7 +22,7 @@
 .hero-kicker {
   font-size: 0.85em;
   text-transform: uppercase;
-  color: #4b634d;
+  color: #2563eb;
   font-weight: 600;
   letter-spacing: 2px;
   margin: 0;
@@ -39,7 +30,7 @@
 
 .hero-subtitle {
   font-size: 1.05em;
-  color: #e6dccd;
+  color: #64748b;
   margin: 0;
   line-height: 1.6;
   max-width: 500px;
@@ -52,10 +43,10 @@
 }
 
 .stat {
-  background: rgba(75, 99, 77, 0.12);
+  background: white;
   padding: 20px 25px;
   border-radius: 12px;
-  border-left: 4px solid #4b634d;
+  border-left: 3px solid #2563eb;
   text-align: center;
   min-width: 120px;
 }
@@ -63,13 +54,13 @@
 .stat-number {
   font-size: 2.2em;
   font-weight: 700;
-  color: #4b634d;
+  color: #2563eb;
   display: block;
 }
 
 .stat-label {
   font-size: 0.9em;
-  color: #cdbfa9;
+  color: #64748b;
   margin-top: 5px;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -84,7 +75,7 @@
 
 /* ========== Error Banner ========== */
 .error-banner {
-  background: linear-gradient(135deg, #b86a4b 0%, #9e5337 100%);
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
   color: white;
   padding: 15px 20px;
   border-radius: 8px;
@@ -100,7 +91,7 @@
   gap: 10px;
   width: 100%;
   padding: 20px;
-  background: linear-gradient(135deg, #4b634d 0%, #8b5e34 100%);
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
   color: white;
   border: none;
   border-radius: 12px;
@@ -108,13 +99,13 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(75, 99, 77, 0.22);
+  box-shadow: 0 4px 15px rgba(37,99,235,0.22);
   margin-bottom: 30px;
 }
 
 .btn-create-trip:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(75, 99, 77, 0.28);
+  box-shadow: 0 6px 20px rgba(37,99,235,0.28);
 }
 
 .btn-icon {
@@ -144,7 +135,7 @@
 }
 
 .form-header {
-  background: linear-gradient(135deg, #4f4030 0%, #34261a 100%);
+  background: linear-gradient(135deg, #374151 0%, #0f172a 100%);
   color: white;
   padding: 25px 30px;
   display: flex;
@@ -188,7 +179,7 @@
   display: block;
   font-weight: 600;
   margin-bottom: 8px;
-  color: #34261a;
+  color: #0f172a;
   font-size: 0.95em;
 }
 
@@ -196,7 +187,7 @@
 .form-group textarea {
   width: 100%;
   padding: 12px 15px;
-  border: 2px solid #e6dccd;
+  border: 2px solid #e2e8f0;
   border-radius: 8px;
   font-size: 1em;
   font-family: inherit;
@@ -207,8 +198,8 @@
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #4b634d;
-  box-shadow: 0 0 0 3px rgba(75, 99, 77, 0.10);
+  border-color: #1e40af;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
 }
 
 .form-group textarea {
@@ -225,7 +216,7 @@
 
 .status-toggle {
   background: white;
-  border: 2px solid #e6dccd;
+  border: 2px solid #e2e8f0;
   border-radius: 25px;
   padding: 6px 12px;
   display: flex;
@@ -238,14 +229,14 @@
 }
 
 .status-toggle.active {
-  background: #6f8b5f;
-  border-color: #55704a;
+  background: #059669;
+  border-color: #166534;
   color: white;
 }
 
 .status-toggle.inactive {
-  background: #b86a4b;
-  border-color: #9e5337;
+  background: #dc2626;
+  border-color: #991b1b;
   color: white;
 }
 
@@ -259,11 +250,11 @@
 
 .form-note {
   font-size: 0.9em;
-  color: #7d6b57;
+  color: #64748b;
   margin: 20px 0;
   padding: 12px 15px;
   background: #f8f9fa;
-  border-left: 3px solid #4b634d;
+  border-left: 3px solid #1e40af;
   border-radius: 4px;
 }
 
@@ -286,7 +277,7 @@
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, #6f8b5f 0%, #55704a 100%);
+  background: linear-gradient(135deg, #059669 0%, #166534 100%);
   color: white;
 }
 
@@ -296,12 +287,12 @@
 }
 
 .btn-cancel {
-  background: #e6dccd;
-  color: #34261a;
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .btn-cancel:hover {
-  background: #cdbfa9;
+  background: #64748b;
 }
 
 /* ========== Empty State ========== */
@@ -320,12 +311,12 @@
 
 .empty-state h3 {
   font-size: 1.5em;
-  color: #34261a;
+  color: #0f172a;
   margin: 15px 0;
 }
 
 .empty-state p {
-  color: #7d6b57;
+  color: #64748b;
   font-size: 1.05em;
 }
 
@@ -351,8 +342,8 @@
 
 .trip-header {
   padding: 20px 25px;
-  background: linear-gradient(135deg, #f7f2e9 0%, #f0f2f5 100%);
-  border-bottom: 2px solid #e6dccd;
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f2f5 100%);
+  border-bottom: 2px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -361,7 +352,7 @@
 }
 
 .trip-header:hover {
-  background: linear-gradient(135deg, #f0f2f5 0%, #e6dccd 100%);
+  background: linear-gradient(135deg, #f0f2f5 0%, #e2e8f0 100%);
 }
 
 .trip-title-section {
@@ -381,7 +372,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #4b634d;
+  color: #1e40af;
   transition: transform 0.3s ease;
 }
 
@@ -391,14 +382,14 @@
 
 .trip-title-content h3 {
   margin: 0;
-  color: #34261a;
+  color: #0f172a;
   font-size: 1.3em;
   font-weight: 600;
 }
 
 .trip-desc-preview {
   margin: 5px 0 0 0;
-  color: #7d6b57;
+  color: #64748b;
   font-size: 0.9em;
 }
 
@@ -414,7 +405,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.95em;
-  color: #4f4030;
+  color: #374151;
   font-weight: 500;
 }
 
@@ -444,7 +435,7 @@
 /* ========== Trip Details ========== */
 .trip-details {
   padding: 30px;
-  border-top: 2px solid #e6dccd;
+  border-top: 2px solid #e2e8f0;
   animation: expand 0.3s ease;
 }
 
@@ -468,7 +459,7 @@
 
 .details-stations h4 {
   margin: 20px 0 15px 0;
-  color: #34261a;
+  color: #0f172a;
   font-size: 1.2em;
 }
 
@@ -487,7 +478,7 @@
   padding: 16px 18px;
   background: #ffffff;
   border-radius: 12px;
-  border-left: 4px solid #4b634d;
+  border-left: 4px solid #1e40af;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
@@ -503,7 +494,7 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #4b634d;
+  background: #1e40af;
   color: white;
   border-radius: 50%;
   font-weight: 700;
@@ -517,14 +508,14 @@
 
 .station-info strong {
   display: block;
-  color: #34261a;
+  color: #0f172a;
   margin-bottom: 4px;
   font-size: 1em;
 }
 
 .station-info p {
   margin: 0;
-  color: #7d6b57;
+  color: #64748b;
   font-size: 0.95em;
   line-height: 1.4;
 }
@@ -540,12 +531,12 @@
   width: 80px;
   height: 80px;
   border-radius: 6px;
-  border: 2px solid #e6dccd;
+  border: 2px solid #e2e8f0;
 }
 
 .btn-qr-download {
   padding: 6px 14px;
-  background: #4b634d;
+  background: #1e40af;
   color: white;
   border: none;
   border-radius: 6px;
@@ -557,12 +548,12 @@
 }
 
 .btn-qr-download:hover {
-  background: #8b5e34;
+  background: #2563eb;
   transform: scale(1.05);
 }
 
 .empty-stations {
-  color: #7d6b57;
+  color: #64748b;
   text-align: center;
   padding: 30px;
   font-style: italic;
@@ -574,7 +565,7 @@
   gap: 12px;
   padding: 15px 25px;
   background: #f8f9fa;
-  border-top: 1px solid #e6dccd;
+  border-top: 1px solid #e2e8f0;
 }
 
 .btn-edit,
@@ -590,22 +581,22 @@
 }
 
 .btn-edit {
-  background: #4b634d;
+  background: #1e40af;
   color: white;
 }
 
 .btn-edit:hover {
-  background: #8b5e34;
+  background: #2563eb;
   transform: translateY(-2px);
 }
 
 .btn-delete {
-  background: #b86a4b;
+  background: #dc2626;
   color: white;
 }
 
 .btn-delete:hover {
-  background: #9e5337;
+  background: #991b1b;
   transform: translateY(-2px);
 }
 
@@ -614,16 +605,16 @@
   text-align: center;
   padding: 40px;
   background: white;
-  color: #7d6b57;
+  color: #64748b;
   border-radius: 8px;
 }
 
 .no-stations {
   padding: 40px;
-  background: #e6dccd;
+  background: #e2e8f0;
   border-radius: 8px;
   text-align: center;
-  color: #7d6b57;
+  color: #64748b;
 }
 
 /* ========== Map Container ========== */
@@ -636,11 +627,7 @@
 
 /* ========== Responsive Design ========== */
 @media (max-width: 768px) {
-  .trips-hero {
-    flex-direction: column;
-    padding: 40px 20px;
-    gap: 30px;
-  }
+  .trips-hero { background: none; color: #0f172a; padding: 0 40px 28px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; margin-bottom: 8px; }
 
   .hero-copy h1 {
     font-size: 1.8em;
@@ -718,7 +705,7 @@
 
 .btn-order {
   background: #f3f4f6;
-  border: 1px solid #dbcdb7;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   width: 26px;
   height: 26px;
@@ -727,16 +714,16 @@
   justify-content: center;
   font-size: 0.7rem;
   cursor: pointer;
-  color: #4f4030;
+  color: #374151;
   transition: background 0.12s, color 0.12s;
   padding: 0;
   line-height: 1;
 }
 
 .btn-order:hover:not(:disabled) {
-  background: #8b5e34;
+  background: #2563eb;
   color: #fff;
-  border-color: #8b5e34;
+  border-color: #2563eb;
 }
 
 .btn-order:disabled {
@@ -749,8 +736,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  background: linear-gradient(135deg, #f7f2e9 0%, #eef6ff 100%);
-  border-top: 1px solid #e6dccd;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef6ff 100%);
+  border-top: 1px solid #e2e8f0;
 }
 
 .route-save-panel .btn-submit {

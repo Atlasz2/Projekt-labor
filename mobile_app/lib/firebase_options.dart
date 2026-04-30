@@ -20,10 +20,7 @@ class DefaultFirebaseOptions {
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -46,7 +43,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyADEGWEQ8_LdK5a8Bt88qw8wFbnv5I7hN8',
+    apiKey: 'AIzaSyCvGmJ76g7egdut1BQ6B5vhJC_IPIvGSh0',
     appId: '1:1062295539229:android:a0d9133c55d5f9137840f4',
     messagingSenderId: '1062295539229',
     projectId: 'projekt-labor-a4b1c',
@@ -60,5 +57,14 @@ class DefaultFirebaseOptions {
     projectId: 'projekt-labor-a4b1c',
     storageBucket: 'projekt-labor-a4b1c.firebasestorage.app',
     iosBundleId: 'com.nagyvazsony.mobileApp',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyCxsLcEZymxThZP7SxN2QGTqlfHik2Ma3g',
+    appId: '1:1062295539229:web:7c868c529376d5cf7840f4',
+    messagingSenderId: '1062295539229',
+    projectId: 'projekt-labor-a4b1c',
+    authDomain: 'projekt-labor-a4b1c.firebaseapp.com',
+    storageBucket: 'projekt-labor-a4b1c.firebasestorage.app',
   );
 }

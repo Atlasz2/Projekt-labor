@@ -113,3 +113,17 @@ export async function getValhallaRouteData(coordinates) {
     source: "fallback",
   };
 }
+
+export const formatDistance = (meters) => {
+  if (!meters || meters <= 0) return "N/A";
+  return `${(meters / 1000).toFixed(1)} km`;
+};
+
+export const formatDuration = (seconds) => {
+  if (!seconds || seconds <= 0) return "N/A";
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours > 0) return `${hours} o ${minutes} p`;
+  return `${minutes} p`;
+};
