@@ -101,9 +101,8 @@ export async function getValhallaRouteData(coordinates) {
         durationSeconds: Number(summary.time || 0),
         source: "valhalla-pedestrian",
       };
-    }
-  } catch (error) {
-    console.error("Valhalla route error:", error);
+    }  } catch {
+    // Network/API errors fall back to direct station-to-station coordinates.
   }
 
   return {

@@ -57,7 +57,11 @@ class _EventsScreenState extends State<EventsScreen> {
     return DateTime.tryParse(s) ?? DateTime(9999);
   }
 
-  void _openImageViewer(BuildContext context, List<String> photos, int initialIndex) {
+  void _openImageViewer(
+    BuildContext context,
+    List<String> photos,
+    int initialIndex,
+  ) {
     if (photos.isEmpty) return;
     showDialog<void>(
       context: context,
@@ -75,7 +79,11 @@ class _EventsScreenState extends State<EventsScreen> {
                   child: OfflineImage.network(
                     photos[index],
                     fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 64,
+                    ),
                   ),
                 ),
               ),
@@ -94,7 +102,11 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
-  Widget _gallery(BuildContext context, List<String> photos, {double height = 180}) {
+  Widget _gallery(
+    BuildContext context,
+    List<String> photos, {
+    double height = 180,
+  }) {
     if (photos.isEmpty) {
       return Container(
         height: height,
@@ -126,7 +138,6 @@ class _EventsScreenState extends State<EventsScreen> {
                   child: const Icon(Icons.broken_image_outlined),
                 ),
               ),
-
             ],
           ),
         ),
@@ -134,7 +145,11 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
-  void _showDetails(BuildContext context, Map<String, dynamic> event, Color accent) {
+  void _showDetails(
+    BuildContext context,
+    Map<String, dynamic> event,
+    Color accent,
+  ) {
     final photos = _photoUrls(event);
     showModalBottomSheet<void>(
       context: context,
@@ -162,34 +177,63 @@ class _EventsScreenState extends State<EventsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _safeString(event['title'], fallback: 'Esemeny'),
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                          _safeString(event['title'], fallback: 'Esemény'),
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            Icon(Icons.calendar_today_outlined, size: 18, color: accent),
+                            Icon(
+                              Icons.calendar_today_outlined,
+                              size: 18,
+                              color: accent,
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(_safeString(event['date'], fallback: 'Ismeretlen datum'))),
+                            Expanded(
+                              child: Text(
+                                _safeString(
+                                  event['date'],
+                                  fallback: 'Ismeretlen dátum',
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                         if (_safeString(event['location']).isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Icon(Icons.location_on_outlined, size: 18, color: accent),
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 18,
+                                color: accent,
+                              ),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(_safeString(event['location']))),
+                              Expanded(
+                                child: Text(_safeString(event['location'])),
+                              ),
                             ],
                           ),
                         ],
                         const SizedBox(height: 16),
                         Text(
-                          _safeString(event['description'], fallback: 'Nincs tovabbi leiras.'),
-                          style: TextStyle(color: Colors.grey.shade700, height: 1.55),
+                          _safeString(
+                            event['description'],
+                            fallback: 'Nincs további leírás.',
+                          ),
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            height: 1.55,
+                          ),
                         ),
                         const SizedBox(height: 12),
-                        Text('${photos.length} foto kapcsolodik ehhez a rendezvenyhez.', style: TextStyle(color: Colors.grey.shade600)),
+                        Text(
+                          '${photos.length} foto kapcsolodik ehhez a rendezvenyhez.',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
                       ],
                     ),
                   ),
@@ -221,7 +265,7 @@ class _EventsScreenState extends State<EventsScreen> {
             return {
               'id': entry.value.id,
               'index': entry.key,
-              'title': _safeString(data['name'], fallback: 'Esemeny'),
+              'title': _safeString(data['name'], fallback: 'Esemény'),
               'description': _safeString(data['description']),
               'date': data['date'],
               'location': _safeString(data['location']),
@@ -231,7 +275,10 @@ class _EventsScreenState extends State<EventsScreen> {
             };
           }).toList();
 
-          events.sort((a, b) => _sortDateKey(a['date']).compareTo(_sortDateKey(b['date'])));
+          events.sort(
+            (a, b) =>
+                _sortDateKey(a['date']).compareTo(_sortDateKey(b['date'])),
+          );
 
           return CustomScrollView(
             slivers: [
@@ -239,7 +286,10 @@ class _EventsScreenState extends State<EventsScreen> {
                 expandedHeight: 140,
                 pinned: true,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: const Text('Rendezvenyek', style: TextStyle(color: Colors.white)),
+                  title: const Text(
+                    'Rendezvények',
+                    style: TextStyle(color: Colors.white),
+                  ),
                   background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -252,9 +302,19 @@ class _EventsScreenState extends State<EventsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.celebration, size: 44, color: Colors.white54),
+                          const Icon(
+                            Icons.celebration,
+                            size: 44,
+                            color: Colors.white54,
+                          ),
                           const SizedBox(height: 6),
-                          Text('${events.length} esemeny', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                          Text(
+                            '${events.length} esemeny',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -262,7 +322,24 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               ),
               if (events.isEmpty)
-                const SliverFillRemaining(child: Center(child: Text('Jelenleg nincsenek rendezvenyek.')))
+                const SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.event_busy_outlined,
+                          size: 46,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 10),
+                        Text('Jelenleg nincsenek rendezvények.'),
+                        SizedBox(height: 6),
+                        Text('Nézz vissza később az új programokért.'),
+                      ],
+                    ),
+                  ),
+                )
               else
                 SliverPadding(
                   padding: const EdgeInsets.all(16),
@@ -270,7 +347,8 @@ class _EventsScreenState extends State<EventsScreen> {
                     itemCount: events.length,
                     itemBuilder: (context, index) {
                       final event = events[index];
-                      final accent = _accentColors[index % _accentColors.length];
+                      final accent =
+                          _accentColors[index % _accentColors.length];
                       final photos = _photoUrls(event);
 
                       return Padding(
@@ -286,36 +364,78 @@ class _EventsScreenState extends State<EventsScreen> {
                                 Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(_safeString(event['title'], fallback: 'Esemeny'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                                      Text(
+                                        _safeString(
+                                          event['title'],
+                                          fallback: 'Esemény',
+                                        ),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 18,
+                                        ),
+                                      ),
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [
-                                          Icon(Icons.calendar_today_outlined, size: 16, color: accent),
+                                          Icon(
+                                            Icons.calendar_today_outlined,
+                                            size: 16,
+                                            color: accent,
+                                          ),
                                           const SizedBox(width: 8),
-                                          Text(_safeString(event['date'], fallback: 'Ismeretlen datum')),
+                                          Text(
+                                            _safeString(
+                                              event['date'],
+                                              fallback: 'Ismeretlen dátum',
+                                            ),
+                                          ),
                                         ],
                                       ),
-                                      if (_safeString(event['location']).isNotEmpty) ...[
+                                      if (_safeString(
+                                        event['location'],
+                                      ).isNotEmpty) ...[
                                         const SizedBox(height: 6),
                                         Row(
                                           children: [
-                                            Icon(Icons.location_on_outlined, size: 16, color: accent),
+                                            Icon(
+                                              Icons.location_on_outlined,
+                                              size: 16,
+                                              color: accent,
+                                            ),
                                             const SizedBox(width: 8),
-                                            Expanded(child: Text(_safeString(event['location']))),
+                                            Expanded(
+                                              child: Text(
+                                                _safeString(event['location']),
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ],
                                       const SizedBox(height: 10),
                                       Text(
-                                        _safeString(event['description'], fallback: 'Erintsd meg a reszletekhez.'),
+                                        _safeString(
+                                          event['description'],
+                                          fallback:
+                                              'Érintsd meg a részletekhez.',
+                                        ),
                                         maxLines: 3,
                                         overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(color: Colors.grey.shade700, height: 1.45),
+                                        style: TextStyle(
+                                          color: Colors.grey.shade700,
+                                          height: 1.45,
+                                        ),
                                       ),
                                       const SizedBox(height: 10),
-                                      Text('${photos.length} foto', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                                      Text(
+                                        '${photos.length} foto',
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 12,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -334,4 +454,3 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 }
-

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import "../styles/Users.css";
+import StateCard from "../components/StateCard";
 
 const formatDate = (value) => {
   if (!value) return "N/A";
@@ -18,12 +19,7 @@ function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  async function fetchUsers() {
     try {
       setLoading(true);
       setError(null);
@@ -135,19 +131,34 @@ function Users() {
       });
 
       setUsers(usersData);
-    } catch (err) {
-      console.error("Hiba a felhasználók betöltésénél:", err);
+    } catch {
       setError("Nem sikerült betölteni az adatokat");
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchUsers();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   if (loading) {
     return (
       <div className="users-page">
-        <h1>👥 Felhasználók és szerver adatok</h1>
-        <p>Betöltés...</p>
+        <div className="page-header">
+          <h1>👥 Felhasználók és szerver adatok</h1>
+          <p>Minden felhasználó (admin + app user) egy helyen, teljes áttekintéssel</p>
+        </div>
+        <StateCard
+          variant="loading"
+          icon="⏳"
+          title="Felhasználók betöltése..."
+          description="A rendszer összegyűjti a users és user_progress adatait."
+        />
       </div>
     );
   }
@@ -155,8 +166,19 @@ function Users() {
   if (error) {
     return (
       <div className="users-page">
-        <h1>👥 Felhasználók és szerver adatok</h1>
-        <p className="error">{error}</p>
+        <div className="page-header">
+          <h1>👥 Felhasználók és szerver adatok</h1>
+          <p>Minden felhasználó (admin + app user) egy helyen, teljes áttekintéssel</p>
+        </div>
+        <StateCard
+          icon="⚠️"
+          title="Nem sikerült betölteni a felhasználókat"
+          description={error}
+          actionLabel="Újrapróbálás"
+          onAction={() => {
+            void fetchUsers();
+          }}
+        />
       </div>
     );
   }
@@ -178,9 +200,11 @@ function Users() {
       </div>
 
       {users.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
-          <p>Még nincsenek felhasználói adatok.</p>
-        </div>
+        <StateCard
+          icon="👥"
+          title="Nincsenek még felhasználók"
+          description="Az alkalmazás még nem kapott felhasználói adatot. Amint érkezik új rekord, itt jelenik meg a ranglista."
+        />
       ) : (
         <div className="users-ranking">
           <div className="users-header">
@@ -256,4 +280,5 @@ function Users() {
 }
 
 export default Users;
+
 

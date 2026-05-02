@@ -60,7 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .collection('public_leaderboard')
         .doc(current['id'].toString())
         .set({
-          'displayName': current['name']?.toString() ?? 'Felhasznalo',
+          'displayName': current['name']?.toString() ?? 'Felhasználó',
           'points': _safeInt(current['points']),
           'completedStationsCount': _safeCount(current['completedStations']),
           'completedEventsCount': _safeCount(current['completedEvents']),
@@ -77,7 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final currentUid = _auth.currentUser?.uid;
       if (currentUid == null) {
-        throw Exception('Nincs bejelentkezett felhasznalo.');
+        throw Exception('Nincs bejelentkezett felhasználó.');
       }
 
       final progressDoc = await _firestore
@@ -98,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             userData['displayName']?.toString() ??
             userData['name']?.toString() ??
             progressData['name']?.toString() ??
-            'Felhasznalo',
+            'Felhasználó',
         'email':
             userData['email']?.toString() ?? _auth.currentUser?.email ?? '',
         'completedStations': _safeCount(progressData['completedStations']) > 0
@@ -110,7 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'points': _safeInt(progressData['totalPoints']) > 0
             ? _safeInt(progressData['totalPoints'])
             : _safeInt(userData['points']),
-        'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs tura',
+        'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs túra',
       };
 
       await _syncLeaderboardEntry(current);
@@ -124,13 +124,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final data = doc.data();
         return <String, dynamic>{
           'id': doc.id,
-          'name': data['displayName']?.toString() ?? 'Felhasznalo',
+          'name': data['displayName']?.toString() ?? 'Felhasználó',
           'completedStations': _safeInt(data['completedStationsCount']),
           'completedEvents': _safeInt(data['completedEventsCount']),
           'points': _safeInt(data['points']),
           'currentTrip': doc.id == currentUid
               ? current['currentTrip']
-              : 'Nincs tura',
+              : 'Nincs túra',
         };
       }).toList();
 
@@ -151,7 +151,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = 'Hiba az adatok betoltesekor: $e';
+        _error = 'Hiba az adatok betöltésekor: $e';
         _isLoading = false;
       });
     }
@@ -204,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Achievement betoltes sikertelen: $e');
+      debugPrint('Jutalmak betöltése sikertelen: $e');
     }
   }
 
@@ -221,8 +221,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (type == 'qr_count') return '$value QR-kod';
     if (type == 'points_threshold') return '$value pont';
     if (type == 'trip_complete') return '$value teljesitett tura';
-    if (type == 'top_n') return 'Top $value helyezes';
-    if (type == 'manual') return 'Manualis';
+    if (type == 'top_n') return 'Top $value helyezés';
+    if (type == 'manual') return 'Manuális';
     return '';
   }
 
@@ -233,22 +233,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final events = _safeCount(_currentUserData?['completedEvents']);
       return [
         _Achievement(
-          'Elso lepesek',
-          'Olvass be 1 QR-kodot',
+          'Első lépések',
+          'Olvass be 1 QR-kódot',
           stations >= 1 || events >= 1,
           '👣',
-          '1 QR-kod',
+          '1 QR-kód',
         ),
         _Achievement(
-          'Felfedezo',
-          'Latogass meg legalabb 3 allomast',
+          'Felfedező',
+          'Látogass meg legalább 3 állomást',
           stations >= 3,
           '🧭',
-          '3 allomas',
+          '3 állomás',
         ),
         _Achievement(
-          'Turahos',
-          'Gyujts ossze 140 pontot',
+          'Túrahős',
+          'Gyűjts össze 140 pontot',
           points >= 140,
           '🏃',
           '140 pont',
@@ -302,7 +302,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final unlockedCount = achievements.where((a) => a.unlocked).length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Fiokom')),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF2EBDD),
+        surfaceTintColor: const Color(0xFFF2EBDD),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text('Fiókom'),
+      ),
       body: Stack(
         children: [
           _isLoading
@@ -324,7 +330,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 12),
                         FilledButton(
                           onPressed: _refreshAll,
-                          child: const Text('Ujraprobalas'),
+                          child: const Text('Újrapróbálás'),
                         ),
                       ],
                     ),
@@ -347,7 +353,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(width: 12),
                           _buildStatCard(
-                            'Allomasok',
+                            'Állomások',
                             stationCount.toString(),
                             Icons.place,
                             Colors.blue,
@@ -358,7 +364,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Row(
                         children: [
                           _buildStatCard(
-                            'Esemenyek',
+                            'Események',
                             eventCount.toString(),
                             Icons.celebration,
                             Colors.deepOrange,
@@ -380,7 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Jutalom elorehaladas',
+                                'Jutalom előrehaladás',
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 8),
@@ -399,10 +405,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Card(
                         child: ListTile(
                           leading: Icon(Icons.map, color: Colors.blue.shade400),
-                          title: const Text('Jelenlegi tura'),
+                          title: const Text('Jelenlegi túra'),
                           subtitle: Text(
                             _currentUserData?['currentTrip']?.toString() ??
-                                'Nincs tura',
+                                'Nincs túra',
                           ),
                         ),
                       ),
@@ -434,9 +440,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Card(
                         child: ListTile(
                           leading: const Icon(Icons.track_changes_outlined),
-                          title: const Text('Reszletes achievement haladas'),
+                          title: const Text('Részletes achievement haladás'),
                           subtitle: const Text(
-                            'Feltetelek, allapotok, pontos elorehaladas',
+                            'Feltételek, állapotok, pontos előrehaladás',
                           ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: () => Navigator.of(context).push(
@@ -490,7 +496,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           ),
                                         ),
                                         Text(
-                                          '${_safeCount(user['completedStations'])} allomas · ${_safeCount(user['completedEvents'])} esemeny',
+                                          '${_safeCount(user['completedStations'])} állomás · ${_safeCount(user['completedEvents'])} esemény',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade600,
@@ -546,7 +552,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Uj Achievement feloldva!',
+                            'Új achievement feloldva!',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -602,7 +608,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            _currentUserData?['name']?.toString() ?? 'Felhasznalo',
+            _currentUserData?['name']?.toString() ?? 'Felhasználó',
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -732,7 +738,7 @@ class _AchievementChip extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                'Feltetel: ${achievement.condition}',
+                'Feltétel: ${achievement.condition}',
                 style: TextStyle(fontSize: 11, color: fg),
               ),
             ),

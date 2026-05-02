@@ -339,7 +339,7 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Szallas es etterem'),
+        title: const Text('Szállás es etterem'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [Tab(text: 'Szallasok'), Tab(text: 'Ettermek')],
@@ -355,4 +355,5 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
     );
   }
 }
+
 

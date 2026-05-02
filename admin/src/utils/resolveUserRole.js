@@ -22,9 +22,8 @@ export async function resolveUserRole(user) {
     const byEmailSnapshot = await getDocs(byEmailQuery);
     if (!byEmailSnapshot.empty) {
       return String(byEmailSnapshot.docs[0].data().role || "user").toLowerCase();
-    }
-  } catch (err) {
-    console.error("Szerepkör feloldás hiba:", err);
+    }  } catch {
+    // Fallback to default role when role lookup fails.
   }
 
   return "user";

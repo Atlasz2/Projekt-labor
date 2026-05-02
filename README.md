@@ -10,6 +10,15 @@ A rendszer ket fo komponensbol all:
 
 ---
 
+## 2026-05-02 Minosegi javitasok
+
+Admin oldali clean-code es stabilitasi refaktor keszult:
+- Hook refaktor: a kezdeti adatbetoltes aszinkron inditasa kesleltetett effect-triggerrel, hogy ne legyen set-state-in-effect lint hiba.
+- Hoisting/hivatkozasi tisztitas: a nagyobb oldalak adatbetolto rutinjai atalakitasra kerultek, hogy ne legyen use-before-declare jellegu kockazat.
+- Prop contractek: a belso ujrahasznosithato komponensek (pl. megerosito dialog, foto-racs, terkep valasztok) PropTypes validaciot kaptak.
+- Logging tisztitas: felesleges console hivasok eltavolitva vagy fallback kommenttel kivaltva.
+- Admin tesztalap: Vitest bevezetve, kezdo automata teszttel a safeString utilhoz.
+
 ## Technologiai stack
 
 ### Admin (webes felulet)

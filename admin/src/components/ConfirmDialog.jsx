@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from "prop-types";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -32,5 +33,15 @@ function ConfirmDialog({
     </Dialog>
   );
 }
+
+ConfirmDialog.propTypes = {
+  open: PropTypes.bool.isRequired,
+  title: PropTypes.string,
+  message: PropTypes.string,
+  confirmText: PropTypes.string,
+  cancelText: PropTypes.string,
+  onConfirm: PropTypes.func.isRequired,
+  onClose: PropTypes.func.isRequired,
+};
 
 export default ConfirmDialog;

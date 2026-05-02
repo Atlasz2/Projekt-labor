@@ -151,8 +151,8 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
     if (_unlockedIds.contains(id)) {
       return const _ProgressData(
         conditionLabel: 'Feloldva',
-        currentLabel: 'Kesz',
-        remainingLabel: 'Teljesitve',
+        currentLabel: 'Kész',
+        remainingLabel: 'Teljesítve',
         progress: 1,
         sortScore: 1,
       );
@@ -162,11 +162,11 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
       final current = _stations;
       final remaining = (target - current).clamp(0, target);
       return _ProgressData(
-        conditionLabel: '$target allomas',
+        conditionLabel: '$target állomás',
         currentLabel: '$current / $target',
         remainingLabel: remaining == 0
-            ? 'Teljesitve'
-            : 'Hianyzik $remaining allomas',
+            ? 'Teljesítve'
+            : 'Hiányzik $remaining állomás',
         progress: (current / target).clamp(0.0, 1.0),
         sortScore: (current / target).clamp(0.0, 1.0),
       );
@@ -175,11 +175,11 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
       final current = _events;
       final remaining = (target - current).clamp(0, target);
       return _ProgressData(
-        conditionLabel: '$target esemeny',
+        conditionLabel: '$target esemény',
         currentLabel: '$current / $target',
         remainingLabel: remaining == 0
-            ? 'Teljesitve'
-            : 'Hianyzik $remaining esemeny',
+            ? 'Teljesítve'
+            : 'Hiányzik $remaining esemény',
         progress: (current / target).clamp(0.0, 1.0),
         sortScore: (current / target).clamp(0.0, 1.0),
       );
@@ -191,8 +191,8 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
         conditionLabel: '$target QR-kod',
         currentLabel: '$current / $target',
         remainingLabel: remaining == 0
-            ? 'Teljesitve'
-            : 'Hianyzik $remaining QR-kod',
+            ? 'Teljesítve'
+            : 'Hiányzik $remaining QR-kod',
         progress: (current / target).clamp(0.0, 1.0),
         sortScore: (current / target).clamp(0.0, 1.0),
       );
@@ -204,8 +204,8 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
         conditionLabel: '$target pont',
         currentLabel: '$current / $target',
         remainingLabel: remaining == 0
-            ? 'Teljesitve'
-            : 'Hianyzik $remaining pont',
+            ? 'Teljesítve'
+            : 'Hiányzik $remaining pont',
         progress: (current / target).clamp(0.0, 1.0),
         sortScore: (current / target).clamp(0.0, 1.0),
       );
@@ -214,11 +214,11 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
       final current = _completedTrips;
       final remaining = (target - current).clamp(0, target);
       return _ProgressData(
-        conditionLabel: '$target teljesitett tura',
+        conditionLabel: '$target teljesített túra',
         currentLabel: '$current / $target',
         remainingLabel: remaining == 0
-            ? 'Teljesitve'
-            : 'Hianyzik $remaining teljesitett tura',
+            ? 'Teljesítve'
+            : 'Hiányzik $remaining teljesített túra',
         progress: (current / target).clamp(0.0, 1.0),
         sortScore: (current / target).clamp(0.0, 1.0),
       );
@@ -226,9 +226,9 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
     if (type == 'top_n') {
       if (_rank == 0) {
         return const _ProgressData(
-          conditionLabel: 'Top helyezes',
-          currentLabel: 'Ranglista nem elerheto',
-          remainingLabel: 'A rang csak admin nezettel szamolhato',
+          conditionLabel: 'Top helyezés',
+          currentLabel: 'Ranglista nem elérhető',
+          remainingLabel: 'A rang csak adminnel számolható',
           progress: 0,
           sortScore: 0,
         );
@@ -240,16 +240,16 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
       return _ProgressData(
         conditionLabel: 'Top $target helyezes',
         currentLabel: '$rank. hely',
-        remainingLabel: done ? 'Teljesitve' : 'Hianyzik $delta helyezes',
+        remainingLabel: done ? 'Teljesítve' : 'Hiányzik $delta helyezes',
         progress: done ? 1 : (target / rank).clamp(0.0, 1.0),
         sortScore: done ? 1 : (target / rank).clamp(0.0, 1.0),
       );
     }
 
     return const _ProgressData(
-      conditionLabel: 'Manualis',
-      currentLabel: 'Admin adja at',
-      remainingLabel: 'Varakozas admin jovahagyasra',
+      conditionLabel: 'Manuális',
+      currentLabel: 'Admin adja át',
+      remainingLabel: 'Várakozás admin jóváhagyásra',
       progress: 0,
       sortScore: 0,
     );
@@ -261,7 +261,7 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
     final unlocked = _unlockedIds.length;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Achievement haladas')),
+      appBar: AppBar(title: const Text('Jutalmak haladása')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -525,3 +525,4 @@ class _TopStatCard extends StatelessWidget {
     );
   }
 }
+

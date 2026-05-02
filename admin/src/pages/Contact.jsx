@@ -15,12 +15,7 @@ function Contact() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchContact();
-  }, []);
-
-  const fetchContact = async () => {
+  async function fetchContact() {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "contact"));
@@ -37,11 +32,19 @@ function Contact() {
         });
       }
       setLoading(false);
-    } catch (err) {
+    } catch {
       setError("Hiba az adatok betöltése során");
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchContact();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -63,7 +66,7 @@ function Contact() {
       await updateDoc(doc(db, "contact", docId), cleanData);
       setSaving(false);
       setError(null);
-    } catch (err) {
+    } catch {
       setError("Hiba a mentés során");
       setSaving(false);
     }

@@ -111,7 +111,7 @@ class _CameraScreenState extends State<CameraScreen> {
       effectiveName =
           userData['displayName']?.toString() ??
           userData['name']?.toString() ??
-          'Felhasznalo';
+          'Felhasználó';
     }
 
     await _firestore.collection('public_leaderboard').doc(uid).set({
@@ -135,7 +135,7 @@ class _CameraScreenState extends State<CameraScreen> {
   Future<void> _onQrDetected(String code) async {
     if (!_scanning || _loading) return;
 
-    // Offline ellenorzes
+    // Offline ellenőrzés
     if (!await _isOnline()) {
       final queuedNow = await LocalCache.enqueuePendingQr(code);
       final cachedStation = _findStationFromLocalCache(code);
@@ -155,8 +155,8 @@ class _CameraScreenState extends State<CameraScreen> {
         } else {
           _station = null;
           _errorMsg = queuedNow
-              ? 'Offline: a QR kod sorba allt, online allapotban szinkronizal.'
-              : 'Ez a QR mar offline sorban van, online allapotban szinkronizal.';
+              ? 'Offline: a QR-kód sorba állt, online állapotban szinkronizál.'
+              : 'Ez a QR már offline sorban van, online állapotban szinkronizál.';
         }
       });
       _controller.stop();
@@ -172,7 +172,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
     try {
       final uid = _auth.currentUser?.uid;
-      if (uid == null) throw Exception('Nincs bejelentkezett felhasznalo');
+      if (uid == null) throw Exception('Nincs bejelentkezett felhasználó');
 
       var snap = await _firestore
           .collection('stations')
@@ -188,7 +188,7 @@ class _CameraScreenState extends State<CameraScreen> {
           });
           return;
         }
-        throw Exception('Ismeretlen QR kod: $code');
+        throw Exception('Ismeretlen QR kód: $code');
       }
 
       final stDoc = snap.docs.first;
@@ -345,7 +345,7 @@ class _CameraScreenState extends State<CameraScreen> {
             'title': first['name']?.toString() ?? 'Jutalom feloldva! 🏆',
             'subtitle': newlyUnlocked.length == 1
                 ? (first['description']?.toString() ?? '')
-                : '${newlyUnlocked.length} uj jutalom feloldva!',
+                : '${newlyUnlocked.length} új jutalom feloldva!',
           },
         }, SetOptions(merge: true));
       }
@@ -369,12 +369,12 @@ class _CameraScreenState extends State<CameraScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QR Beolvasas'),
+        title: const Text('QR beolvasás'),
         actions: [
           if (_history.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.history),
-              tooltip: 'Elozmenyek',
+              tooltip: 'Előzmények',
               onPressed: () => _showHistory(context),
             ),
         ],
@@ -392,6 +392,34 @@ class _CameraScreenState extends State<CameraScreen> {
   Widget _buildScanner() {
     return Column(
       children: [
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFE8F5E9), Color(0xFFF1F8E9)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFB7DFC0)),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.tips_and_updates_outlined, color: Color(0xFF2E7D32)),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Tipp: tartsd stabilan a kamerát. Offline módban a QR beolvasás sorba áll.',
+                  style: TextStyle(
+                    color: Color(0xFF1B5E20),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         Expanded(
           flex: 3,
           child: ClipRRect(
@@ -425,7 +453,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     padding: const EdgeInsets.all(12),
                     color: Colors.black54,
                     child: const Text(
-                      'Iranyitsd a QR kodra a keretet',
+                      'Irányítsd a QR-kódra a keretet',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.white),
                     ),
@@ -444,7 +472,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Nemreg beolvasva (${_history.length})',
+                    'Nemrég beolvasva (${_history.length})',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
@@ -488,7 +516,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final s = _station!;
     final alreadyDone = s['alreadyDone'] == true;
     final points = (s['points'] as num?)?.toInt() ?? 10;
-    final name = s['name']?.toString() ?? 'Allomas';
+    final name = s['name']?.toString() ?? 'Állomás';
     final unlockContent = s['unlockContent']?.toString() ?? '';
     final extraInfo = s['extraInfo']?.toString() ?? '';
     final imageUrl = _primaryImageUrl(s);
@@ -553,7 +581,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 const SizedBox(width: 6),
                 Text(
                   alreadyDone
-                      ? 'Mar feloldott (+0 pt)'
+                      ? 'Már feloldott (+0 pt)'
                       : (offlineQueued
                             ? ('Offline sorban (+$points pt)')
                             : ('+$points pont')),
@@ -586,7 +614,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       Icon(Icons.emoji_events, color: Colors.amber, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'Uj jutalom feloldva! 🎉',
+                        'Új jutalom feloldva! 🎉',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.amber,
@@ -705,7 +733,7 @@ class _CameraScreenState extends State<CameraScreen> {
             child: FilledButton.icon(
               onPressed: _reset,
               icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Ujabb beolvasas'),
+              label: const Text('Újabb beolvasás'),
             ),
           ),
           const SizedBox(height: 12),
@@ -732,7 +760,7 @@ class _CameraScreenState extends State<CameraScreen> {
             FilledButton.icon(
               onPressed: _reset,
               icon: const Icon(Icons.refresh),
-              label: const Text('Ujra probals'),
+              label: const Text('Újrapróbálás'),
             ),
           ],
         ),
@@ -751,7 +779,7 @@ class _CameraScreenState extends State<CameraScreen> {
         child: Column(
           children: [
             const Text(
-              'Beolvasasi elozmenyek',
+              'Beolvasási előzmények',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const Divider(),

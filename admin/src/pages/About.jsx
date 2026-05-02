@@ -1,17 +1,19 @@
-﻿import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../firebaseConfig";
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from "firebase/firestore";
 import "../styles/About.css";
 import { safeString } from "../utils/safeString";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { fileToOptimizedDataUrl } from "../utils/imageUpload";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
+import StateCard from "../components/StateCard";
 
 function About() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [error, setError] = useState(null);
   const [formData, setFormData] = useState({
     year: "",
     title: "",
@@ -21,12 +23,12 @@ function About() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [imagePreview, setImagePreview] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
-
-  useEffect(() => {
-    fetchEvents();
+  const [snack, setSnack] = useState({ open: false, msg: "", severity: "error" });
+  const showMsg = useCallback((msg, severity = "error") => {
+    setSnack({ open: true, msg, severity });
   }, []);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "about"));
@@ -40,11 +42,19 @@ function About() {
       data.sort((a, b) => (parseInt(a.year) || 0) - (parseInt(b.year) || 0));
       setEvents(data);
     } catch {
-      setError("Hiba az adatok betöltésénél");
+      showMsg("Hiba az adatok betöltésénél");
     } finally {
       setLoading(false);
     }
-  };
+  }, [showMsg]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchEvents();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [fetchEvents]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -60,7 +70,7 @@ function About() {
       setFormData((prev) => ({ ...prev, imageUrl: url }));
       setImagePreview(url);
     } catch (err) {
-      setError("Képfeltöltési hiba: " + err.message);
+      showMsg("Képfeltöltési hiba: " + err.message);
     } finally {
       setUploadingImage(false);
     }
@@ -86,9 +96,10 @@ function About() {
       setShowForm(false);
       setEditingId(null);
       setImagePreview("");
-      fetchEvents();
+      showMsg(editingId ? "Esemény frissítve" : "Esemény hozzáadva", "success");
+      await fetchEvents();
     } catch {
-      setError("Hiba a mentéskor");
+      showMsg("Hiba a mentéskor");
     }
   };
 
@@ -113,14 +124,30 @@ function About() {
     try {
       await deleteDoc(doc(db, "about", deleteDialog.id));
       setDeleteDialog({ open: false, id: null });
-      fetchEvents();
+      showMsg("Esemény törölve", "success");
+      await fetchEvents();
     } catch {
-      setError("Hiba a törlésnél");
+      showMsg("Hiba a törlésnél");
       setDeleteDialog({ open: false, id: null });
     }
   };
 
-  if (loading) return <div className="loading">Betöltés...</div>;
+  if (loading) {
+    return (
+      <div className="content-page">
+        <div className="page-header">
+          <h1>🏛️ Nagyvázsony Története</h1>
+          <p>Szerkeszd a település történeti eseményeit (időrendben)</p>
+        </div>
+        <StateCard
+          variant="loading"
+          icon="📜"
+          title="Történeti események betöltése..."
+          description="Az idővonal elemei rendezés alatt állnak."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="content-page">
@@ -129,7 +156,6 @@ function About() {
         <p>Szerkeszd a település történeti eseményeit (időrendben)</p>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
 
       {!showForm && (
         <button className="btn-primary" onClick={() => setShowForm(true)}>
@@ -219,7 +245,13 @@ function About() {
 
       <div className="timeline">
         {events.length === 0 ? (
-          <p className="no-data">Nincsenek még történeti események. Adj hozzá valamilyen eseményt!</p>
+          <StateCard
+            icon="🏛️"
+            title="Még nincs idővonali esemény"
+            description="Indítsd el az oldalt egy első történeti bejegyzéssel, hogy a látogatók rögtön tartalmat lássanak."
+            actionLabel="Új esemény hozzáadása"
+            onAction={() => setShowForm(true)}
+          />
         ) : (
           events.map((event, idx) => (
             <div key={event.id} className="timeline-item">
@@ -249,6 +281,17 @@ function About() {
           ))
         )}
       </div>
+
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={4000}
+        onClose={() => setSnack((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))}>
+          {snack.msg}
+        </Alert>
+      </Snackbar>
 
       <ConfirmDialog
         open={deleteDialog.open}

@@ -108,8 +108,10 @@ service cloud.firestore {
       allow create, update: if isAdmin();
 
       // User: can write their own entry, but points must match user_progress.totalPoints
+      // and the user_progress document must exist (prevents bypass via missing doc).
       allow create, update: if isSignedIn()
         && request.auth.uid == userId
+        && exists(/databases/$(database)/documents/user_progress/$(userId))
         && request.resource.data.points ==
              get(/databases/$(database)/documents/user_progress/$(userId)).data.totalPoints;
     }
@@ -161,3 +163,4 @@ service cloud.firestore {
     }
   }
 }
+

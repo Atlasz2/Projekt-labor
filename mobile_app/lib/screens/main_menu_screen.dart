@@ -82,16 +82,16 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Kijelentkezes'),
-        content: const Text('Biztosan kijelentkezel?'),
+        title: const Text('Kijelentkezés'),
+        content: const Text('Biztosan ki szeretnél jelentkezni?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Megse'),
+            child: const Text('Mégsem'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Kijelentkezes'),
+            child: const Text('Kijelentkezés'),
           ),
         ],
       ),
@@ -102,13 +102,13 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   @override
   Widget build(BuildContext context) {
     final items = <_MenuItem>[
-      _MenuItem('Terkep es turak', 'GPS, utvonal es allomasok', Icons.map_outlined, const Color(0xFF667EEA), const MapTripsScreen()),
-      _MenuItem('QR beolvasas', 'Pontok es esemeny pecsetek', Icons.qr_code_scanner, const Color(0xFF4CAF50), const CameraScreen()),
-      _MenuItem('Rendezvenyek', 'Kepek, reszletek, pecsetvadaszat', Icons.celebration_outlined, const Color(0xFFFF9800), const EventsScreen()),
-      _MenuItem('Nagyvazsony tortenete', 'Idovonal es helytortenet', Icons.history_edu_outlined, const Color(0xFF8E44AD), const HistoryScreen()),
-      _MenuItem('Szallas es etterem', 'Kepek, arak, hivas', Icons.hotel_outlined, const Color(0xFFE91E63), const AccommodationScreen()),
-      _MenuItem('Feloldott tartalmak', 'Gyujtott elmenyek es jelzesek', Icons.collections_outlined, const Color(0xFFFF6B6B), const UnlockedContentScreen()),
-      _MenuItem('Kapcsolat', 'Elerhetosegek es iroda', Icons.call_outlined, const Color(0xFF0097A7), const ContactScreen()),
+      _MenuItem('Térkép és túrák', 'GPS, útvonal és állomások', Icons.map_outlined, const Color(0xFF667EEA), const MapTripsScreen()),
+      _MenuItem('QR beolvasás', 'Pontok és esemény pecsétek', Icons.qr_code_scanner, const Color(0xFF4CAF50), const CameraScreen()),
+      _MenuItem('Rendezvények', 'Képek, részletek, pecsétvadászat', Icons.celebration_outlined, const Color(0xFFFF9800), const EventsScreen()),
+      _MenuItem('Nagyvázsony története', 'Idővonal és helytörténet', Icons.history_edu_outlined, const Color(0xFF8E44AD), const HistoryScreen()),
+      _MenuItem('Szállás és étterem', 'Képek, árak, hívás', Icons.hotel_outlined, const Color(0xFFE91E63), const AccommodationScreen()),
+      _MenuItem('Feloldott tartalmak', 'Gyűjtött élmények és jelzések', Icons.collections_outlined, const Color(0xFFFF6B6B), const UnlockedContentScreen()),
+      _MenuItem('Kapcsolat', 'Elérhetőségek és iroda', Icons.call_outlined, const Color(0xFF0097A7), const ContactScreen()),
     ];
 
     final width = MediaQuery.of(context).size.width;
@@ -123,10 +123,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         shadowColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.account_circle_outlined, size: 28),
-          tooltip: 'Fiokom',
+          tooltip: 'Fiókom',
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
         ),
-        title: const Text('Nagyvazsony'),
+        title: const Text('Nagyvázsony'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_outlined),
@@ -195,20 +195,62 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           ),
                         ],
                       ),
-                    ),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: _offlineSyncService.onlineNotifier,
-                    builder: (context, online, _) => Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Icon(
-                          online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-                          size: 16,
-                          color: online ? const Color(0xFF2D6A4F) : const Color(0xFFA16207),
+                    ),                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ValueListenableBuilder<bool>(
+                        valueListenable: _offlineSyncService.onlineNotifier,
+                        builder: (context, online, _) => Container(
+                          margin: const EdgeInsets.only(bottom: 6, right: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: online ? const Color(0xFFE7F6EC) : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                                size: 14,
+                                color: online ? const Color(0xFF2D6A4F) : const Color(0xFFA16207),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                online ? 'Online' : 'Offline',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: online ? const Color(0xFF2D6A4F) : const Color(0xFFA16207),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                      ValueListenableBuilder<int>(
+                        valueListenable: _offlineSyncService.pendingCountNotifier,
+                        builder: (context, pending, _) {
+                          if (pending <= 0) return const SizedBox.shrink();
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFDBEAFE),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '$pending függő művelet',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1D4ED8),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   Container(
                     width: double.infinity,
@@ -225,7 +267,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       ],
                     ),
                     child: const Text(
-                      'Fedezd fel Nagyvazsonyt',
+                      'Fedezd fel Nagyvázsonyt!',
                       style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
                     ),
                   ),
@@ -337,6 +379,9 @@ class _NoGlowScrollBehavior extends ScrollBehavior {
     return child;
   }
 }
+
+
+
 
 
 

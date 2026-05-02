@@ -1,20 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import PropTypes from "prop-types";
+import React, { useState } from "react";
 import {
   browserLocalPersistence,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
-} from 'firebase/auth';
-import { auth } from '../firebaseConfig';
-import { resolveUserRole } from '../utils/resolveUserRole';
-import '../styles/Login.css';
+} from "firebase/auth";
+import { auth } from "../firebaseConfig";
+import { resolveUserRole } from "../utils/resolveUserRole";
+import "../styles/Login.css";
 
 const AUTH_ERROR_MESSAGES = {
-  'auth/invalid-email':      'Ervenytelen email cim.',
-  'auth/user-not-found':     'Ez az email nincs regisztralva.',
-  'auth/wrong-password':     'Hibas email vagy jelszo.',
-  'auth/invalid-credential': 'Hibas email vagy jelszo.',
+  "auth/invalid-email": "Ervenytelen email cim.",
+  "auth/user-not-found": "Ez az email nincs regisztralva.",
+  "auth/wrong-password": "Hibas email vagy jelszo.",
+  "auth/invalid-credential": "Hibas email vagy jelszo.",
 };
+
+function consumePersistedAccessError() {
+  const persistedError = sessionStorage.getItem("admin_access_error");
+  if (persistedError) {
+    sessionStorage.removeItem("admin_access_error");
+    return persistedError;
+  }
+  return "";
+}
 
 function EyeIcon({ visible }) {
   return visible ? (
@@ -30,6 +40,10 @@ function EyeIcon({ visible }) {
     </svg>
   );
 }
+
+EyeIcon.propTypes = {
+  visible: PropTypes.bool.isRequired,
+};
 
 function CastleSvg() {
   return (
@@ -68,23 +82,15 @@ function CastleSvg() {
 }
 
 function Login() {
-  const [email, setEmail]               = useState(localStorage.getItem('last_admin_email') || '');
-  const [password, setPassword]         = useState('');
-  const [error, setError]               = useState('');
-  const [loading, setLoading]           = useState(false);
+  const [email, setEmail] = useState(localStorage.getItem("last_admin_email") || "");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(consumePersistedAccessError);
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    const persistedError = sessionStorage.getItem('admin_access_error');
-    if (persistedError) {
-      setError(persistedError);
-      sessionStorage.removeItem('admin_access_error');
-    }
-  }, []);
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setError("");
     setLoading(true);
 
     try {
@@ -93,14 +99,14 @@ function Login() {
       const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
 
       const role = await resolveUserRole(credential.user);
-      if (role !== 'admin') {
+      if (role !== "admin") {
         await signOut(auth);
-        setError('Ehhez a fiokhhoz nincs admin jogosultsag.');
+        setError("Ehhez a fiokhhoz nincs admin jogosultsag.");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem('last_admin_email', normalizedEmail);
+      localStorage.setItem("last_admin_email", normalizedEmail);
       // AdminAuthContext onAuthStateChanged picks up the new session automatically.
     } catch (err) {
       setError(AUTH_ERROR_MESSAGES[err.code] || `Bejelentkezesi hiba: ${err.message}`);
@@ -156,7 +162,7 @@ function Login() {
                 <label htmlFor="password">Jelszo</label>
                 <div className="password-wrap">
                   <input
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? "text" : "password"}
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -167,9 +173,9 @@ function Login() {
                   <button
                     type="button"
                     className="password-toggle"
-                    onClick={() => setShowPassword((v) => !v)}
+                    onClick={() => setShowPassword((visible) => !visible)}
                     tabIndex={-1}
-                    aria-label={showPassword ? 'Jelszo elrejtese' : 'Jelszo megjelenites'}
+                    aria-label={showPassword ? "Jelszo elrejtese" : "Jelszo megjelenites"}
                   >
                     <EyeIcon visible={showPassword} />
                   </button>
@@ -183,7 +189,7 @@ function Login() {
                     Belepes folyamatban...
                   </span>
                 ) : (
-                  'Belepes a vezerloközpontba'
+                  "Belepes a vezerlokozpontba"
                 )}
               </button>
             </form>

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import PropTypes from "prop-types";
+import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../firebaseConfig";
 import {
   collection,
@@ -23,6 +24,7 @@ import { getQrValue, getQrImageUrl } from "../utils/qrHelpers";
 import { fetchDataUrl } from "../utils/imageUpload";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import StateCard from "../components/StateCard";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 
@@ -187,11 +189,26 @@ function TripMap({ center, routePath, stations, isLoaded, loadError }) {
   );
 }
 
+TripMap.propTypes = {
+  center: PropTypes.shape({
+    lat: PropTypes.number.isRequired,
+    lng: PropTypes.number.isRequired,
+  }).isRequired,
+  routePath: PropTypes.arrayOf(PropTypes.arrayOf(PropTypes.number)),
+  stations: PropTypes.arrayOf(PropTypes.object).isRequired,
+  isLoaded: PropTypes.bool.isRequired,
+  loadError: PropTypes.object,
+};
+
+TripMap.defaultProps = {
+  routePath: [],
+  loadError: null,
+};
+
 function Trips() {
   const [trips, setTrips] = useState([]);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [expandedTripId, setExpandedTripId] = useState(null);
@@ -200,7 +217,9 @@ function Trips() {
   const [routeSavingId, setRouteSavingId] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [snack, setSnack] = useState({ open: false, msg: "", severity: "error" });
-  const showMsg = (msg, severity = "error") => setSnack({ open: true, msg, severity });
+  const showMsg = useCallback((msg, severity = "error") => {
+    setSnack({ open: true, msg, severity });
+  }, []);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -211,14 +230,9 @@ function Trips() {
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
 
       const tripsSnapshot = await getDocs(collection(db, "trips"));
       const tripsData = tripsSnapshot.docs.map((doc) => ({
@@ -251,13 +265,20 @@ function Trips() {
         ...doc.data(),
       }));
       setStations(stationsData);
-    } catch (err) {
-      setError("Hiba az adatok betolteseinel");
-      console.error(err);
+    } catch {
+      showMsg("Hiba az adatok betöltéseinél");
     } finally {
       setLoading(false);
     }
-  };
+  }, [showMsg]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchData();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [fetchData]);
 
   const getTripsStations = (tripId) => {
     return stations
@@ -355,9 +376,8 @@ function Trips() {
       }
       fetchData();
       handleCancel();
-    } catch (err) {
-      setError("Hiba a menteskor");
-      console.error(err);
+    } catch {
+      showMsg("Hiba a mentéskor");
     }
   };
 
@@ -381,9 +401,8 @@ function Trips() {
       await deleteDoc(doc(db, "trips", deleteDialog.id));
       setDeleteDialog({ open: false, id: null });
       fetchData();
-    } catch (err) {
-      setError("Hiba a torleskor");
-      console.error(err);
+    } catch {
+      showMsg("Hiba a törléskor");
       setDeleteDialog({ open: false, id: null });
     }
   };
@@ -415,10 +434,8 @@ function Trips() {
       ]);
       showMsg("Sorrend frissítve!", "success");
       await fetchData();
-    } catch (err) {
-      showMsg("Hiba a sorrend mentésekor");
-      console.error(err);
-    }
+    } catch {
+      showMsg("Hiba a sorrend mentésekor");    }
   };
 
   const handleSaveRoute = async (trip) => {
@@ -506,9 +523,7 @@ function Trips() {
       );
 
       showMsg("Útvonal sikeresen mentve!", "success");
-    } catch (err) {
-      console.error(err);
-      showMsg("Hiba az útvonal mentésekor");
+    } catch {      showMsg("Hiba az útvonal mentésekor");
     } finally {
       setRouteSavingId(null);
     }
@@ -537,16 +552,21 @@ function Trips() {
 
       const fileName = `${(station.name || "allomas").replace(/\s+/g, "_")}_QR.pdf`;
       docPdf.save(fileName);
-    } catch (error) {
-      console.error("PDF letoltes hiba:", error);
-      showMsg("Hiba a PDF letoltese kozben");
+    } catch {      showMsg("Hiba a PDF letoltese kozben");
     }
   };
 
   if (loading)
     return (
       <div className="trips-shell">
-        <p className="no-data">Betoltes...</p>
+        <div className="trips-main">
+          <StateCard
+            variant="loading"
+            icon="🧭"
+            title="Túrák betöltése..."
+            description="Útvonalak, állomások és metrikák szinkronizálása folyamatban."
+          />
+        </div>
       </div>
     );
 
@@ -555,8 +575,8 @@ function Trips() {
       <div className="trips-hero">
         <div className="hero-content">
           <div className="hero-copy">
-            <p className="hero-kicker">Tura Studio</p>
-            <h1>Turak Kezelése</h1>
+            <p className="hero-kicker">Túra Stúdió</p>
+            <h1>Túrák kezelése</h1>
             <p className="hero-subtitle">
               Útvonalak, állomások és tervezés egy helyen. Hozz létre, szerkessz és kezelj túraként könnyedén.
             </p>
@@ -574,8 +594,6 @@ function Trips() {
           </div>
         </div>
       </div>
-
-      {error && <div className="error-banner">{error}</div>}
 
       <div className="trips-main">
         {!showForm ? (
@@ -643,7 +661,7 @@ function Trips() {
                   className="btn-cancel"
                   onClick={handleCancel}
                 >
-                  Cancel
+                  Mégse
                 </button>
               </div>
             </form>
@@ -651,11 +669,13 @@ function Trips() {
         )}
 
         {trips.length === 0 && !showForm ? (
-          <div className="empty-state">
-            <div className="empty-icon">🗺️</div>
-            <h3>Még nincsenek túrák</h3>
-            <p>Hozz létre az első túrádat, hogy elkezdhesd a kezelést!</p>
-          </div>
+          <StateCard
+            icon="🗺️"
+            title="Még nincsenek túrák"
+            description="Hozd létre az első túrát, és máris megjelenik itt a kezelőfelület térképpel és állomás-listával."
+            actionLabel="Első túra létrehozása"
+            onAction={() => setShowForm(true)}
+          />
         ) : (
           <div className="trips-list">
             {trips.map((trip) => {
@@ -769,7 +789,7 @@ function Trips() {
                                       className="btn-qr-download"
                                       onClick={() => handleDownloadPdf(station, trip.name)}
                                     >
-                                      Download
+                                      Letöltés
                                     </button>
                                   </div>
                                 </li>
@@ -778,7 +798,7 @@ function Trips() {
                           </ul>
                         ) : (
                           <p className="empty-stations">
-                            Nincsenek még állomások ezhez a túrához
+                            Nincsenek még állomások ehhez a túrához
                           </p>
                         )}
                       </div>
@@ -818,7 +838,7 @@ function Trips() {
       <ConfirmDialog
         open={deleteDialog.open}
         title="Túra törlése"
-        message="Biztosan torolni szeretned ezt a turat?"
+        message="Biztosan törölni szeretnéd ezt a túrát?"
         confirmText="Törlés"
         onClose={() => setDeleteDialog({ open: false, id: null })}
         onConfirm={confirmDelete}

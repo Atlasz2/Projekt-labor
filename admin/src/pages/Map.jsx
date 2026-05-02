@@ -50,12 +50,7 @@ function Map() {
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
   });
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  async function fetchData() {
     try {
       setLoading(true);
       setError(null);
@@ -113,13 +108,20 @@ function Map() {
       } else {
         setCenter(DEFAULT_CENTER);
       }
-    } catch (err) {
-      console.error("Hiba az adatok betöltésekor:", err);
+    } catch {
       setError("Nem sikerült betölteni a térkép adatait");
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchData();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   if (loading) {
     return (

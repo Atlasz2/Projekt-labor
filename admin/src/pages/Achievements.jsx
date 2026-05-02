@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { db } from "../firebaseConfig";
 import {
   addDoc, collection, deleteDoc, doc,
@@ -6,6 +6,8 @@ import {
 } from "firebase/firestore";
 import "../styles/Achievements.css";
 import ConfirmDialog from "../components/ConfirmDialog";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 const CONDITION_TYPES = [
   { value: "station_count",    label: "Allomast latogasson meg (>= N db)" },
@@ -40,10 +42,10 @@ export default function Achievements() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [snack, setSnack] = useState({ open: false, msg: "", severity: "error" });
+  const showMsg = useCallback((msg, severity = "error") => setSnack({ open: true, msg, severity }), []);
 
-  useEffect(() => { loadAll(); }, []);
-
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, "achievements"));
@@ -60,8 +62,12 @@ export default function Achievements() {
         list = reload.docs.map((d) => ({ id: d.id, ...d.data() }));
       }
       setAchievements(list);
+    } catch {
+      showMsg("Hiba az adatok betoltésekor");
     } finally { setLoading(false); }
-  };
+  }, [showMsg]);
+
+  useEffect(() => { setTimeout(() => void loadAll(), 0); }, [loadAll]);
 
   const openCreate = () => { setEditing(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (a) => {
@@ -100,7 +106,6 @@ export default function Achievements() {
       setShowForm(false);
       await loadAll();
     } catch (err) {
-      console.error("Achievement save error:", err);
       setSaveError(err.message || "Ismeretlen hiba");
     } finally { setSaving(false); }
   };
@@ -109,9 +114,14 @@ export default function Achievements() {
 
   const doDelete = async () => {
     if (!confirmDeleteId) return;
-    await deleteDoc(doc(db, "achievements", confirmDeleteId));
-    setConfirmDeleteId(null);
-    await loadAll();
+    try {
+      await deleteDoc(doc(db, "achievements", confirmDeleteId));
+      setConfirmDeleteId(null);
+      await loadAll();
+    } catch {
+      showMsg("Hiba a torleskor");
+      setConfirmDeleteId(null);
+    }
   };
 
   const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
@@ -265,6 +275,14 @@ export default function Achievements() {
         onConfirm={doDelete}
         onClose={() => setConfirmDeleteId(null)}
       />
+      <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack((s) => ({ ...s, open: false }))} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+        <Alert severity={snack.severity} onClose={() => setSnack((s) => ({ ...s, open: false }))}>{snack.msg}</Alert>
+      </Snackbar>
     </div>
   );
 }
+
+
+
+
+

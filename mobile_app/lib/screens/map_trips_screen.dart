@@ -409,12 +409,12 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
   }
 
   String _formatDistance(double meters) {
-    if (meters <= 0) return 'N/A';
+    if (meters <= 0) return 'Nincs adat';
     return '${(meters / 1000).toStringAsFixed(1)} km';
   }
 
   String _formatDuration(double seconds) {
-    if (seconds <= 0) return 'N/A';
+    if (seconds <= 0) return 'Nincs adat';
     final totalMinutes = (seconds / 60).round().clamp(1, 1 << 20);
     final hours = totalMinutes ~/ 60;
     final minutes = totalMinutes % 60;
@@ -454,8 +454,8 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     if (waypoints.length < 2) {
       return {
         'points': <LatLng>[],
-        'distanceLabel': 'N/A',
-        'durationLabel': 'N/A',
+        'distanceLabel': 'Nincs adat',
+        'durationLabel': 'Nincs adat',
       };
     }
 
@@ -478,9 +478,14 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         );
         request.headers.contentType = ContentType('application', 'json');
         request.write(body);
-        final response = await request.close().timeout(const Duration(seconds: 12));
+        final response = await request.close().timeout(
+          const Duration(seconds: 12),
+        );
         if (response.statusCode == 200) {
-          final responseBody = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 10));
+          final responseBody = await response
+              .transform(utf8.decoder)
+              .join()
+              .timeout(const Duration(seconds: 10));
           final data = jsonDecode(responseBody);
           if (data is Map && data['trip'] is Map) {
             final trip = data['trip'] as Map;
@@ -522,9 +527,14 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       ..connectionTimeout = const Duration(seconds: 12);
     try {
       final request = await osrmClient.getUrl(osrmUri);
-      final response = await request.close().timeout(const Duration(seconds: 10));
+      final response = await request.close().timeout(
+        const Duration(seconds: 10),
+      );
       if (response.statusCode == 200) {
-        final responseBody = await response.transform(utf8.decoder).join().timeout(const Duration(seconds: 8));
+        final responseBody = await response
+            .transform(utf8.decoder)
+            .join()
+            .timeout(const Duration(seconds: 8));
         final data = jsonDecode(responseBody);
         if (data is Map &&
             data['code'] == 'Ok' &&
@@ -566,8 +576,8 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
     return {
       'points': waypoints,
-      'distanceLabel': 'N/A',
-      'durationLabel': 'N/A',
+      'distanceLabel': 'Nincs adat',
+      'durationLabel': 'Nincs adat',
       'fallback': true,
     };
   }
@@ -884,8 +894,8 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
     List<LatLng> routePoints = const [];
     String status = 'Turistaútvonal';
-    String distanceLabel = 'N/A';
-    String durationLabel = 'N/A';
+    String distanceLabel = 'Nincs adat';
+    String durationLabel = 'Nincs adat';
     bool isValhallaRoute = false;
 
     // Elsodlegesen Valhalla-t hasznalunk, hogy turistautak/foldutak legyenek preferalva.
@@ -1389,13 +1399,14 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         children: [
           const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
           const SizedBox(height: 12),
-          const Text('Nem sikerült betölteni', style: TextStyle(fontSize: 16)),
+          const Text(
+            'Nem sikerült betölteni a térképet',
+            style: TextStyle(fontSize: 16),
+          ),
           const SizedBox(height: 16),
-          FilledButton(onPressed: _loadAll, child: const Text('Újra próbálás')),
+          FilledButton(onPressed: _loadAll, child: const Text('Újrapróbálás')),
         ],
       ),
     );
   }
 }
-
-

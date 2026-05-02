@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import PropTypes from "prop-types";
+import React, { useState } from 'react';
 import { db, storage } from '../firebaseConfig';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,8 +10,8 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import '../styles/Stations.css';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { safeString } from '../utils/safeString';
-import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
+import StateCard from '../components/StateCard';
+import { normalizePhotosFromDoc } from '../utils/photoHelpers';
 import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
@@ -35,6 +36,18 @@ function MapPicker({ value, onChange }) {
     </GoogleMap>
   );
 }
+
+MapPicker.propTypes = {
+  value: PropTypes.shape({
+    lat: PropTypes.number,
+    lon: PropTypes.number,
+  }),
+  onChange: PropTypes.func.isRequired,
+};
+
+MapPicker.defaultProps = {
+  value: null,
+};
 
 const EMPTY_FORM = {
   name: '',
@@ -249,7 +262,7 @@ export default function Stations() {
   });
 
   if (isLoading) {
-    return <div className="stations-shell"><p className="empty-state">Betöltés...</p></div>;
+    return <StateCard variant="loading" icon="📍" title="Állomások betöltése..." description="Kérjük várj, az adatok betöltése folyamatban van." />;
   }
 
   return (
@@ -276,42 +289,60 @@ export default function Stations() {
         <span className="search-count">{filtered.length} / {stations.length} állomás</span>
       </div>
 
-      <div className="stations-grid">
-        {filtered.map((station) => {
-          const qrValue = getQrValue(station);
-          const tripName = getTripName(station.tripId);
-
-          return (
-            <div key={station.id} className="station-card">
-              <div className="station-media">
-                {(normalizePhotosFromDoc(station)[0] || '') ? <img src={(normalizePhotosFromDoc(station)[0] || '')} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
-                <span className="station-points">⭐ {station.points} pont</span>
+      {stations.length === 0 ? (
+        <StateCard
+          variant="empty"
+          icon="📍"
+          title="Nincsenek még állomások"
+          description="Adj hozzá egy új állomást a túráidhoz."
+          actionLabel="Első állomás hozzáadása"
+          onAction={handleAdd}
+        />
+      ) : filtered.length === 0 ? (
+        <StateCard
+          variant="empty"
+          icon="🔎"
+          title="Nincs találat"
+          description="Próbálj másik kulcsszót, vagy töröld a keresést."
+          actionLabel="Keresés törlése"
+          onAction={() => setSearch('')}
+        />
+      ) : (
+        <div className="stations-grid">
+                {filtered.map((station) => {
+                  const qrValue = getQrValue(station);
+                  const tripName = getTripName(station.tripId);
+      
+                  return (
+                    <div key={station.id} className="station-card">
+                      <div className="station-media">
+                        {(normalizePhotosFromDoc(station)[0] || '') ? <img src={(normalizePhotosFromDoc(station)[0] || '')} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
+                        <span className="station-points">⭐ {station.points} pont</span>
+                      </div>
+                      <div className="station-body">
+                        <div className="station-title">
+                          <h3>{station.name}</h3>
+                          {tripName && <span className="trip-badge">🗺️ {tripName}</span>}
+                        </div>
+                        <p className="station-desc">{station.description || 'Nincs leírás megadva.'}</p>
+                        {station.funFact && <p className="station-fun-fact">💡 {station.funFact}</p>}
+                        <div className="station-qr">
+                          <div className="qr-meta">
+                            <span className="qr-label">QR: {qrValue.substring(0, 16)}{qrValue.length > 16 ? '…' : ''}</span>
+                            <button className="qr-print" type="button" onClick={() => handleDownloadPdf(station)}>🖨️ Nyomtatás</button>
+                          </div>
+                          <img src={getQrImageUrl(qrValue)} alt={`QR ${station.name}`} />
+                        </div>
+                        <div className="station-actions">
+                          <button onClick={() => handleEdit(station)} className="btn-edit">✏️ Szerkesztés</button>
+                          <button onClick={() => setDeleteDialog({ open: true, id: station.id })} className="btn-delete">🗑️ Törlés</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="station-body">
-                <div className="station-title">
-                  <h3>{station.name}</h3>
-                  {tripName && <span className="trip-badge">🗺️ {tripName}</span>}
-                </div>
-                <p className="station-desc">{station.description || 'Nincs leírás megadva.'}</p>
-                {station.funFact && <p className="station-fun-fact">💡 {station.funFact}</p>}
-                <div className="station-qr">
-                  <div className="qr-meta">
-                    <span className="qr-label">QR: {qrValue.substring(0, 16)}{qrValue.length > 16 ? '…' : ''}</span>
-                    <button className="qr-print" type="button" onClick={() => handleDownloadPdf(station)}>🖨️ Nyomtatás</button>
-                  </div>
-                  <img src={getQrImageUrl(qrValue)} alt={`QR ${station.name}`} />
-                </div>
-                <div className="station-actions">
-                  <button onClick={() => handleEdit(station)} className="btn-edit">✏️ Szerkesztés</button>
-                  <button onClick={() => setDeleteDialog({ open: true, id: station.id })} className="btn-delete">🗑️ Törlés</button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        {stations.length === 0 && <p className="empty-state">Még nincsenek állomások. Adj hozzá egyet!</p>}
-        {stations.length > 0 && filtered.length === 0 && <p className="empty-state">Nincs találat a keresésre.</p>}
-      </div>
+            )}
 
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
@@ -474,4 +505,5 @@ export default function Stations() {
     </div>
   );
 }
+
 

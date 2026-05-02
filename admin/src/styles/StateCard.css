@@ -1,0 +1,56 @@
+.state-card {
+  text-align: center;
+  padding: 56px 24px;
+  border-radius: 16px;
+  border: 1px solid #dbe6f3;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(191, 219, 254, 0.45), transparent 42%),
+    linear-gradient(160deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.state-card__icon {
+  font-size: 2.75rem;
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.state-card__title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.state-card__description {
+  max-width: 520px;
+  margin: 10px auto 0;
+  color: #52627a;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.state-card__action {
+  margin-top: 18px;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+  cursor: pointer;
+}
+
+.state-card__action:hover {
+  filter: brightness(1.05);
+}
+
+.state-card--loading .state-card__icon {
+  animation: state-card-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes state-card-pulse {
+  0%,
+  100% { transform: scale(1); opacity: 0.72; }
+  50% { transform: scale(1.08); opacity: 1; }
+}

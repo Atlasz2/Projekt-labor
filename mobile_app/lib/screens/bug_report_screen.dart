@@ -89,8 +89,8 @@ class _BugReportScreenState extends State<BugReportScreen> {
         SnackBar(
           content: Text(
             service.isOnline
-                ? 'A hibabejelentes el lett kuldve.'
-                : 'Offline modban rogzitve. Online kapcsolatnal szinkronizalodik.',
+                ? 'A hibajelentés el lett küldve.'
+                : 'Offline módban rögzítve. Szinkronizálódik, amint visszatér a kapcsolat.',
           ),
         ),
       );
@@ -197,3 +197,4 @@ class _BugReportScreenState extends State<BugReportScreen> {
     );
   }
 }
+

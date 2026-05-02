@@ -16,7 +16,8 @@ service firebase.storage {
         && request.auth.token.email != null
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.token.email))
         && firestore.get(/databases/(default)/documents/users/$(request.auth.token.email)).data.email == request.auth.token.email
-        && firestore.get(/databases/(default)/documents/users/$(request.auth.token.email)).data.role == 'admin';
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.token.email)).data.role == 'admin'
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.token.email)).data.uid == request.auth.uid;
     }
 
     function isAdmin() {
@@ -29,3 +30,4 @@ service firebase.storage {
     }
   }
 }
+
