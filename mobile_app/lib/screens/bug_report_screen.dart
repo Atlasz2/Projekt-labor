@@ -37,6 +37,25 @@ class _BugReportScreenState extends State<BugReportScreen> {
     super.dispose();
   }
 
+  bool _isClosed(Map<String, dynamic> item) {
+    final resolved = item['resolved'];
+    if (resolved is bool) return resolved;
+    final status = (item['status'] ?? '').toString().toLowerCase();
+    return status == 'closed' || status == 'fixed' || status == 'resolved';
+  }
+
+  String _formatCreatedAt(Map<String, dynamic> item) {
+    final raw = item['created_at_text']?.toString() ?? '';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return 'Ismeretlen időpont';
+    final local = parsed.toLocal();
+    final mm = local.month.toString().padLeft(2, '0');
+    final dd = local.day.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '${local.year}. $mm. $dd. $hh:$min';
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
@@ -67,14 +86,11 @@ class _BugReportScreenState extends State<BugReportScreen> {
 
     try {
       if (service.isOnline) {
-        await FirebaseFirestore.instance
-            .collection('bug_reports')
-            .doc(bugId)
-            .set({
-              ...payload,
-              'created_at': FieldValue.serverTimestamp(),
-              'updated_at': FieldValue.serverTimestamp(),
-            });
+        await FirebaseFirestore.instance.collection('bug_reports').doc(bugId).set({
+          ...payload,
+          'created_at': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+        });
       } else {
         await service.queueAction(
           actionType: 'create',
@@ -85,6 +101,8 @@ class _BugReportScreenState extends State<BugReportScreen> {
       }
 
       if (!mounted) return;
+      _titleController.clear();
+      _descriptionController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -94,12 +112,11 @@ class _BugReportScreenState extends State<BugReportScreen> {
           ),
         ),
       );
-      Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Nem sikerult elkuldeni: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nem sikerült elküldeni: $error')),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -107,8 +124,10 @@ class _BugReportScreenState extends State<BugReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Hibabejelentes')),
+      appBar: AppBar(title: const Text('Hibabejelentés')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -124,16 +143,28 @@ class _BugReportScreenState extends State<BugReportScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Ha hibat talalsz, itt rogzitheto a bejelentes. Az admin latni fogja a nevedet es email cimedet is.',
+                    'Ha hibát találsz, itt rögzítheted a bejelentést. Az admin látni fogja a nevedet és email címedet is.',
                     style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Text(
+                      'Lentebb a korábbi bejelentéseidet és az admin válaszait is látod.',
+                      style: TextStyle(color: Color(0xFF1E3A8A), height: 1.45),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Nev'),
+                    decoration: const InputDecoration(labelText: 'Név'),
                     validator: (value) =>
                         (value == null || value.trim().isEmpty)
-                        ? 'Kotelezo mező.'
+                        ? 'Kötelező mező.'
                         : null,
                   ),
                   const SizedBox(height: 12),
@@ -142,16 +173,16 @@ class _BugReportScreenState extends State<BugReportScreen> {
                     decoration: const InputDecoration(labelText: 'Email'),
                     validator: (value) =>
                         (value == null || value.trim().isEmpty)
-                        ? 'Kotelezo mező.'
+                        ? 'Kötelező mező.'
                         : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _titleController,
-                    decoration: const InputDecoration(labelText: 'Rovid cim'),
+                    decoration: const InputDecoration(labelText: 'Rövid cím'),
                     validator: (value) =>
                         (value == null || value.trim().length < 4)
-                        ? 'Irj legalabb 4 karaktert.'
+                        ? 'Írj legalább 4 karaktert.'
                         : null,
                   ),
                   const SizedBox(height: 12),
@@ -159,37 +190,136 @@ class _BugReportScreenState extends State<BugReportScreen> {
                     initialValue: _severity,
                     items: const [
                       DropdownMenuItem(value: 'low', child: Text('Alacsony')),
-                      DropdownMenuItem(value: 'medium', child: Text('Kozepes')),
+                      DropdownMenuItem(value: 'medium', child: Text('Közepes')),
                       DropdownMenuItem(value: 'high', child: Text('Magas')),
-                      DropdownMenuItem(
-                        value: 'critical',
-                        child: Text('Kritikus'),
-                      ),
+                      DropdownMenuItem(value: 'critical', child: Text('Kritikus')),
                     ],
                     onChanged: (value) =>
                         setState(() => _severity = value ?? 'medium'),
-                    decoration: const InputDecoration(labelText: 'Sulyossag'),
+                    decoration: const InputDecoration(labelText: 'Súlyosság'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _descriptionController,
                     minLines: 5,
                     maxLines: 8,
-                    decoration: const InputDecoration(labelText: 'Leiras'),
+                    decoration: const InputDecoration(labelText: 'Leírás'),
                     validator: (value) =>
                         (value == null || value.trim().length < 10)
-                        ? 'Adj reszletesebb leirast.'
+                        ? 'Adj részletesebb leírást.'
                         : null,
                   ),
                   const SizedBox(height: 18),
                   FilledButton(
                     onPressed: _submitting ? null : _submit,
                     child: Text(
-                      _submitting ? 'Kuldes...' : 'Hibabejelentes elkuldese',
+                      _submitting ? 'Küldés...' : 'Hibabejelentés elküldése',
                     ),
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 18),
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('bug_reports')
+                  .where('reported_by.user_id', isEqualTo: uid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const SizedBox.shrink();
+                }
+
+                final docs = snapshot.data!.docs.toList()
+                  ..sort((a, b) {
+                    final aTs = (a.data()['created_at_ms'] ?? 0) as num;
+                    final bTs = (b.data()['created_at_ms'] ?? 0) as num;
+                    return bTs.compareTo(aTs);
+                  });
+
+                if (docs.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Korábbi hibabejelentéseid',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 12),
+                      ...docs.map((doc) {
+                        final item = doc.data();
+                        final response = (item['admin_response'] ?? '')
+                            .toString()
+                            .trim();
+                        final closed = _isClosed(item);
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _formatCreatedAt(item),
+                                      style: const TextStyle(
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    closed ? 'Lezárt' : 'Folyamatban',
+                                    style: TextStyle(
+                                      color: closed
+                                          ? const Color(0xFF065F46)
+                                          : const Color(0xFF92400E),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                (item['title'] ?? 'Hibabejelentés').toString(),
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 4),
+                              Text((item['description'] ?? '').toString()),
+                              const SizedBox(height: 8),
+                              Text(
+                                response.isEmpty
+                                    ? 'Admin válasz még nem érkezett.'
+                                    : 'Admin válasz: $response',
+                                style: TextStyle(
+                                  color: response.isEmpty
+                                      ? const Color(0xFF475569)
+                                      : const Color(0xFF1D4ED8),
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -197,4 +327,3 @@ class _BugReportScreenState extends State<BugReportScreen> {
     );
   }
 }
-

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../services/offline_sync_service.dart';
 
 class ContactScreen extends StatefulWidget {
@@ -34,7 +35,7 @@ class _ContactScreenState extends State<ContactScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadContactData();
     final user = FirebaseAuth.instance.currentUser;
     _nameController.text = user?.displayName ?? '';
@@ -138,6 +139,7 @@ class _ContactScreenState extends State<ContactScreen>
           backgroundColor: Colors.green,
         ),
       );
+      _tabController.animateTo(2);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -165,6 +167,18 @@ class _ContactScreenState extends State<ContactScreen>
     return status == 'closed' || status == 'fixed' || status == 'resolved';
   }
 
+  String _formatCreatedAt(Map<String, dynamic> item) {
+    final raw = item['created_at_text']?.toString() ?? '';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return 'Ismeretlen időpont';
+    final local = parsed.toLocal();
+    final mm = local.month.toString().padLeft(2, '0');
+    final dd = local.day.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final min = local.minute.toString().padLeft(2, '0');
+    return '${local.year}. $mm. $dd. $hh:$min';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,9 +187,11 @@ class _ContactScreenState extends State<ContactScreen>
         elevation: 0,
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           tabs: const [
             Tab(icon: Icon(Icons.call_outlined), text: 'Kapcsolat'),
-            Tab(icon: Icon(Icons.bug_report_outlined), text: 'Hibabejelentés'),
+            Tab(icon: Icon(Icons.bug_report_outlined), text: 'Új hibabejelentés'),
+            Tab(icon: Icon(Icons.history), text: 'Előzmények'),
           ],
         ),
       ),
@@ -184,6 +200,7 @@ class _ContactScreenState extends State<ContactScreen>
         children: [
           _buildContactTab(),
           _buildBugReportTab(),
+          _buildBugHistoryTab(),
         ],
       ),
     );
@@ -191,7 +208,9 @@ class _ContactScreenState extends State<ContactScreen>
 
   Widget _buildContactTab() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_contactData == null) return const Center(child: Text('Nincs kapcsolati adat.'));
+    if (_contactData == null) {
+      return const Center(child: Text('Nincs kapcsolati adat.'));
+    }
 
     return SingleChildScrollView(
       child: Padding(
@@ -213,11 +232,23 @@ class _ContactScreenState extends State<ContactScreen>
                   ),
                 ),
                 const SizedBox(height: 20),
-                _buildItem(Icons.location_on, 'Cím', _safeString(_contactData!['address'])),
+                _buildItem(
+                  Icons.location_on,
+                  'Cím',
+                  _safeString(_contactData!['address']),
+                ),
                 const SizedBox(height: 16),
-                _buildItem(Icons.phone, 'Telefon', _safeString(_contactData!['phone'])),
+                _buildItem(
+                  Icons.phone,
+                  'Telefon',
+                  _safeString(_contactData!['phone']),
+                ),
                 const SizedBox(height: 16),
-                _buildItem(Icons.email, 'Email', _safeString(_contactData!['email'])),
+                _buildItem(
+                  Icons.email,
+                  'Email',
+                  _safeString(_contactData!['email']),
+                ),
               ],
             ),
           ),
@@ -227,8 +258,6 @@ class _ContactScreenState extends State<ContactScreen>
   }
 
   Widget _buildBugReportTab() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -253,6 +282,27 @@ class _ContactScreenState extends State<ContactScreen>
                   const Text(
                     'Ha hibát találsz az alkalmazásban, itt tudod jelezni. A bejelentés offline módban is rögzíthető.',
                     style: TextStyle(height: 1.5, color: Color(0xFF6B7280)),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.visibility_outlined, color: Color(0xFF2563EB)),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'A korábbi bejelentéseidet és az admin válaszait az Előzmények fülön találod.',
+                            style: TextStyle(color: Color(0xFF1E3A8A), height: 1.45),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 20),
                   TextFormField(
@@ -308,104 +358,181 @@ class _ContactScreenState extends State<ContactScreen>
                               ),
                             )
                           : const Icon(Icons.send_outlined),
-                      label: Text(_submitting ? 'Küldés...' : 'Bejelentés elküldése'),
+                      label: Text(
+                        _submitting ? 'Küldés...' : 'Bejelentés elküldése',
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 18),
-          if (uid != null)
-            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('bug_reports')
-                  .where('reported_by.user_id', isEqualTo: uid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SizedBox.shrink();
-                }
-
-                final docs = snapshot.data!.docs.toList()
-                  ..sort((a, b) {
-                    final aTs = (a.data()['created_at_ms'] ?? 0) as num;
-                    final bTs = (b.data()['created_at_ms'] ?? 0) as num;
-                    return bTs.compareTo(aTs);
-                  });
-
-                if (docs.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Admin visszajelzések',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 10),
-                      ...docs.map((doc) {
-                        final item = doc.data();
-                        final response = (item['admin_response'] ?? '').toString().trim();
-                        final closed = _isClosed(item);
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE5E7EB)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (item['description'] ?? 'Nincs leírás').toString(),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                closed ? 'Állapot: Lezárt (true)' : 'Állapot: Aktív (false)',
-                                style: TextStyle(
-                                  color: closed ? const Color(0xFF065F46) : const Color(0xFF92400E),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                response.isEmpty
-                                    ? 'Admin válasz még nem érkezett.'
-                                    : 'Admin válasz: $response',
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                );
-              },
-            ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBugHistoryTab() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('Jelentkezz be a korábbi hibabejelentéseid megtekintéséhez.'),
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('bug_reports')
+          .where('reported_by.user_id', isEqualTo: uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final docs = snapshot.data!.docs.toList()
+          ..sort((a, b) {
+            final aTs = (a.data()['created_at_ms'] ?? 0) as num;
+            final bTs = (b.data()['created_at_ms'] ?? 0) as num;
+            return bTs.compareTo(aTs);
+          });
+
+        if (docs.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Még nincs korábbi hibabejelentésed.'),
+            ),
+          );
+        }
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 12,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Korábbi hibabejelentéseid',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Itt látod az állapotot és az admin válaszát is.',
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            ...docs.map((doc) {
+              final item = doc.data();
+              final response = (item['admin_response'] ?? '').toString().trim();
+              final closed = _isClosed(item);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: closed
+                        ? const Color(0xFFA7F3D0)
+                        : const Color(0xFFFCD34D),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _formatCreatedAt(item),
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: closed
+                                ? const Color(0xFFECFDF5)
+                                : const Color(0xFFFFFBEB),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            closed ? 'Lezárt' : 'Folyamatban',
+                            style: TextStyle(
+                              color: closed
+                                  ? const Color(0xFF065F46)
+                                  : const Color(0xFF92400E),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      (item['description'] ?? 'Nincs leírás').toString(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: response.isEmpty
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFFEFF6FF),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        response.isEmpty
+                            ? 'Admin válasz még nem érkezett.'
+                            : 'Admin válasz: $response',
+                        style: TextStyle(
+                          color: response.isEmpty
+                              ? const Color(0xFF475569)
+                              : const Color(0xFF1D4ED8),
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 
@@ -428,7 +555,10 @@ class _ContactScreenState extends State<ContactScreen>
                 ),
               ),
               const SizedBox(height: 4),
-              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
             ],
           ),
         ),

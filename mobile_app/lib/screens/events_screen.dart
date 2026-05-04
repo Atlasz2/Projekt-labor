@@ -231,7 +231,7 @@ class _EventsScreenState extends State<EventsScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          '${photos.length} foto kapcsolodik ehhez a rendezvenyhez.',
+                          '${photos.length} fotó kapcsolódik ehhez a rendezvényhez.',
                           style: TextStyle(color: Colors.grey.shade600),
                         ),
                       ],
@@ -246,6 +246,95 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
+
+  Widget _buildSkeletonCard() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 180,
+                color: Colors.grey.shade200,
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 18,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      height: 13,
+                      width: 140,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 13,
+                      width: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEventsSkeleton(BuildContext context) {
+    return CustomScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      slivers: [
+        SliverAppBar(
+          expandedHeight: 140,
+          pinned: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: const Text(
+              'Rendezvények',
+              style: TextStyle(color: Colors.white),
+            ),
+            background: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF667EEA), Color(0xFF764BA2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList.builder(
+            itemCount: 4,
+            itemBuilder: (_, i) => _buildSkeletonCard(),
+          ),
+        ),
+      ],
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -253,7 +342,7 @@ class _EventsScreenState extends State<EventsScreen> {
         stream: _firestore.collection('events').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return _buildEventsSkeleton(context);
           }
           if (snapshot.hasError) {
             return Center(child: Text('Hiba: ${snapshot.error}'));
@@ -309,7 +398,7 @@ class _EventsScreenState extends State<EventsScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${events.length} esemeny',
+                            '${events.length} esemény',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 13,
@@ -430,7 +519,7 @@ class _EventsScreenState extends State<EventsScreen> {
                                       ),
                                       const SizedBox(height: 10),
                                       Text(
-                                        '${photos.length} foto',
+                                        '${photos.length} fotó',
                                         style: TextStyle(
                                           color: Colors.grey.shade600,
                                           fontSize: 12,

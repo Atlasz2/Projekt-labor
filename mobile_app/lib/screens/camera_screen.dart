@@ -1,12 +1,15 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../widgets/offline_image.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/local_cache.dart';
+import '../services/offline_sync_service.dart';
 import '../services/pending_qr_sync_service.dart';
+import '../services/qr_processing_service.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -19,6 +22,7 @@ class _CameraScreenState extends State<CameraScreen> {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _controller = MobileScannerController();
+  final OfflineSyncService _offlineSyncService = OfflineSyncService();
 
   bool _scanning = true;
   bool _loading = false;
@@ -62,8 +66,9 @@ class _CameraScreenState extends State<CameraScreen> {
   @override
   void initState() {
     super.initState();
-    _loadHistory();
-    PendingQrSyncService.start();
+    unawaited(_offlineSyncService.init());
+    unawaited(_loadHistory());
+    unawaited(PendingQrSyncService.start());
   }
 
   @override
@@ -77,66 +82,44 @@ class _CameraScreenState extends State<CameraScreen> {
     if (uid == null) return;
     try {
       final doc = await _firestore.collection('user_progress').doc(uid).get();
-      final data = doc.data() ?? {};
-      final completed = List<String>.from(data['completedStations'] ?? []);
-      if (completed.isEmpty) return;
-      final stSnap = await _firestore.collection('stations').get();
-      final all = {
-        for (final d in stSnap.docs)
-          d.id: <String, dynamic>{'id': d.id, ...d.data()},
-      };
+      final data = doc.data() ?? <String, dynamic>{};
+      final completed = List<String>.from(data['completedStations'] ?? const []);
+      if (completed.isEmpty) {
+        if (!mounted) return;
+        setState(() => _history = []);
+        return;
+      }
+
+      final recentIds = completed.reversed.take(10).toList(growable: false);
+      final byId = <String, Map<String, dynamic>>{};
+
+      for (var i = 0; i < recentIds.length; i += 10) {
+        final end = (i + 10 < recentIds.length) ? i + 10 : recentIds.length;
+        final chunk = recentIds.sublist(i, end);
+        final snap = await _firestore
+            .collection('stations')
+            .where(FieldPath.documentId, whereIn: chunk)
+            .get();
+
+        for (final st in snap.docs) {
+          byId[st.id] = <String, dynamic>{'id': st.id, ...st.data()};
+        }
+      }
+
       if (!mounted) return;
       setState(() {
-        _history = completed
-            .map((id) => all[id] ?? {'name': id})
-            .toList()
-            .reversed
-            .take(10)
-            .toList();
+        _history = recentIds
+            .map((id) => byId[id] ?? <String, dynamic>{'id': id, 'name': id})
+            .toList(growable: false);
       });
     } catch (_) {}
-  }
-
-  Future<void> _syncLeaderboardEntry({
-    required String uid,
-    required int points,
-    required int completedStationsCount,
-    required int completedEventsCount,
-    String? displayName,
-  }) async {
-    var effectiveName = displayName?.trim() ?? '';
-    if (effectiveName.isEmpty) {
-      final userDoc = await _firestore.collection('users').doc(uid).get();
-      final userData = userDoc.data() ?? <String, dynamic>{};
-      effectiveName =
-          userData['displayName']?.toString() ??
-          userData['name']?.toString() ??
-          'Felhasználó';
-    }
-
-    await _firestore.collection('public_leaderboard').doc(uid).set({
-      'displayName': effectiveName,
-      'points': points,
-      'completedStationsCount': completedStationsCount,
-      'completedEventsCount': completedEventsCount,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  Future<bool> _isOnline() async {
-    try {
-      final r = await Connectivity().checkConnectivity();
-      return r.any((x) => x != ConnectivityResult.none);
-    } catch (_) {
-      return true;
-    }
   }
 
   Future<void> _onQrDetected(String code) async {
     if (!_scanning || _loading) return;
 
-    // Offline ellenőrzés
-    if (!await _isOnline()) {
+    await _offlineSyncService.init();
+    if (!_offlineSyncService.isOnline) {
       final queuedNow = await LocalCache.enqueuePendingQr(code);
       final cachedStation = _findStationFromLocalCache(code);
       if (!mounted) return;
@@ -174,29 +157,22 @@ class _CameraScreenState extends State<CameraScreen> {
       final uid = _auth.currentUser?.uid;
       if (uid == null) throw Exception('Nincs bejelentkezett felhasználó');
 
-      var snap = await _firestore
-          .collection('stations')
-          .where('qrCode', isEqualTo: code)
-          .limit(1)
-          .get();
-      if (snap.docs.isEmpty) {
-        final byId = await _firestore.collection('stations').doc(code).get();
-        if (byId.exists) {
-          await _handleStationFound(uid, byId.id, <String, dynamic>{
-            'id': byId.id,
-            ...byId.data()!,
-          });
-          return;
-        }
-        throw Exception('Ismeretlen QR kód: $code');
-      }
+      final result = await QrProcessingService.processByCode(uid: uid, code: code);
+      if (!mounted) return;
 
-      final stDoc = snap.docs.first;
-      final stData = stDoc.data();
-      await _handleStationFound(uid, stDoc.id, <String, dynamic>{
-        'id': stDoc.id,
-        ...stData,
+      setState(() {
+        _station = {
+          ..._normalizeStation(result.station),
+          'alreadyDone': result.alreadyDone,
+          'newAchievements': result.newAchievements,
+        };
+        _loading = false;
       });
+
+      if (!result.alreadyDone) {
+        unawaited(_loadHistory());
+      }
+      unawaited(PendingQrSyncService.start());
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -218,142 +194,6 @@ class _CameraScreenState extends State<CameraScreen> {
       }
     }
     return null;
-  }
-
-  Future<void> _handleStationFound(
-    String uid,
-    String stationId,
-    Map<String, dynamic> data,
-  ) async {
-    final progressRef = _firestore.collection('user_progress').doc(uid);
-    final progressDoc = await progressRef.get();
-    final progressData = progressDoc.data() ?? {};
-    final completed = List<String>.from(
-      progressData['completedStations'] ?? [],
-    );
-    final completedEvents = List<String>.from(
-      progressData['completedEvents'] ?? [],
-    );
-    final alreadyDone = completed.contains(stationId);
-    final stationPoints = (data['points'] as num?)?.toInt() ?? 10;
-    final currentPoints = (progressData['totalPoints'] as num?)?.toInt() ?? 0;
-    var updatedPoints = currentPoints;
-    List<Map<String, dynamic>> newAch = [];
-
-    if (!alreadyDone) {
-      completed.add(stationId);
-      updatedPoints = currentPoints + stationPoints;
-      await progressRef.set({
-        'completedStations': completed,
-        'totalPoints': updatedPoints,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      newAch = await _checkAchievements(
-        uid,
-        completed,
-        updatedPoints,
-        progressData,
-      );
-    }
-
-    await _syncLeaderboardEntry(
-      uid: uid,
-      displayName: progressData['name']?.toString(),
-      points: updatedPoints,
-      completedStationsCount: completed.length,
-      completedEventsCount: completedEvents.length,
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _station = {
-        ..._normalizeStation(data),
-        'alreadyDone': alreadyDone,
-        'newAchievements': newAch,
-      };
-      _loading = false;
-    });
-    _loadHistory();
-    PendingQrSyncService.start();
-  }
-
-  Future<List<Map<String, dynamic>>> _checkAchievements(
-    String uid,
-    List<String> completedStations,
-    int totalPoints,
-    Map<String, dynamic> progressData,
-  ) async {
-    try {
-      final results = await Future.wait([
-        _firestore.collection('achievements').get(),
-        _firestore
-            .collection('user_progress')
-            .doc(uid)
-            .collection('unlocked_achievements')
-            .get(),
-      ]);
-      final achSnap = results[0] as QuerySnapshot;
-      final unlockedSnap = results[1] as QuerySnapshot;
-      final alreadyUnlocked = unlockedSnap.docs.map((d) => d.id).toSet();
-
-      final completedEvents = List<String>.from(
-        progressData['completedEvents'] ?? [],
-      );
-      final completedTripIds = List<String>.from(
-        progressData['completedTripIds'] ?? [],
-      );
-      final newlyUnlocked = <Map<String, dynamic>>[];
-
-      for (final doc in achSnap.docs) {
-        final id = doc.id;
-        if (alreadyUnlocked.contains(id)) continue;
-        final achData = doc.data() as Map<String, dynamic>;
-        final type = achData['conditionType']?.toString() ?? '';
-        final target = (achData['conditionValue'] as num?)?.toInt() ?? 1;
-
-        bool met = false;
-        if (type == 'station_count') {
-          met = completedStations.length >= target;
-        } else if (type == 'event_count') {
-          met = completedEvents.length >= target;
-        } else if (type == 'qr_count') {
-          met = (completedStations.length + completedEvents.length) >= target;
-        } else if (type == 'points_threshold') {
-          met = totalPoints >= target;
-        } else if (type == 'trip_complete') {
-          met = completedTripIds.length >= target;
-        }
-
-        if (met) {
-          await _firestore
-              .collection('user_progress')
-              .doc(uid)
-              .collection('unlocked_achievements')
-              .doc(id)
-              .set({'unlockedAt': FieldValue.serverTimestamp()});
-          await _firestore.collection('achievements').doc(id).update({
-            'unlockedCount': FieldValue.increment(1),
-          });
-          newlyUnlocked.add({'id': id, ...achData});
-        }
-      }
-
-      if (newlyUnlocked.isNotEmpty) {
-        final first = newlyUnlocked.first;
-        await _firestore.collection('user_progress').doc(uid).set({
-          'pendingAchievementBanner': {
-            'title': first['name']?.toString() ?? 'Jutalom feloldva! 🏆',
-            'subtitle': newlyUnlocked.length == 1
-                ? (first['description']?.toString() ?? '')
-                : '${newlyUnlocked.length} új jutalom feloldva!',
-          },
-        }, SetOptions(merge: true));
-      }
-      return newlyUnlocked;
-    } catch (e) {
-      debugPrint('Achievement check failed: $e');
-      return [];
-    }
   }
 
   void _reset() {

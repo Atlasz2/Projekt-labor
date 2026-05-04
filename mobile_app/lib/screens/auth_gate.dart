@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -36,8 +38,8 @@ class _AuthGateState extends State<AuthGate> {
     if (_lastBootstrappedUid == uid) return;
     _lastBootstrappedUid = uid;
     _servicesStoppedForSignedOut = false;
-    BootstrapService.run().ignore();
-    PendingQrSyncService.start().ignore();
+    unawaited(BootstrapService.run());
+    unawaited(PendingQrSyncService.start());
   }
 
   Future<void> _stopBackgroundServices() async {
@@ -66,7 +68,7 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         if (!snapshot.hasData || snapshot.data == null) {
-          _stopBackgroundServices().ignore();
+          unawaited(_stopBackgroundServices());
           return const NameScreen();
         }
 

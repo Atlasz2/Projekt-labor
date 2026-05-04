@@ -78,17 +78,17 @@ class OfflineSyncService {
     ) async {
       await _updateConnectivity(results);
       if (_isOnline) {
-        syncPendingActions();
+        unawaited(syncPendingActions());
       }
     });
 
-    _connectivityTimer = Timer.periodic(const Duration(seconds: 12), (
+    _connectivityTimer = Timer.periodic(const Duration(seconds: 60), (
       _,
     ) async {
       final latestConnectivity = await Connectivity().checkConnectivity();
       await _updateConnectivity(latestConnectivity);
       if (_isOnline) {
-        syncPendingActions();
+        unawaited(syncPendingActions());
       }
     });
   }
@@ -186,7 +186,7 @@ class OfflineSyncService {
   }
 
   DateTime? getLastSyncTime() {
-    if (!_initialized || _pendingActionsBox.isEmpty) return DateTime.now();
+    if (!_initialized || _pendingActionsBox.isEmpty) return null;
 
     final actions = _pendingActionsBox.values
         .map(

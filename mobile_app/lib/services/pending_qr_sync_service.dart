@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import 'local_cache.dart';
+import 'offline_sync_service.dart';
 import 'qr_processing_service.dart';
 
 class PendingQrSyncService {
@@ -19,7 +20,7 @@ class PendingQrSyncService {
     _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
       final online = results.any((r) => r != ConnectivityResult.none);
       if (online) {
-        syncNow().ignore();
+        unawaited(syncNow());
       }
     });
 
@@ -36,20 +37,19 @@ class PendingQrSyncService {
     if (_syncInProgress) return;
     if (!LocalCache.hasPendingQr) return;
 
-    final online = await _isOnline();
-    if (!online) return;
+    final syncService = OfflineSyncService();
+    await syncService.init();
+    if (!syncService.isOnline) return;
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     _syncInProgress = true;
     try {
-      final queueEntries = LocalCache.getPendingQrQueue().entries.toList()
-        ..sort((a, b) => a.key.compareTo(b.key));
-
+      final queueEntries = LocalCache.getPendingQrQueue();
       for (final entry in queueEntries) {
         try {
-          await QrProcessingService.processByCode(uid: uid, code: entry.value);
+          await QrProcessingService.processByCode(uid: uid, code: entry.key);
           await LocalCache.removePendingQr(entry.key);
         } catch (e) {
           debugPrint('Pending QR sync failed for ${entry.key}: $e');
@@ -57,15 +57,6 @@ class PendingQrSyncService {
       }
     } finally {
       _syncInProgress = false;
-    }
-  }
-
-  static Future<bool> _isOnline() async {
-    try {
-      final result = await Connectivity().checkConnectivity();
-      return result.any((r) => r != ConnectivityResult.none);
-    } catch (_) {
-      return true;
     }
   }
 }

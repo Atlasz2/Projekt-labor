@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/leaderboard_service.dart';
+
 class AchievementProgressScreen extends StatefulWidget {
   const AchievementProgressScreen({super.key});
 
@@ -35,22 +37,6 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse('$value') ?? 0;
-  }
-
-  Future<void> _syncLeaderboardEntry({
-    required String uid,
-    required String displayName,
-    required int points,
-    required int completedStationsCount,
-    required int completedEventsCount,
-  }) async {
-    await _firestore.collection('public_leaderboard').doc(uid).set({
-      'displayName': displayName,
-      'points': points,
-      'completedStationsCount': completedStationsCount,
-      'completedEventsCount': completedEventsCount,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
   }
 
   Future<void> _loadData() async {
@@ -90,7 +76,7 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
           progressData['name']?.toString() ??
           'Felhasznalo';
 
-      await _syncLeaderboardEntry(
+      await LeaderboardService.syncEntry(
         uid: uid,
         displayName: displayName,
         points: points,

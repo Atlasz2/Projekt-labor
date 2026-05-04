@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/offline_sync_service.dart';
+import '../theme/app_colors.dart';
 import 'accommodation_screen.dart';
 import 'camera_screen.dart';
 import 'contact_screen.dart';
@@ -22,6 +23,15 @@ class MainMenuScreen extends StatefulWidget {
 }
 
 class _MainMenuScreenState extends State<MainMenuScreen> {
+  static final List<_MenuItem> _menuItems = <_MenuItem>[
+    _MenuItem('Térkép és túrák', 'GPS, útvonal és állomások', Icons.map_outlined, Color(0xFF667EEA), const MapTripsScreen()),
+    _MenuItem('QR beolvasás', 'Pontok és esemény pecsétek', Icons.qr_code_scanner, Color(0xFF4CAF50), const CameraScreen()),
+    _MenuItem('Rendezvények', 'Képek, részletek, pecsétvadászat', Icons.celebration_outlined, Color(0xFFFF9800), const EventsScreen()),
+    _MenuItem('Nagyvázsony története', 'Idővonal és helytörténet', Icons.history_edu_outlined, Color(0xFF8E44AD), const HistoryScreen()),
+    _MenuItem('Szállás és étterem', 'Képek, árak, hívás', Icons.hotel_outlined, Color(0xFFE91E63), const AccommodationScreen()),
+    _MenuItem('Feloldott tartalmak', 'Gyűjtött élmények és jelzések', Icons.collections_outlined, Color(0xFFFF6B6B), const UnlockedContentScreen()),
+    _MenuItem('Kapcsolat', 'Elérhetőségek és iroda', Icons.call_outlined, Color(0xFF0097A7), const ContactScreen()),
+  ];
   late final ScrollController _scrollController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final OfflineSyncService _offlineSyncService = OfflineSyncService();
@@ -35,7 +45,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _offlineSyncService.init().ignore();
+    unawaited(_offlineSyncService.init());
     _loadPendingAchievementBanner();
   }
 
@@ -101,23 +111,13 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final items = <_MenuItem>[
-      _MenuItem('Térkép és túrák', 'GPS, útvonal és állomások', Icons.map_outlined, const Color(0xFF667EEA), const MapTripsScreen()),
-      _MenuItem('QR beolvasás', 'Pontok és esemény pecsétek', Icons.qr_code_scanner, const Color(0xFF4CAF50), const CameraScreen()),
-      _MenuItem('Rendezvények', 'Képek, részletek, pecsétvadászat', Icons.celebration_outlined, const Color(0xFFFF9800), const EventsScreen()),
-      _MenuItem('Nagyvázsony története', 'Idővonal és helytörténet', Icons.history_edu_outlined, const Color(0xFF8E44AD), const HistoryScreen()),
-      _MenuItem('Szállás és étterem', 'Képek, árak, hívás', Icons.hotel_outlined, const Color(0xFFE91E63), const AccommodationScreen()),
-      _MenuItem('Feloldott tartalmak', 'Gyűjtött élmények és jelzések', Icons.collections_outlined, const Color(0xFFFF6B6B), const UnlockedContentScreen()),
-      _MenuItem('Kapcsolat', 'Elérhetőségek és iroda', Icons.call_outlined, const Color(0xFF0097A7), const ContactScreen()),
-    ];
-
     final width = MediaQuery.of(context).size.width;
     final crossAxisCount = width < 420 ? 1 : (width < 900 ? 2 : 3);
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF2EBDD),
-        surfaceTintColor: const Color(0xFFF2EBDD),
+        backgroundColor: AppColors.background,
+        surfaceTintColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
         shadowColor: Colors.transparent,
@@ -150,8 +150,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    const Color(0xFFF2EBDD).withValues(alpha: 0.48),
-                    const Color(0xFFF2EBDD).withValues(alpha: 0.60),
+                    AppColors.background.withValues(alpha: 0.48),
+                    AppColors.background.withValues(alpha: 0.60),
                   ],
                 ),
               ),
@@ -288,14 +288,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                             padding: const EdgeInsets.all(4),
                             physics: const ClampingScrollPhysics(),
                             clipBehavior: Clip.hardEdge,
-                            itemCount: items.length,
+                            itemCount: _menuItems.length,
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: crossAxisCount,
                               crossAxisSpacing: 2,
                               mainAxisSpacing: 2,
                               childAspectRatio: width < 420 ? 2.9 : 1.28,
                             ),
-                            itemBuilder: (_, index) => _MenuCard(item: items[index]),
+                            itemBuilder: (_, index) => _MenuCard(item: _menuItems[index]),
                           ),
                         ),
                       ),

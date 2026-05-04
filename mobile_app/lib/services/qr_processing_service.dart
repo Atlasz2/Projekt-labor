@@ -1,4 +1,6 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'leaderboard_service.dart';
 
 class QrProcessResult {
   const QrProcessResult({
@@ -97,13 +99,15 @@ class QrProcessingService {
       );
     }
 
-    await _syncLeaderboardEntry(
-      uid: uid,
-      points: updatedPoints,
-      completedStationsCount: completed.length,
-      completedEventsCount: completedEvents.length,
-      displayName: progressData['name']?.toString(),
-    );
+    if (!alreadyDone) {
+      await LeaderboardService.syncEntry(
+        uid: uid,
+        points: updatedPoints,
+        completedStationsCount: completed.length,
+        completedEventsCount: completedEvents.length,
+        displayName: progressData['name']?.toString(),
+      );
+    }
 
     return QrProcessResult(
       station: stationData,
@@ -113,32 +117,6 @@ class QrProcessingService {
       completedStationsCount: completed.length,
       completedEventsCount: completedEvents.length,
     );
-  }
-
-  static Future<void> _syncLeaderboardEntry({
-    required String uid,
-    required int points,
-    required int completedStationsCount,
-    required int completedEventsCount,
-    String? displayName,
-  }) async {
-    var effectiveName = displayName?.trim() ?? '';
-    if (effectiveName.isEmpty) {
-      final userDoc = await _firestore.collection('users').doc(uid).get();
-      final userData = userDoc.data() ?? <String, dynamic>{};
-      effectiveName =
-          userData['displayName']?.toString() ??
-          userData['name']?.toString() ??
-          'Felhasznalo';
-    }
-
-    await _firestore.collection('public_leaderboard').doc(uid).set({
-      'displayName': effectiveName,
-      'points': points,
-      'completedStationsCount': completedStationsCount,
-      'completedEventsCount': completedEventsCount,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
   }
 
   static Future<List<Map<String, dynamic>>> _checkAchievements({

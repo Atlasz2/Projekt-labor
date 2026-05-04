@@ -36,6 +36,40 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
     return <String>{};
   }
 
+  List<String> _imageCandidates(Map<String, dynamic> data, {String? preferred}) {
+    final results = <String>[];
+
+    void addIfPresent(dynamic raw) {
+      final value = raw?.toString().trim() ?? '';
+      if (value.isNotEmpty && !results.contains(value)) {
+        results.add(value);
+      }
+    }
+
+    addIfPresent(preferred);
+
+    final photos = data['photos'];
+    if (photos is List) {
+      for (final item in photos) {
+        if (item is String) {
+          addIfPresent(item);
+        } else if (item is Map && item['url'] != null) {
+          addIfPresent(item['url']);
+        }
+      }
+    }
+
+    final photoUrls = data['photoUrls'];
+    if (photoUrls is List) {
+      for (final item in photoUrls) {
+        addIfPresent(item);
+      }
+    }
+
+    addIfPresent(data['imageUrl']);
+    return results;
+  }
+
   Future<Set<String>> _loadCompletedStationIds(String uid) async {
     final ids = <String>{};
 
@@ -47,7 +81,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       ids.addAll(_idsFromDynamic(data['completed_stations']));
     }
 
-    final subSnap = await _firestore.collection('user_progress').doc(uid).collection('completed_stations').get();
+    final subSnap = await _firestore
+        .collection('user_progress')
+        .doc(uid)
+        .collection('completed_stations')
+        .get();
     ids.addAll(subSnap.docs.map((d) => d.id));
 
     return ids;
@@ -71,7 +109,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                   child: OfflineImage.network(
                     photos[index],
                     fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 64,
+                    ),
                   ),
                 ),
               ),
@@ -125,7 +167,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
             'stationName': stationName,
             'title': 'Fun fact',
             'content': funFact,
-            'imageUrl': '',
+            'type': 'funFact',
+            'images': _imageCandidates(
+              data,
+              preferred: data['funFactImageUrl']?.toString(),
+            ),
           });
         }
 
@@ -137,13 +183,15 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
             'stationName': stationName,
             'title': 'Feloldott tartalom',
             'content': extra,
-            'imageUrl': unlockImage,
+            'type': 'unlock',
+            'images': _imageCandidates(data, preferred: unlockImage),
           });
         }
       }
 
       unlocked.sort((a, b) {
-        final byStation = a['stationName'].toString().compareTo(b['stationName'].toString());
+        final byStation =
+            a['stationName'].toString().compareTo(b['stationName'].toString());
         if (byStation != 0) return byStation;
         return a['title'].toString().compareTo(b['title'].toString());
       });
@@ -173,76 +221,161 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       ),
       body: Stack(
         children: [
-          Positioned.fill(child: Image.asset('assets/var.jpg', fit: BoxFit.cover)),
-          Positioned.fill(child: Container(color: const Color(0xFFF2EBDD).withValues(alpha: 0.97))),
+          Positioned.fill(
+            child: Image.asset('assets/var.jpg', fit: BoxFit.cover),
+          ),
+          Positioned.fill(
+            child: Container(
+              color: const Color(0xFFF2EBDD).withValues(alpha: 0.97),
+            ),
+          ),
           SafeArea(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.error_outline, size: 56, color: Colors.red.shade300),
-                              const SizedBox(height: 12),
-                              Text(_error!, textAlign: TextAlign.center),
-                              const SizedBox(height: 16),
-                              FilledButton(onPressed: _load, child: const Text('Újrapróbálás')),
-                            ],
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 56,
+                            color: Colors.red.shade300,
                           ),
-                        ),
-                      )
-                    : _unlockedItems.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Icon(Icons.lock_outline, size: 64, color: Color(0xFFB0A090)),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'Még nincsenek feloldott tartalmak',
-                                    style: Theme.of(context).textTheme.titleMedium,
-                                    textAlign: TextAlign.center,
+                          const SizedBox(height: 12),
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: _load,
+                            child: const Text('Újrapróbálás'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : _unlockedItems.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.lock_outline,
+                            size: 64,
+                            color: Color(0xFFB0A090),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Még nincsenek feloldott tartalmak',
+                            style: Theme.of(context).textTheme.titleMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Teljesíts állomásokat a térképen, hogy feloldhasd a tartalmakat.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF8B7355),
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                      itemCount: _unlockedItems.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF312E81),
+                                    Color(0xFF7C3AED),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF7C3AED).withValues(
+                                      alpha: 0.28,
+                                    ),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 8),
                                   ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Teljesíts állomásokat a térképen, hogy feloldhasd a tartalmakat.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Color(0xFF8B7355), height: 1.5),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 54,
+                                    height: 54,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.18),
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    child: const Icon(
+                                      Icons.auto_awesome_rounded,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${_unlockedItems.length} feloldott tartalom',
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        const Text(
+                                          'Minden teljesített állomás új vizuális vagy szöveges meglepetéseket nyit meg.',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            height: 1.45,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _load,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                              itemCount: _unlockedItems.length + 1,
-                              itemBuilder: (context, index) {
-                                if (index == 0) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 16),
-                                    child: Text(
-                                      '${_unlockedItems.length} feloldott tartalom',
-                                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Color(0xFF4B3A2A)),
-                                    ),
-                                  );
-                                }
-                                final item = _unlockedItems[index - 1];
-                                return _UnlockedCard(item: item, index: index, onTapImage: () {
-                                  final imageUrl = item['imageUrl']?.toString() ?? '';
-                                  if (imageUrl.isNotEmpty) {
-                                    _openImageViewer([imageUrl], 0);
-                                  }
-                                });
-                              },
-                            ),
-                          ),
+                          );
+                        }
+                        final item = _unlockedItems[index - 1];
+                        return _UnlockedCard(
+                          item: item,
+                          index: index,
+                          onTapImage: () {
+                            final images =
+                                (item['images'] as List<String>? ?? const []);
+                            if (images.isNotEmpty) {
+                              _openImageViewer(images, 0);
+                            }
+                          },
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -255,7 +388,11 @@ class _UnlockedCard extends StatelessWidget {
   final int index;
   final VoidCallback onTapImage;
 
-  const _UnlockedCard({required this.item, required this.index, required this.onTapImage});
+  const _UnlockedCard({
+    required this.item,
+    required this.index,
+    required this.onTapImage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +404,13 @@ class _UnlockedCard extends StatelessWidget {
       [Color(0xFF9D174D), Color(0xFFDB2777)],
     ];
     final grad = gradients[(index - 1) % gradients.length];
-    final imageUrl = item['imageUrl']?.toString() ?? '';
+    final images = (item['images'] as List<String>? ?? const []);
+    final imageUrl = images.isNotEmpty ? images.first : '';
+    final type = item['type']?.toString() ?? 'unlock';
+    final icon = type == 'funFact'
+        ? Icons.lightbulb_rounded
+        : Icons.celebration_rounded;
+    final badge = type == 'funFact' ? 'Fun fact' : 'Feloldott tartalom';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -289,13 +432,44 @@ class _UnlockedCard extends StatelessWidget {
           children: [
             Row(
               children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    item['stationName']?.toString() ?? 'Ismeretlen állomás',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['stationName']?.toString() ?? 'Ismeretlen állomás',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        badge,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const Icon(Icons.lock_open_rounded, color: Colors.white70, size: 18),
+                const Icon(
+                  Icons.lock_open_rounded,
+                  color: Colors.white70,
+                  size: 18,
+                ),
               ],
             ),
             if (imageUrl.isNotEmpty) ...[
@@ -308,21 +482,41 @@ class _UnlockedCard extends StatelessWidget {
                     children: [
                       OfflineImage.network(
                         imageUrl,
-                        height: 180,
+                        height: 210,
                         width: double.infinity,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Container(
-                          height: 180,
+                          height: 210,
                           color: Colors.white12,
                           alignment: Alignment.center,
-                          child: const Icon(Icons.broken_image_outlined, color: Colors.white70),
+                          child: const Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.32),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                       Positioned(
                         right: 10,
                         bottom: 10,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.48),
                             borderRadius: BorderRadius.circular(999),
@@ -330,9 +524,19 @@ class _UnlockedCard extends StatelessWidget {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.zoom_in, color: Colors.white, size: 14),
+                              Icon(
+                                Icons.zoom_in,
+                                color: Colors.white,
+                                size: 14,
+                              ),
                               SizedBox(width: 4),
-                              Text('Megnyitás', style: TextStyle(color: Colors.white, fontSize: 11)),
+                              Text(
+                                'Megnyitás',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -341,14 +545,57 @@ class _UnlockedCard extends StatelessWidget {
                   ),
                 ),
               ),
+            ] else ...[
+              const SizedBox(height: 12),
+              Container(
+                height: 140,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, color: Colors.white70, size: 34),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Ehhez a tartalomhoz nincs külön kép',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
             const SizedBox(height: 10),
-            Text(item['title']?.toString() ?? '', style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              item['title']?.toString() ?? '',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 6),
             Text(
               item['content']?.toString() ?? '',
-              style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.5, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              ),
             ),
+            if (images.length > 1) ...[
+              const SizedBox(height: 12),
+              Text(
+                '${images.length} kép érhető el ehhez a feloldott tartalomhoz.',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ],
           ],
         ),
       ),

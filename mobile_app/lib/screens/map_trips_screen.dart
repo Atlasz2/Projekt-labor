@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -1102,12 +1102,87 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     await _refreshSelectedTripMap();
   }
 
+
+  Widget _buildMapSkeleton(BuildContext context) {
+    final grey = Colors.grey.shade200;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Trip selector chips row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(
+                4,
+(i) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Container(
+                    width: 90,
+                    height: 36,
+                    decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(20)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Map placeholder
+        Expanded(
+          flex: 5,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(color: grey),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Metrics row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: List.generate(
+              3,
+              (i) => Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  height: 48,
+                  decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Station list skeletons
+        Expanded(
+          flex: 3,
+          child: ListView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: 4,
+            itemBuilder: (_, i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Térkép és Túrák')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? _buildMapSkeleton(context)
           : _error != null
           ? _buildError()
           : _buildMapTab(),

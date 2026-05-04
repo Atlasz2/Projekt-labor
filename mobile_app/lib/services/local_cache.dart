@@ -89,20 +89,20 @@ class LocalCache {
     final normalized = qrCode.trim();
     if (normalized.isEmpty) return false;
 
-    for (final value in _pendingQr.values) {
-      if ((value ?? '').toString().trim() == normalized) {
-        return false;
-      }
+    if (_pendingQr.containsKey(normalized)) {
+      return false;
     }
 
-    final key = DateTime.now().microsecondsSinceEpoch.toString();
-    await _pendingQr.put(key, normalized);
+    await _pendingQr.put(normalized, DateTime.now().microsecondsSinceEpoch);
     return true;
   }
 
   static bool hasPendingQrCode(String qrCode) {
     final normalized = qrCode.trim();
     if (normalized.isEmpty) return false;
+    if (_pendingQr.containsKey(normalized)) return true;
+
+    // Legacy fallback for old timestamp-keyed entries.
     for (final value in _pendingQr.values) {
       if ((value ?? '').toString().trim() == normalized) {
         return true;
@@ -111,12 +111,28 @@ class LocalCache {
     return false;
   }
 
-  static Map<String, String> getPendingQrQueue() => {
-    for (final k in List<dynamic>.from(_pendingQr.keys))
-      k.toString(): (_pendingQr.get(k) ?? '').toString(),
-  };
+  static List<MapEntry<String, int>> getPendingQrQueue() {
+    final entries = <MapEntry<String, int>>[];
+    for (final key in List<dynamic>.from(_pendingQr.keys)) {
+      final value = _pendingQr.get(key);
+      final keyStr = key.toString();
+      if (value is num) {
+        // New format: key = qrCode, value = enqueue timestamp.
+        entries.add(MapEntry(keyStr, value.toInt()));
+      } else {
+        // Legacy format: key = timestamp, value = qrCode.
+        final ts = int.tryParse(keyStr) ?? 0;
+        final qr = (value ?? '').toString().trim();
+        if (qr.isNotEmpty) {
+          entries.add(MapEntry(qr, ts));
+        }
+      }
+    }
+    entries.sort((a, b) => a.value.compareTo(b.value));
+    return entries;
+  }
 
-  static Future<void> removePendingQr(String key) => _pendingQr.delete(key);
+  static Future<void> removePendingQr(String qrCode) => _pendingQr.delete(qrCode);
 
   static bool get hasPendingQr => _pendingQr.isNotEmpty;
 

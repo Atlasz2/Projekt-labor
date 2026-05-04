@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'services/local_cache.dart';
 import 'firebase_options.dart';
 import 'screens/auth_gate.dart';
+import 'theme/app_colors.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,7 +61,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF5B6F4C),
+      seedColor: AppColors.seed,
       brightness: Brightness.light,
     );
 
@@ -70,7 +71,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: colorScheme,
-        scaffoldBackgroundColor: const Color(0xFFF2EBDD),
+        scaffoldBackgroundColor: AppColors.background,
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,

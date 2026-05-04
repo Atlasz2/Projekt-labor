@@ -15,6 +15,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<Map<String, dynamic>> _events = [];
   bool _isLoading = true;
   String? _error;
+  String _selectedPeriod = 'Összes';
 
   @override
   void initState() {
@@ -31,11 +32,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<String> _safeFacts(dynamic value) {
     if (value is List) {
       return value
-          .map((e) => e.toString())
-          .where((e) => e.trim().isNotEmpty)
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
           .toList();
     }
     return const [];
+  }
+
+  String _periodLabel(Map<String, dynamic> event) {
+    return _safeString(event['period']);
   }
 
   Future<void> _loadHistory() async {
@@ -76,6 +81,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final periods = _events
+        .map(_periodLabel)
+        .where((period) => period.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    final activePeriod = periods.contains(_selectedPeriod)
+        ? _selectedPeriod
+        : 'Összes';
+    final filteredEvents = activePeriod == 'Összes'
+        ? _events
+        : _events.where((event) => _periodLabel(event) == activePeriod).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5EFE4),
       body: Stack(
@@ -107,7 +125,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 backgroundColor: const Color(0xFF1F2937),
                 foregroundColor: Colors.white,
                 flexibleSpace: FlexibleSpaceBar(
-                  titlePadding: const EdgeInsetsDirectional.only(start: 56, bottom: 14, end: 14),
+                  titlePadding: const EdgeInsetsDirectional.only(
+                    start: 56,
+                    bottom: 14,
+                    end: 14,
+                  ),
                   expandedTitleScale: 1.18,
                   title: const Text(
                     'Nagyvázsony története',
@@ -152,11 +174,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: Colors.red.shade300,
+                          ),
                           const SizedBox(height: 16),
                           Text(_error!, textAlign: TextAlign.center),
                           const SizedBox(height: 16),
-                          FilledButton(onPressed: _loadHistory, child: const Text('Újrapróbálás')),
+                          FilledButton(
+                            onPressed: _loadHistory,
+                            child: const Text('Újrapróbálás'),
+                          ),
                         ],
                       ),
                     ),
@@ -166,18 +195,104 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 const SliverFillRemaining(
                   child: Center(child: Text('Nincs történeti adat.')),
                 )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
-                  sliver: SliverList.builder(
-                    itemCount: _events.length,
-                    itemBuilder: (context, index) {
-                      final event = _events[index];
-                      final isLast = index == _events.length - 1;
-                      return _TimelineEntry(event: event, isLast: isLast);
-                    },
+              else ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.07),
+                            blurRadius: 16,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Idővonal és korszakok',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Válassz korszakot, majd nyisd le az eseménykártyát a részletekért. Így hosszabb leírásoknál is átlátható marad az oldal.',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              height: 1.5,
+                            ),
+                          ),
+                          if (periods.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: ChoiceChip(
+                                      label: const Text('Összes'),
+                                      selected: activePeriod == 'Összes',
+                                      onSelected: (_) {
+                                        setState(() => _selectedPeriod = 'Összes');
+                                      },
+                                    ),
+                                  ),
+                                  ...periods.map(
+                                    (period) => Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: ChoiceChip(
+                                        label: Text(period),
+                                        selected: activePeriod == period,
+                                        onSelected: (_) {
+                                          setState(() => _selectedPeriod = period);
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
+                if (filteredEvents.isEmpty)
+                  const SliverFillRemaining(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Ebben a korszakban nincs még megjeleníthető esemény.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                    sliver: SliverList.builder(
+                      itemCount: filteredEvents.length,
+                      itemBuilder: (context, index) {
+                        return _TimelineEntry(
+                          event: filteredEvents[index],
+                          initiallyExpanded: index == 0,
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ],
           ),
         ],
@@ -188,144 +303,156 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
 class _TimelineEntry extends StatelessWidget {
   final Map<String, dynamic> event;
-  final bool isLast;
+  final bool initiallyExpanded;
 
-  const _TimelineEntry({required this.event, required this.isLast});
+  const _TimelineEntry({required this.event, required this.initiallyExpanded});
 
   @override
   Widget build(BuildContext context) {
     final facts = (event['facts'] as List<String>?) ?? const [];
     final imageUrl = event['imageUrl']?.toString() ?? '';
+    final description = event['description']?.toString() ?? '';
+    final period = event['period']?.toString() ?? '';
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 56,
-          child: Column(
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 5,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: initiallyExpanded,
+          tilePadding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6B4F2A),
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.18),
-                      blurRadius: 8,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
                     ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    (event['year']?.toString().isNotEmpty ?? false)
-                        ? event['year'].toString().substring(0, event['year'].toString().length.clamp(0, 4))
-                        : '?',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
-                    textAlign: TextAlign.center,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6B4F2A),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      event['year']?.toString() ?? '',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                ),
+                  if (period.isNotEmpty)
+                    Chip(
+                      label: Text(period),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
               ),
-              if (!isLast)
-                Container(
-                  width: 3,
-                  height: 195,
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF8B7355).withValues(alpha: 0.62),
-                        const Color(0xFF8B7355).withValues(alpha: 0.15),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+              const SizedBox(height: 12),
+              Text(
+                event['title']?.toString() ?? '',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              if (description.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  description,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade700, height: 1.5),
                 ),
+              ],
             ],
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Card(
-            margin: const EdgeInsets.only(bottom: 18),
-            elevation: 5,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (imageUrl.isNotEmpty)
-                  OfflineImage.network(
+          children: [
+            if (imageUrl.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: OfflineImage.network(
                     imageUrl,
-                    height: 180,
+                    height: 220,
                     width: double.infinity,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) => _placeholder(),
-                  )
-                else
-                  _placeholder(),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+                  ),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: _placeholder(),
+                ),
+              ),
+            if (description.isNotEmpty)
+              Text(
+                description,
+                style: TextStyle(color: Colors.grey.shade800, height: 1.6),
+              ),
+            if ((event['quote']?.toString() ?? '').isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6B4F2A).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  '"${event['quote']}"',
+                  style: const TextStyle(fontStyle: FontStyle.italic),
+                ),
+              ),
+            ],
+            if (facts.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Érdekességek',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...facts.map(
+                (fact) => Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(event['year']?.toString() ?? '', style: const TextStyle(color: Color(0xFF6B4F2A), fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 4),
-                      Text(event['title']?.toString() ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                      if ((event['period']?.toString() ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Chip(label: Text(event['period'].toString()), visualDensity: VisualDensity.compact),
-                      ],
-                      const SizedBox(height: 10),
-                      Text(event['description']?.toString() ?? '', style: TextStyle(color: Colors.grey.shade700, height: 1.5)),
-                      if ((event['quote']?.toString() ?? '').isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6B4F2A).withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Text('"${event['quote']}"', style: const TextStyle(fontStyle: FontStyle.italic)),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Icon(
+                          Icons.circle,
+                          size: 8,
+                          color: Color(0xFF6B4F2A),
                         ),
-                      ],
-                      if (facts.isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        const Text('Érdekességek', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        ...facts.map((fact) => Padding(
-                          padding: const EdgeInsets.only(bottom: 7),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.only(top: 6),
-                                child: Icon(Icons.circle, size: 8, color: Color(0xFF6B4F2A)),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(child: Text(fact)),
-                            ],
-                          ),
-                        )),
-                      ],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(fact)),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+            ],
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _placeholder() {
     return Container(
-      height: 130,
+      height: 140,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [Color(0xFF8B7355), Color(0xFFC9A66B)],
@@ -334,10 +461,12 @@ class _TimelineEntry extends StatelessWidget {
         ),
       ),
       child: const Center(
-        child: Icon(Icons.account_balance_outlined, color: Colors.white, size: 34),
+        child: Icon(
+          Icons.account_balance_outlined,
+          color: Colors.white,
+          size: 34,
+        ),
       ),
     );
   }
 }
-
-
