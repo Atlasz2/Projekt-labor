@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -31,27 +32,6 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
     if (value == null) return fallback;
     if (value is String) return value.trim().isEmpty ? fallback : value.trim();
     return value.toString().trim().isEmpty ? fallback : value.toString().trim();
-  }
-
-  List<String> _photoUrls(Map<String, dynamic> item) {
-    final photos = item['photos'];
-    if (photos is List && photos.isNotEmpty) {
-      return photos
-          .map((entry) {
-            if (entry is String) return entry;
-            if (entry is Map && entry['url'] != null) return entry['url'].toString();
-            return '';
-          })
-          .where((url) => url.isNotEmpty)
-          .cast<String>()
-          .toList();
-    }
-    final photoUrls = item['photoUrls'];
-    if (photoUrls is List && photoUrls.isNotEmpty) {
-      return photoUrls.map((entry) => entry.toString()).toList();
-    }
-    final single = _safe(item['imageUrl']);
-    return single.isEmpty ? <String>[] : <String>[single];
   }
 
   Future<void> _launchUrl(String url) async {
@@ -185,7 +165,7 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
   }
 
   void _showDetails(Map<String, dynamic> item, {required bool isRestaurant}) {
-    final photos = _photoUrls(item);
+    final photos = photoListFromDoc(item);
     final website = _safe(item['website']);
     final phone = _safe(item['phone']);
     final name = _safe(item['name'], fallback: 'Ismeretlen');
@@ -291,7 +271,7 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
           itemCount: items.length,
           itemBuilder: (_, index) {
             final item = items[index];
-            final photos = _photoUrls(item);
+            final photos = photoListFromDoc(item);
             final type = _safe(item['type']);
 
             return Card(

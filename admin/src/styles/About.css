@@ -16,7 +16,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: linear-gradient(to bottom, #2563eb 0%, #60a5fa 60%, transparent 100%);
+  background: linear-gradient(to bottom, #5b6f4c 0%, #9db47e 60%, transparent 100%);
   opacity: 0.35;
 }
 
@@ -40,7 +40,7 @@
 .timeline-dot {
   width: 22px;
   height: 22px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #5b6f4c, #46583b);
   border-radius: 50%;
   border: 3px solid #f1f5f9;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 4px 10px rgba(37, 99, 235, 0.3);
@@ -59,7 +59,7 @@
   border-radius: 14px;
   padding: 20px 22px;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.04);
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid #5b6f4c;
   transition: box-shadow 0.15s, transform 0.15s;
 }
 
@@ -74,8 +74,8 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 800;
-  color: #2563eb;
-  background: #eff6ff;
+  color: #5b6f4c;
+  background: #eef2e6;
   border: 1px solid rgba(37, 99, 235, 0.2);
   padding: 3px 12px;
   border-radius: 999px;
@@ -87,7 +87,7 @@
   margin: 0 0 8px;
   font-size: 16px;
   font-weight: 700;
-  color: #0f172a;
+  color: #2b2720;
   line-height: 1.35;
 }
 
@@ -116,13 +116,13 @@
 }
 
 .btn-edit {
-  background: #eff6ff;
-  color: #2563eb;
+  background: #eef2e6;
+  color: #5b6f4c;
   border: 1px solid rgba(37, 99, 235, 0.2);
 }
 
 .btn-edit:hover {
-  background: #dbeafe;
+  background: #e4ecd7;
   transform: translateY(-1px);
 }
 
@@ -175,13 +175,13 @@
   border-bottom: 1px solid #e2e8f0;
   background:
     radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 36%),
-    linear-gradient(135deg, #eff6ff, #f8fafc);
+    linear-gradient(135deg, #eef2e6, #f8fafc);
 }
 
 .about-editor-header h2 {
   margin: 4px 0 10px;
   font-size: 28px;
-  color: #0f172a;
+  color: #2b2720;
 }
 
 .about-editor-header p {
@@ -193,7 +193,7 @@
 
 .about-editor-kicker {
   margin: 0;
-  color: #2563eb;
+  color: #5b6f4c;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -204,7 +204,7 @@
   align-self: flex-start;
   border: 1px solid #cbd5e1;
   background: rgba(255, 255, 255, 0.82);
-  color: #0f172a;
+  color: #2b2720;
   border-radius: 999px;
   padding: 10px 16px;
   font-weight: 700;
@@ -245,7 +245,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #5b6f4c, #46583b);
   color: #fff;
   font-weight: 800;
   box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
@@ -253,7 +253,7 @@
 
 .about-editor-section-head h3 {
   margin: 0 0 4px;
-  color: #0f172a;
+  color: #2b2720;
 }
 
 .about-editor-section-head p {
@@ -295,8 +295,8 @@
   height: 190px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #dbeafe, #eff6ff 48%, #ede9fe);
-  color: #2563eb;
+  background: linear-gradient(135deg, #e4ecd7, #eef2e6 48%, #ede9fe);
+  color: #5b6f4c;
   font-size: 46px;
 }
 
@@ -314,9 +314,9 @@
   display: inline-flex;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #eff6ff;
+  background: #eef2e6;
   border: 1px solid rgba(37, 99, 235, 0.2);
-  color: #2563eb;
+  color: #5b6f4c;
   font-size: 12px;
   font-weight: 800;
 }
@@ -324,7 +324,7 @@
 .about-editor-preview-body h3 {
   margin: 12px 0 8px;
   font-size: 20px;
-  color: #0f172a;
+  color: #2b2720;
 }
 
 .about-editor-preview-body p {
@@ -339,7 +339,7 @@
 
 .about-editor-tips h4 {
   margin: 0 0 10px;
-  color: #0f172a;
+  color: #2b2720;
 }
 
 .about-editor-tips ul {
@@ -360,10 +360,10 @@
   justify-content: center;
   gap: 8px;
   padding: 28px;
-  border: 2px dashed #bfdbfe;
+  border: 2px dashed #d5e0c2;
   border-radius: 12px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: #eef2e6;
+  color: #5b6f4c;
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
@@ -378,8 +378,8 @@
 }
 
 .about-img-dropzone:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
+  background: #e4ecd7;
+  border-color: #b7c89b;
 }
 
 .about-img-icon {
@@ -439,7 +439,7 @@
 html.dark .about-img-dropzone {
   background: rgba(37, 99, 235, 0.12);
   border-color: rgba(37, 99, 235, 0.3);
-  color: #93c5fd;
+  color: #b7c89b;
 }
 
 html.dark .about-img-dropzone:hover {

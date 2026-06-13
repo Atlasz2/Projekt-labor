@@ -1,4 +1,4 @@
-﻿/* ── Users page ───────────────────────────────────────────── */
+/* ── Users page ───────────────────────────────────────────── */
 .users-page {
   max-width: 1280px;
   margin: 0 auto;
@@ -11,7 +11,7 @@
 
 .page-header h1 {
   font-size: 1.6rem;
-  color: #0f172a;
+  color: #2b2720;
   margin: 0 0 6px;
   font-weight: 800;
 }
@@ -50,7 +50,7 @@
 .stat-number {
   font-size: 1.9rem;
   font-weight: 800;
-  color: #2563eb;
+  color: #5b6f4c;
   margin: 0 0 4px;
   line-height: 1;
 }
@@ -72,7 +72,7 @@
   grid-template-columns: 70px 1.3fr 120px 120px 230px 1.2fr;
   gap: 14px;
   padding: 12px 18px;
-  background: #0f172a;
+  background: #2b2720;
   color: #e2e8f0;
   font-weight: 600;
   font-size: 0.82rem;
@@ -106,7 +106,7 @@
 
 /* Name */
 .name-col { display: flex; flex-direction: column; gap: 2px; }
-.name-col strong { font-size: 0.92rem; color: #0f172a; font-weight: 600; }
+.name-col strong { font-size: 0.92rem; color: #2b2720; font-weight: 600; }
 .name-col small  { font-size: 0.78rem; color: #94a3b8; }
 
 /* Role badge */
@@ -122,9 +122,9 @@
 }
 
 .role-badge.admin {
-  background: #eff6ff;
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
+  background: #eef2e6;
+  color: #3a4a2f;
+  border: 1px solid #d5e0c2;
 }
 
 .role-badge.user {
@@ -138,7 +138,7 @@
 
 .points-badge {
   display: inline-block;
-  background: #2563eb;
+  background: #5b6f4c;
   color: #fff;
   padding: 6px 12px;
   border-radius: 999px;
@@ -148,7 +148,7 @@
 
 /* Progress */
 .progress-col { display: flex; flex-direction: column; gap: 4px; }
-.progress-text { font-size: 0.84rem; color: #374151; font-weight: 500; }
+.progress-text { font-size: 0.84rem; color: #5c5142; font-weight: 500; }
 
 .progress-bar {
   height: 6px;
@@ -159,7 +159,7 @@
 
 .progress-fill {
   height: 100%;
-  background: #2563eb;
+  background: #5b6f4c;
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -171,7 +171,7 @@
 
 .server-col code {
   font-size: 0.74rem;
-  color: #374151;
+  color: #5c5142;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
@@ -231,7 +231,7 @@
 .users-empty-state h3 {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #0f172a;
+  color: #2b2720;
   margin: 0 0 8px;
 }
 

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; \"=== run ===\" ; flutter run --help 2>&1 | Select-String -Pattern \"project-dir\" -SimpleMatch ; \"=== analyze ===\" ; flutter analyze --help 2>&1 | Select-String -Pattern \"project-dir|\\\\[directory\\\\]|<directory>\")",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; flutter analyze mobile_app 2>&1 | Select-Object -Last 40)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; flutter test mobile_app 2>&1 | Select-Object -Last 30)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location mobile_app ; flutter test 2>&1 | Select-Object -Last 25)",
+      "PowerShell(Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes' ; Get-ChildItem mobile_app\\\\assets -File | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}} | Format-Table -AutoSize)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter pub get 2>&1 | Select-Object -Last 8 ; \"=== ANALYZE ===\" ; flutter analyze 2>&1 | Select-Object -Last 12)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter test 2>&1 | Select-Object -Last 4)",
+      "PowerShell(Remove-Item -Path 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app\\\\build' -Recurse -Force -ErrorAction SilentlyContinue ; Get-PSDrive C | Select-Object @{N='FreeGB';E={[math]::Round\\($_.Free/1GB,2\\)}})",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter analyze 2>&1 | Select-Object -Last 15)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter analyze 2>&1 | Select-Object -Last 10)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter test 2>&1 | Select-Object -Last 3)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter analyze 2>&1 | Select-Object -Last 6 ; \"=== TEST ===\" ; flutter test 2>&1 | Select-Object -Last 3)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter analyze 2>&1 | Select-Object -Last 10 ; \"=== TEST ===\" ; flutter test 2>&1 | Select-Object -Last 3)",
+      "PowerShell($env:PATH = \"C:\\\\src\\\\flutter\\\\bin;\" + $env:PATH ; Set-Location 'C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\mobile_app' ; flutter analyze 2>&1 | Select-Object -Last 8 ; \"=== TEST ===\" ; flutter test 2>&1 | Select-Object -Last 3)"
+    ]
+  }
+}

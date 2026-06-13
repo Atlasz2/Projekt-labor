@@ -13,6 +13,7 @@ class PendingAction {
   final String docId;
   final Map<String, dynamic> data;
   final DateTime createdAt;
+  final int attempts;
 
   PendingAction({
     required this.id,
@@ -21,7 +22,18 @@ class PendingAction {
     required this.docId,
     required this.data,
     required this.createdAt,
+    this.attempts = 0,
   });
+
+  PendingAction copyWith({int? attempts}) => PendingAction(
+    id: id,
+    actionType: actionType,
+    collection: collection,
+    docId: docId,
+    data: data,
+    createdAt: createdAt,
+    attempts: attempts ?? this.attempts,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -30,6 +42,7 @@ class PendingAction {
     'docId': docId,
     'data': data,
     'createdAt': createdAt.toIso8601String(),
+    'attempts': attempts,
   };
 
   factory PendingAction.fromJson(Map<String, dynamic> json) => PendingAction(
@@ -39,6 +52,7 @@ class PendingAction {
     docId: json['docId'] as String,
     data: Map<String, dynamic>.from(json['data'] as Map),
     createdAt: DateTime.parse(json['createdAt'] as String),
+    attempts: (json['attempts'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -48,6 +62,10 @@ class OfflineSyncService {
   static final OfflineSyncService _instance = OfflineSyncService._internal();
 
   factory OfflineSyncService() => _instance;
+
+  /// Drop a pending action after this many failed sync attempts so a poison
+  /// entry (permission-denied, invalid data) can never block the queue forever.
+  static const int _maxSyncAttempts = 5;
 
   late Box<Map> _pendingActionsBox;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -178,6 +196,20 @@ class OfflineSyncService {
           _refreshPendingCount();
         } catch (error) {
           debugPrint('Offline sync hiba: $error');
+          final nextAttempts = action.attempts + 1;
+          if (nextAttempts >= _maxSyncAttempts) {
+            await _pendingActionsBox.delete(action.id);
+            _refreshPendingCount();
+            debugPrint(
+              'Offline sync: elem eldobva $_maxSyncAttempts sikertelen '
+              'kísérlet után (${action.collection}/${action.docId})',
+            );
+          } else {
+            await _pendingActionsBox.put(
+              action.id,
+              action.copyWith(attempts: nextAttempts).toJson(),
+            );
+          }
         }
       }
     } finally {

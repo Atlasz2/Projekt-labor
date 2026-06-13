@@ -6,12 +6,14 @@
   "scripts": {
     "start": "npm run admin:dev",
     "build": "npm run admin:build",
-    "test": "echo \"No root test suite configured. Use admin/mobile commands explicitly.\"",
+    "test": "npm run admin:test && npm run mobile:test",
     "admin:dev": "npm --prefix admin run dev",
     "admin:build": "npm --prefix admin run build",
     "admin:preview": "npm --prefix admin run preview",
+    "admin:lint": "npm --prefix admin run lint",
+    "admin:test": "npm --prefix admin run test",
     "mobile:analyze": "flutter analyze mobile_app",
-    "mobile:test": "flutter test mobile_app",
-    "mobile:run": "flutter run --project-dir mobile_app"
+    "mobile:test": "cd mobile_app && flutter test",
+    "mobile:run": "cd mobile_app && flutter run"
   }
 }

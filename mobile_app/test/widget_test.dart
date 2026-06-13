@@ -56,5 +56,26 @@ void main() {
       );
       expect(find.text('teszt@example.com'), findsOneWidget);
     });
+
+    testWidgets('érvénytelen email megadásakor hibát jelez',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: NameScreen()));
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Teljes név *'),
+        'Teszt Elek',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Email (opcionális)'),
+        'ervenytelen-email',
+      );
+      await tester.tap(find.text('Folytatás'));
+      await tester.pump(); // trigger Snackbar
+
+      expect(
+        find.text('Érvénytelen email cím. Hagyd üresen, vagy adj meg helyeset.'),
+        findsOneWidget,
+      );
+    });
   });
 }

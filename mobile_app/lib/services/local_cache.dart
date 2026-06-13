@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -10,6 +11,10 @@ class LocalCache {
   static const _kRoutes = 'routes_v2';
   static const _kMeta = 'meta_v1';
 
+  /// Live count of queued offline QR scans, so the UI can reflect pending
+  /// work the moment a code is enqueued or synced.
+  static final ValueNotifier<int> pendingQrCountNotifier = ValueNotifier<int>(0);
+
   static Future<void> init() async {
     await Future.wait([
       Hive.openBox<dynamic>(_kTrips),
@@ -19,6 +24,7 @@ class LocalCache {
       Hive.openBox<dynamic>(_kRoutes),
       Hive.openBox<dynamic>(_kMeta),
     ]);
+    pendingQrCountNotifier.value = _pendingQr.length;
   }
 
   static Box<dynamic> get _trips => Hive.box(_kTrips);
@@ -94,6 +100,7 @@ class LocalCache {
     }
 
     await _pendingQr.put(normalized, DateTime.now().microsecondsSinceEpoch);
+    pendingQrCountNotifier.value = _pendingQr.length;
     return true;
   }
 
@@ -132,7 +139,10 @@ class LocalCache {
     return entries;
   }
 
-  static Future<void> removePendingQr(String qrCode) => _pendingQr.delete(qrCode);
+  static Future<void> removePendingQr(String qrCode) async {
+    await _pendingQr.delete(qrCode);
+    pendingQrCountNotifier.value = _pendingQr.length;
+  }
 
   static bool get hasPendingQr => _pendingQr.isNotEmpty;
 
@@ -150,6 +160,10 @@ class LocalCache {
     final current = getOfflineTileTripIds();
     if (!current.add(tripId)) return;
     await _meta.put('offlineTileTripIds', current.toList(growable: false));
+  }
+
+  static Future<void> clearOfflineTileTripIds() async {
+    await _meta.delete('offlineTileTripIds');
   }
 
   static Set<String> getOfflineTileTripIds() {
@@ -192,4 +206,3 @@ class LocalCache {
   static Map<String, dynamic> _sanitize(Map<String, dynamic> m) =>
       _sanitizeValue(m) as Map<String, dynamic>;
 }
-

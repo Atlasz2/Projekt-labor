@@ -1,4 +1,4 @@
-﻿/* ── Achievements page ───────────────────────────────────── */
+/* ── Achievements page ───────────────────────────────────── */
 .ach-wrap {
   padding: 28px 24px;
   max-width: 760px;
@@ -25,7 +25,7 @@
   margin: 0 0 4px;
   font-size: 1.55rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #2b2720;
 }
 
 .ach-header-sub {
@@ -36,7 +36,7 @@
 
 .ach-add-btn {
   flex-shrink: 0;
-  background: #2563eb;
+  background: #5b6f4c;
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -48,7 +48,7 @@
   transition: background 0.15s, transform 0.15s;
 }
 
-.ach-add-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+.ach-add-btn:hover { background: #46583b; transform: translateY(-1px); }
 
 /* List */
 .ach-list { display: flex; flex-direction: column; gap: 8px; }
@@ -66,7 +66,7 @@
   padding: 14px 16px;
   box-shadow: 0 1px 4px rgba(15,23,42,0.07);
   border: 1px solid #e2e8f0;
-  border-left: 4px solid var(--ac, #2563eb);
+  border-left: 4px solid var(--ac, #5b6f4c);
   transition: box-shadow 0.15s, border-color 0.15s;
 }
 
@@ -76,7 +76,7 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: var(--ac, #2563eb);
+  background: var(--ac, #5b6f4c);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -85,7 +85,7 @@
 }
 
 .ach-row-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ach-row-name { font-weight: 700; font-size: 0.95rem; color: #0f172a; }
+.ach-row-name { font-weight: 700; font-size: 0.95rem; color: #2b2720; }
 .ach-row-desc { font-size: 0.82rem; color: #64748b; }
 
 .ach-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -101,7 +101,7 @@
 }
 
 .ach-row-btn:hover { opacity: 0.75; }
-.ach-row-btn.edit  { background: #eff6ff; color: #1e40af; }
+.ach-row-btn.edit  { background: #eef2e6; color: #3a4a2f; }
 .ach-row-btn.del   { background: #fef2f2; color: #991b1b; padding: 6px 10px; }
 
 /* Condition badge */
@@ -116,7 +116,7 @@
   margin-top: 2px;
   width: fit-content;
 }
-.ach-row-cond strong { color: #2563eb; }
+.ach-row-cond strong { color: #5b6f4c; }
 
 /* Modal overlay */
 .ach-overlay {
@@ -150,7 +150,7 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
-.ach-modal-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #0f172a; }
+.ach-modal-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #2b2720; }
 
 .ach-modal-x {
   background: #f1f5f9;
@@ -182,7 +182,7 @@
   display: block;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #374151;
+  color: #5c5142;
   margin-bottom: -6px;
 }
 
@@ -196,11 +196,11 @@
   outline: none;
   font-family: inherit;
   background: #f8fafc;
-  color: #0f172a;
+  color: #2b2720;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.ach-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); background: #fff; }
+.ach-input:focus { border-color: #5b6f4c; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); background: #fff; }
 
 /* Select */
 .ach-select {
@@ -229,8 +229,8 @@
   transition: border-color 0.12s, background 0.12s;
 }
 
-.ach-icon-btn:hover  { background: #eff6ff; border-color: #bfdbfe; }
-.ach-icon-btn.active { border-color: #2563eb; background: #eff6ff; }
+.ach-icon-btn:hover  { background: #eef2e6; border-color: #d5e0c2; }
+.ach-icon-btn.active { border-color: #5b6f4c; background: #eef2e6; }
 
 /* Colour picker */
 .ach-color-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
@@ -245,7 +245,7 @@
 }
 
 .ach-color-btn:hover  { transform: scale(1.15); }
-.ach-color-btn.active { border-color: #0f172a; transform: scale(1.15); }
+.ach-color-btn.active { border-color: #2b2720; transform: scale(1.15); }
 
 .ach-color-picker {
   width: 26px;
@@ -280,7 +280,7 @@
   color: #fff;
 }
 
-.ach-preview-name { font-weight: 700; font-size: 0.92rem; color: #0f172a; }
+.ach-preview-name { font-weight: 700; font-size: 0.92rem; color: #2b2720; }
 
 /* Footer */
 .ach-modal-footer {
@@ -293,7 +293,7 @@
 
 .ach-cancel-btn {
   background: #f1f5f9;
-  color: #374151;
+  color: #5c5142;
   border: none;
   border-radius: 8px;
   padding: 9px 18px;
@@ -306,7 +306,7 @@
 .ach-cancel-btn:hover { background: #e2e8f0; }
 
 .ach-save-btn {
-  background: #2563eb;
+  background: #5b6f4c;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -317,5 +317,5 @@
   transition: background 0.12s;
 }
 
-.ach-save-btn:hover:not(:disabled) { background: #1d4ed8; }
+.ach-save-btn:hover:not(:disabled) { background: #46583b; }
 .ach-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }

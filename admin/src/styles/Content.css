@@ -14,7 +14,7 @@
 
 .page-header h1 {
   font-size: 2.5em;
-  color: #0f172a;
+  color: #2b2720;
   margin: 0 0 10px 0;
   font-weight: 700;
   letter-spacing: -0.5px;
@@ -36,7 +36,7 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.form-container h2 { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin: 0 0 24px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; letter-spacing: -0.01em; }
+.form-container h2 { font-size: 1.15rem; font-weight: 700; color: #2b2720; margin: 0 0 24px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; letter-spacing: -0.01em; }
 
 
 /* ========== Form Layout ========== */
@@ -55,7 +55,7 @@
 .form-group label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #374151;
+  color: #5c5142;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -69,7 +69,7 @@
   font-size: 0.93rem;
   font-family: inherit;
   background: #f8fafc;
-  color: #0f172a;
+  color: #2b2720;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
 
@@ -77,7 +77,7 @@
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #5b6f4c;
   background: #fff;
   box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
 }
@@ -117,7 +117,7 @@
 .form-container textarea:focus,
 .form-container select:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #5b6f4c;
   background: white;
   box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
 }
@@ -129,7 +129,7 @@
 
 /* ========== Primary Button ========== */
 .btn-primary {
-  background: #2563eb;
+  background: #5b6f4c;
   color: white;
   border: none;
   padding: 12px 24px;
@@ -153,7 +153,7 @@
 /* ========== Secondary Button ========== */
 .btn-secondary {
   background: #e2e8f0;
-  color: #0f172a;
+  color: #2b2720;
   border: 1px solid #e2e8f0;
   padding: 12px 24px;
   border-radius: 8px;
@@ -170,7 +170,7 @@
 
 /* ========== Edit Button ========== */
 .btn-edit {
-  background: #1e40af;
+  background: #3a4a2f;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -181,7 +181,7 @@
 }
 
 .btn-edit:hover {
-  background: #2563eb;
+  background: #5b6f4c;
   transform: translateY(-1px);
 }
 
@@ -227,20 +227,20 @@
 
 .card h3 {
   font-size: 1.4em;
-  color: #0f172a;
+  color: #2b2720;
   margin: 0 0 12px 0;
   word-break: break-word;
 }
 
 .card p {
-  color: #374151;
+  color: #5c5142;
   margin: 8px 0;
   font-size: 0.95em;
   line-height: 1.5;
 }
 
 .card strong {
-  color: #0f172a;
+  color: #2b2720;
   font-weight: 600;
 }
 
@@ -359,7 +359,7 @@
   align-items: flex-start;
   gap: 14px;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #374151 0%, #1e3a5f 100%);
+  background: linear-gradient(135deg, #5c5142 0%, #3b4a2c 100%);
   color: #fff;
 }
 
@@ -420,7 +420,7 @@
 .editor-field label {
   font-size: 0.88em;
   font-weight: 700;
-  color: #374151;
+  color: #5c5142;
 }
 
 .editor-field input,
@@ -438,7 +438,7 @@
 .editor-field textarea:focus,
 .editor-field select:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #5b6f4c;
   box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
   background: #fff;
 }
@@ -595,7 +595,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed #2563eb;
+  border: 1px dashed #5b6f4c;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
   color: #5c4631;

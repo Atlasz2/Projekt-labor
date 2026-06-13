@@ -38,7 +38,7 @@
   text-transform: uppercase;
   letter-spacing: 0.16em;
   font-size: 0.7rem;
-  color: #2563eb;
+  color: #5b6f4c;
   font-weight: 600;
 }
 
@@ -62,13 +62,13 @@
 }
 
 .cta.primary {
-  background: #2563eb;
+  background: #5b6f4c;
   color: #fff;
   box-shadow: 0 4px 12px rgba(37,99,235,0.3);
 }
 
 .cta.primary:hover {
-  background: #1d4ed8;
+  background: #46583b;
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(37,99,235,0.36);
 }
@@ -154,9 +154,9 @@
 }
 
 .card-chip {
-  background: #eff6ff;
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
+  background: #eef2e6;
+  color: #3a4a2f;
+  border: 1px solid #d5e0c2;
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 0.76rem;
@@ -183,7 +183,7 @@
 }
 
 .tone-mint { background: #f0fdf4; border-color: #bbf7d0; }
-.tone-sky  { background: #eff6ff; border-color: #bfdbfe; }
+.tone-sky  { background: #eef2e6; border-color: #d5e0c2; }
 .tone-sand { background: #fffbeb; border-color: #fed7aa; }
 .tone-sun  { background: #fff7ed; border-color: #fdba74; }
 .tone-rose { background: #fff1f2; border-color: #fecdd3; }
@@ -201,7 +201,7 @@
 }
 
 .tone-mint .kpi-badge { background: #059669; }
-.tone-sky  .kpi-badge { background: #2563eb; }
+.tone-sky  .kpi-badge { background: #5b6f4c; }
 .tone-sand .kpi-badge { background: #d97706; color: #fff; }
 .tone-sun  .kpi-badge { background: #ea580c; }
 .tone-rose .kpi-badge { background: #e11d48; }
@@ -247,8 +247,8 @@
 
 .quick-tile:hover {
   transform: translateY(-1px);
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: #d5e0c2;
+  background: #eef2e6;
   box-shadow: 0 4px 12px rgba(37,99,235,0.1);
 }
 
@@ -258,8 +258,8 @@
   border-radius: 10px;
   display: grid;
   place-items: center;
-  background: #eff6ff;
-  color: #2563eb;
+  background: #eef2e6;
+  color: #5b6f4c;
   font-weight: 700;
   font-size: 0.72rem;
   flex-shrink: 0;
@@ -288,7 +288,7 @@
   height: 8px;
   margin-top: 7px;
   border-radius: 50%;
-  background: #2563eb;
+  background: #5b6f4c;
   flex-shrink: 0;
 }
 
@@ -340,9 +340,9 @@
 .achievement-count {
   font-weight: 700;
   font-size: 0.8rem;
-  color: #1d4ed8;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: #46583b;
+  background: #eef2e6;
+  border: 1px solid #d5e0c2;
   padding: 2px 10px;
   border-radius: 999px;
 }

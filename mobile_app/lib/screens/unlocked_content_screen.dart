@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 
 class UnlockedContentScreen extends StatefulWidget {
@@ -34,40 +35,6 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
           .toSet();
     }
     return <String>{};
-  }
-
-  List<String> _imageCandidates(Map<String, dynamic> data, {String? preferred}) {
-    final results = <String>[];
-
-    void addIfPresent(dynamic raw) {
-      final value = raw?.toString().trim() ?? '';
-      if (value.isNotEmpty && !results.contains(value)) {
-        results.add(value);
-      }
-    }
-
-    addIfPresent(preferred);
-
-    final photos = data['photos'];
-    if (photos is List) {
-      for (final item in photos) {
-        if (item is String) {
-          addIfPresent(item);
-        } else if (item is Map && item['url'] != null) {
-          addIfPresent(item['url']);
-        }
-      }
-    }
-
-    final photoUrls = data['photoUrls'];
-    if (photoUrls is List) {
-      for (final item in photoUrls) {
-        addIfPresent(item);
-      }
-    }
-
-    addIfPresent(data['imageUrl']);
-    return results;
   }
 
   Future<Set<String>> _loadCompletedStationIds(String uid) async {
@@ -168,7 +135,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
             'title': 'Fun fact',
             'content': funFact,
             'type': 'funFact',
-            'images': _imageCandidates(
+            'images': photoListFromDoc(
               data,
               preferred: data['funFactImageUrl']?.toString(),
             ),
@@ -184,7 +151,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
             'title': 'Feloldott tartalom',
             'content': extra,
             'type': 'unlock',
-            'images': _imageCandidates(data, preferred: unlockImage),
+            'images': photoListFromDoc(data, preferred: unlockImage),
           });
         }
       }

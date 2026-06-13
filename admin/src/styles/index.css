@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 *, *::before, *::after {
   margin: 0;
@@ -7,43 +7,43 @@
 }
 
 :root {
-  /* Backgrounds */
-  --admin-bg:           #f1f5f9;
-  --admin-bg-soft:      #e2e8f0;
-  --admin-surface:      #ffffff;
-  --admin-surface-muted:#f8fafc;
+  /* Backgrounds — warm Nagyvázsony parchment */
+  --admin-bg:           #f2ebdd;
+  --admin-bg-soft:      #e9dfc9;
+  --admin-surface:      #fbf7ef;
+  --admin-surface-muted:#f4eee0;
 
-  /* Borders */
-  --admin-border:       #e2e8f0;
-  --admin-border-strong:#cbd5e1;
+  /* Borders — warm tan */
+  --admin-border:       #e3d8c2;
+  --admin-border-strong:#cdbf9f;
 
-  /* Text */
-  --admin-text:         #0f172a;
-  --admin-text-muted:   #64748b;
+  /* Text — warm near-black */
+  --admin-text:         #2b2720;
+  --admin-text-muted:   #7a6e58;
 
-  /* Primary accent — blue */
-  --admin-accent:       #2563eb;
-  --admin-accent-deep:  #1d4ed8;
-  --admin-accent-soft:  #eff6ff;
-  --admin-accent-border:#bfdbfe;
+  /* Primary accent — olive green (mobile seed) */
+  --admin-accent:       #5b6f4c;
+  --admin-accent-deep:  #46583b;
+  --admin-accent-soft:  #eaefe0;
+  --admin-accent-border:#c7d2b0;
 
   /* Success green */
-  --admin-green:        #059669;
-  --admin-green-soft:   #ecfdf5;
+  --admin-green:        #2e7d32;
+  --admin-green-soft:   #e7f0e2;
 
-  /* Danger red */
-  --admin-danger:       #dc2626;
-  --admin-danger-deep:  #b91c1c;
-  --admin-danger-soft:  #fef2f2;
+  /* Danger — terracotta */
+  --admin-danger:       #b23a2e;
+  --admin-danger-deep:  #8f2d24;
+  --admin-danger-soft:  #f7ece7;
 
   /* Warning amber */
-  --admin-warning:      #d97706;
-  --admin-warning-soft: #fffbeb;
+  --admin-warning:      #b0760f;
+  --admin-warning-soft: #fbf1de;
 
-  /* Shadows */
-  --admin-shadow-sm:    0 1px 3px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04);
-  --admin-shadow:       0 4px 16px rgba(15,23,42,0.08), 0 2px 6px rgba(15,23,42,0.04);
-  --admin-shadow-lg:    0 10px 32px rgba(15,23,42,0.10), 0 4px 12px rgba(15,23,42,0.06);
+  /* Shadows — warm-tinted */
+  --admin-shadow-sm:    0 1px 3px rgba(74,60,40,0.10), 0 1px 2px rgba(74,60,40,0.05);
+  --admin-shadow:       0 4px 16px rgba(74,60,40,0.10), 0 2px 6px rgba(74,60,40,0.05);
+  --admin-shadow-lg:    0 10px 32px rgba(74,60,40,0.13), 0 4px 12px rgba(74,60,40,0.08);
 
   /* Radius */
   --r-sm: 8px;
@@ -190,7 +190,7 @@ html.dark .users-header { background: #0a1628 !important; }
 html.dark .users-stats .stat-card { background: var(--admin-surface); border-color: var(--admin-border); }
 /* Timeline dark */
 html.dark .timeline-year { background: rgba(37,99,235,0.18); border-color: rgba(37,99,235,0.3); }
-html.dark .btn-edit { background: rgba(37,99,235,0.15); color: #93c5fd; border-color: rgba(37,99,235,0.3); }
+html.dark .btn-edit { background: rgba(37,99,235,0.15); color: #b7c89b; border-color: rgba(37,99,235,0.3); }
 html.dark .btn-delete { background: rgba(220,38,38,0.12); color: #fca5a5; border-color: rgba(220,38,38,0.25); }
 /* BugReports dark */
 html.dark .MuiCard-root { background: var(--admin-surface) !important; }
@@ -220,7 +220,7 @@ html.dark .hero-subtitle { color: var(--admin-text-muted); }
 html.dark .stat {
   background: var(--admin-surface);
   border-color: var(--admin-border);
-  border-left-color: #2563eb;
+  border-left-color: #5b6f4c;
 }
 html.dark .stat-label { color: var(--admin-text-muted); }
 
@@ -261,7 +261,7 @@ html.dark .form-group input:focus,
 html.dark .form-group textarea:focus { background: var(--admin-bg-soft); }
 html.dark .form-note {
   background: var(--admin-bg-soft);
-  border-left-color: #2563eb;
+  border-left-color: #5b6f4c;
   color: var(--admin-text-muted);
 }
 html.dark .btn-cancel { background: var(--admin-bg-soft); color: var(--admin-text); }
@@ -293,10 +293,10 @@ html.dark .station-card {
 html.dark .station-card:hover { border-color: #3d5068; }
 html.dark .station-title h3 { color: var(--admin-text); }
 html.dark .station-desc     { color: var(--admin-text-muted); }
-html.dark .station-fun-fact { background: rgba(37,99,235,0.12); border-left-color: #2563eb; color: #93c5fd; }
+html.dark .station-fun-fact { background: rgba(37,99,235,0.12); border-left-color: #5b6f4c; color: #b7c89b; }
 html.dark .station-qr       { background: var(--admin-bg); }
 html.dark .qr-label         { color: var(--admin-text-muted); }
-html.dark .trip-badge       { background: rgba(37,99,235,0.15); color: #93c5fd; }
+html.dark .trip-badge       { background: rgba(37,99,235,0.15); color: #b7c89b; }
 
 html.dark .station-modal {
   background: var(--admin-surface);
@@ -310,8 +310,8 @@ html.dark .modal-close     { color: var(--admin-text-muted); }
 html.dark .modal-close:hover { color: var(--admin-text); }
 html.dark .section-tabs    { background: var(--admin-bg); border-color: var(--admin-border); }
 html.dark .section-tab     { color: var(--admin-text-muted); }
-html.dark .section-tab:hover  { background: rgba(37,99,235,0.12); color: #93c5fd; }
-html.dark .section-tab.active { background: var(--admin-surface); color: #60a5fa; border-bottom-color: #2563eb; }
+html.dark .section-tab:hover  { background: rgba(37,99,235,0.12); color: #b7c89b; }
+html.dark .section-tab.active { background: var(--admin-surface); color: #9db47e; border-bottom-color: #5b6f4c; }
 html.dark .modal-body      { background: var(--admin-surface); }
 html.dark .modal-footer    { background: var(--admin-bg); border-top-color: var(--admin-border); }
 html.dark .field-group label  { color: var(--admin-text-muted); }
@@ -328,10 +328,10 @@ html.dark .field-group select:focus { background: var(--admin-bg-soft); }
 html.dark .field-hint      { color: var(--admin-text-muted); }
 html.dark .btn-nav         { background: var(--admin-bg-soft); color: var(--admin-text); }
 html.dark .btn-cancel      { background: var(--admin-bg-soft); color: var(--admin-text); }
-html.dark .btn-edit        { background: rgba(37,99,235,0.15); color: #93c5fd; }
+html.dark .btn-edit        { background: rgba(37,99,235,0.15); color: #b7c89b; }
 html.dark .btn-delete      { background: rgba(220,38,38,0.12); color: #fca5a5; }
 html.dark .unlock-info-box { background: rgba(37,99,235,0.1); border-color: rgba(37,99,235,0.3); }
-html.dark .unlock-info-box strong { color: #93c5fd; }
+html.dark .unlock-info-box strong { color: #b7c89b; }
 html.dark .unlock-info-box p      { color: var(--admin-text-muted); }
 html.dark .image-preview          { border-color: var(--admin-border); }
 
@@ -347,7 +347,7 @@ html.dark .legend-header {
 }
 html.dark .legend-header h3 { color: var(--admin-text); }
 html.dark .legend-item  { background: var(--admin-bg); border-color: transparent; }
-html.dark .legend-item:hover { background: var(--admin-bg-soft); border-color: #2563eb; }
+html.dark .legend-item:hover { background: var(--admin-bg-soft); border-color: #5b6f4c; }
 html.dark .legend-name  { color: var(--admin-text); }
 html.dark .detail-badge { background: var(--admin-bg-soft); border-color: var(--admin-border); color: var(--admin-text-muted); }
 html.dark .map-error,
@@ -356,7 +356,7 @@ html.dark .map-error p  { color: var(--admin-text-muted); }
 html.dark .map-empty p  { color: var(--admin-text-muted); }
 html.dark .map-loading  { background: var(--admin-bg); }
 html.dark .map-loading p { color: var(--admin-text); }
-html.dark .spinner       { border-color: var(--admin-border); border-top-color: #2563eb; }
+html.dark .spinner       { border-color: var(--admin-border); border-top-color: #5b6f4c; }
 
 /* ── SeedDatabase (uses Content.css classes) ──────────────────── */
 html.dark .seed-actions .btn-secondary { background: var(--admin-bg-soft); color: var(--admin-text); border-color: var(--admin-border); }

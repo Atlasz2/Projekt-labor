@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/local_cache.dart';
@@ -29,39 +30,6 @@ class _CameraScreenState extends State<CameraScreen> {
   Map<String, dynamic>? _station;
   String? _errorMsg;
   List<Map<String, dynamic>> _history = [];
-
-  String _primaryImageUrl(Map<String, dynamic> item) {
-    final photos = item['photos'];
-    if (photos is List && photos.isNotEmpty) {
-      for (final entry in photos) {
-        if (entry is String && entry.trim().isNotEmpty) {
-          return entry.trim();
-        }
-        if (entry is Map) {
-          final url = entry['url']?.toString().trim() ?? '';
-          if (url.isNotEmpty) return url;
-        }
-      }
-    }
-
-    final photoUrls = item['photoUrls'];
-    if (photoUrls is List && photoUrls.isNotEmpty) {
-      for (final entry in photoUrls) {
-        final url = entry?.toString().trim() ?? '';
-        if (url.isNotEmpty) return url;
-      }
-    }
-
-    return item['imageUrl']?.toString().trim() ?? '';
-  }
-
-  Map<String, dynamic> _normalizeStation(Map<String, dynamic> item) {
-    final imageUrl = _primaryImageUrl(item);
-    return {
-      ...item,
-      'imageUrl': imageUrl,
-    };
-  }
 
   @override
   void initState() {
@@ -129,7 +97,8 @@ class _CameraScreenState extends State<CameraScreen> {
         _errorMsg = null;
         if (cachedStation != null) {
           _station = {
-            ..._normalizeStation(cachedStation),
+            ...cachedStation,
+            'imageUrl': primaryPhotoFromDoc(cachedStation),
             'alreadyDone': false,
             'newAchievements': const <Map<String, dynamic>>[],
             'offlineQueued': true,
@@ -162,7 +131,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
       setState(() {
         _station = {
-          ..._normalizeStation(result.station),
+          ...result.station,
+          'imageUrl': primaryPhotoFromDoc(result.station),
           'alreadyDone': result.alreadyDone,
           'newAchievements': result.newAchievements,
         };
@@ -359,7 +329,7 @@ class _CameraScreenState extends State<CameraScreen> {
     final name = s['name']?.toString() ?? 'Állomás';
     final unlockContent = s['unlockContent']?.toString() ?? '';
     final extraInfo = s['extraInfo']?.toString() ?? '';
-    final imageUrl = _primaryImageUrl(s);
+    final imageUrl = primaryPhotoFromDoc(s);
     final newAch =
         (s['newAchievements'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final offlineQueued = s['offlineQueued'] == true;

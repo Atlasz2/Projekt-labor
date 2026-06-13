@@ -11,7 +11,7 @@ import Alert from '@mui/material/Alert';
 import '../styles/Stations.css';
 import ConfirmDialog from '../components/ConfirmDialog';
 import StateCard from '../components/StateCard';
-import { normalizePhotosFromDoc } from '../utils/photoHelpers';
+import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
 import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
@@ -176,9 +176,7 @@ export default function Stations() {
         longitude: Number(formData.longitude),
         description: formData.description.trim(),
         points: parseInt(formData.points, 10) || 10,
-        photos: formData.photos.map(url => ({ url })),
-        photoUrls: formData.photos,
-        imageUrl: formData.photos[0] || '',
+        ...buildPhotoFields(formData.photos),
         qrCode: formData.qrCode.trim() || '',
         tripId: formData.tripId || '',
         funFact: formData.funFact.trim(),
@@ -312,11 +310,12 @@ export default function Stations() {
                 {filtered.map((station) => {
                   const qrValue = getQrValue(station);
                   const tripName = getTripName(station.tripId);
-      
+                  const coverPhoto = normalizePhotosFromDoc(station)[0] || '';
+
                   return (
                     <div key={station.id} className="station-card">
                       <div className="station-media">
-                        {(normalizePhotosFromDoc(station)[0] || '') ? <img src={(normalizePhotosFromDoc(station)[0] || '')} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
+                        {coverPhoto ? <img src={coverPhoto} alt={station.name} loading="lazy" /> : <div className="station-placeholder">📷</div>}
                         <span className="station-points">⭐ {station.points} pont</span>
                       </div>
                       <div className="station-body">
@@ -389,7 +388,7 @@ export default function Stations() {
                     <div className="photo-grid station-photo-grid">
                       {formData.photos.map((url, i) => (
                         <div key={i} className="photo-thumb">
-                          <img src={url} alt="" />
+                          {url ? <img src={url} alt="" /> : null}
                           <button type="button" className="photo-remove" onClick={() => handleRemovePhoto(i)}>✕</button>
                           {i === 0 && <span className="thumb-badge">Borítókép</span>}
                         </div>
@@ -455,7 +454,7 @@ export default function Stations() {
                     <div className="photo-grid station-photo-grid">
                       {formData.photos.map((url, i) => (
                         <div key={i} className="photo-thumb">
-                          <img src={url} alt="" />
+                          {url ? <img src={url} alt="" /> : null}
                           <button type="button" className="photo-remove" onClick={() => handleRemovePhoto(i)}>✕</button>
                           {i === 0 && <span className="thumb-badge">Borítókép</span>}
                         </div>

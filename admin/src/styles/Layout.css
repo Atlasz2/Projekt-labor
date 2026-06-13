@@ -1,18 +1,18 @@
-﻿/* ================================================================
+/* ================================================================
    LAYOUT — Modern municipality admin sidebar + shell
    ================================================================ */
 
 :root {
-  /* Sidebar palette */
-  --sb-bg-top:      #0f172a;
-  --sb-bg-bottom:   #1e3a5f;
-  --sb-text:        #e2e8f0;
-  --sb-text-muted:  rgba(148,163,184,0.85);
-  --sb-border:      rgba(255,255,255,0.07);
-  --sb-active-bg:   rgba(37,99,235,0.22);
-  --sb-active-border:rgba(96,165,250,0.4);
-  --sb-hover-bg:    rgba(255,255,255,0.06);
-  --sb-accent:      #60a5fa;
+  /* Sidebar palette — warm Nagyvázsony forest */
+  --sb-bg-top:      #2c3522;
+  --sb-bg-bottom:   #3b4a2c;
+  --sb-text:        #ece6d8;
+  --sb-text-muted:  rgba(214,205,182,0.85);
+  --sb-border:      rgba(255,255,255,0.08);
+  --sb-active-bg:   rgba(123,150,98,0.28);
+  --sb-active-border:rgba(168,190,138,0.45);
+  --sb-hover-bg:    rgba(255,255,255,0.07);
+  --sb-accent:      #a8be8a;
   --sb-width:       268px;
 }
 
@@ -76,12 +76,12 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #5b6f4c, #46583b);
   color: #fff;
   font-weight: 800;
   font-size: 0.78rem;
   letter-spacing: 0.06em;
-  box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+  box-shadow: 0 4px 12px rgba(123,150,98,0.4);
   flex-shrink: 0;
 }
 
@@ -197,12 +197,12 @@
 
 .nav-link.active {
   background: var(--sb-active-bg);
-  color: #bfdbfe;
+  color: #d5e0c2;
   border-color: var(--sb-active-border);
 }
 
-.nav-link.active .nav-label { color: #dbeafe; font-weight: 600; }
-.nav-link.active .nav-icon  { background: rgba(37,99,235,0.3); color: #93c5fd; }
+.nav-link.active .nav-label { color: #e4ecd7; font-weight: 600; }
+.nav-link.active .nav-icon  { background: rgba(123,150,98,0.3); color: #b7c89b; }
 
 .nav-icon {
   width: 30px;
@@ -273,13 +273,13 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: #1e3a5f;
-  color: #e2e8f0;
+  background: #3b4a2c;
+  color: #ece6d8;
   box-shadow: 0 4px 16px rgba(0,0,0,0.2);
   font-size: 1.2rem;
 }
 
-.sidebar-open-btn:hover { background: #0f172a; transform: scale(1.04); }
+.sidebar-open-btn:hover { background: #2c3522; transform: scale(1.04); }
 
 /* ---- Main content ---- */
 .main-content {

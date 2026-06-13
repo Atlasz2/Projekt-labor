@@ -50,11 +50,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
         _error = null;
       });
 
-      final snapshot = await _firestore
+      final query = _firestore
           .collection('about')
-          .orderBy('year', descending: false)
-          .get();
+          .orderBy('year', descending: false);
 
+      QuerySnapshot<Map<String, dynamic>> snapshot;
+      try {
+        // A szerveres lekérés timeoutol, ha a hálózat csatlakozott, de halott,
+        // különben a képernyő örökké pörögne.
+        snapshot = await query.get().timeout(const Duration(seconds: 10));
+      } catch (_) {
+        // Visszalépés a Firestore helyi gyorsítótárára (offline / gyenge net).
+        snapshot = await query.get(const GetOptions(source: Source.cache));
+      }
+
+      if (!mounted) return;
       setState(() {
         _events = snapshot.docs.map((doc) {
           final data = doc.data();
@@ -72,6 +82,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = 'Hiba: $e';
         _isLoading = false;

@@ -158,7 +158,11 @@ service cloud.firestore {
 
     match /bug_reports/{reportId} {
       allow create: if isSignedIn();
-      allow read: if isAdmin();
+      // Admins read everything; a signed-in user may read their own reports
+      // so the in-app "previous reports" history works (query is filtered by
+      // reported_by.user_id == request.auth.uid).
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.reported_by.user_id == request.auth.uid);
       allow update, delete: if isAdmin();
     }
   }

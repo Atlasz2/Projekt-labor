@@ -18,6 +18,10 @@ class _NameScreenState extends State<NameScreen> {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
+  bool _isValidEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
+  }
+
   @override
   void dispose() {
     _displayNameController.dispose();
@@ -27,11 +31,23 @@ class _NameScreenState extends State<NameScreen> {
 
   Future<void> _handleContinue() async {
     final displayName = _displayNameController.text.trim();
+    final email = _emailController.text.trim();
 
     if (displayName.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('A név megadása kötelező!')));
+      return;
+    }
+
+    if (email.isNotEmpty && !_isValidEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Érvénytelen email cím. Hagyd üresen, vagy adj meg helyeset.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -46,7 +62,6 @@ class _NameScreenState extends State<NameScreen> {
       if (user == null) {
         throw Exception('Nem sikerült bejelentkezni.');
       }
-      final email = _emailController.text.trim();
 
       await firestore.runTransaction((transaction) async {
         final reservedName = await transaction.get(usernameRef);

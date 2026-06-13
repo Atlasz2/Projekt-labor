@@ -10,7 +10,7 @@ export default function PhotoGrid({ photos, uploading, feedback, onUpload, onRem
       <div className="photo-grid">
         {photos.map((url, index) => (
           <div key={url + index} className="photo-thumb">
-            <img src={url} alt="" />
+            {url ? <img src={url} alt="" /> : null}
             <button type="button" className="photo-remove" onClick={() => onRemove(index)}>
               x
             </button>

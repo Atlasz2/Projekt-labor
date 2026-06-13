@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -9,28 +8,40 @@ import 'offline_sync_service.dart';
 import 'qr_processing_service.dart';
 
 class PendingQrSyncService {
-  static StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   static bool _started = false;
   static bool _syncInProgress = false;
+  static VoidCallback? _onlineListener;
 
   static Future<void> start() async {
     if (_started) return;
     _started = true;
 
-    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
-      final online = results.any((r) => r != ConnectivityResult.none);
-      if (online) {
+    // Sync whenever the device becomes *confirmed* online. We listen to
+    // OfflineSyncService.onlineNotifier (which flips only after a real
+    // reachability probe) instead of the raw connectivity stream — otherwise
+    // syncNow runs before connectivity is verified and bails out on the stale
+    // offline flag, leaving scanned codes stuck in the queue.
+    final sync = OfflineSyncService();
+    await sync.init();
+    void onlineChanged() {
+      if (sync.onlineNotifier.value) {
         unawaited(syncNow());
       }
-    });
+    }
+
+    _onlineListener = onlineChanged;
+    sync.onlineNotifier.addListener(onlineChanged);
 
     await syncNow();
   }
 
   static Future<void> stop() async {
     _started = false;
-    await _connectivitySub?.cancel();
-    _connectivitySub = null;
+    final listener = _onlineListener;
+    if (listener != null) {
+      OfflineSyncService().onlineNotifier.removeListener(listener);
+      _onlineListener = null;
+    }
   }
 
   static Future<void> syncNow() async {
@@ -51,7 +62,13 @@ class PendingQrSyncService {
         try {
           await QrProcessingService.processByCode(uid: uid, code: entry.key);
           await LocalCache.removePendingQr(entry.key);
+        } on QrStationNotFoundException {
+          // Permanent: the code maps to no station — drop it so the queue
+          // can drain instead of retrying this poison entry forever.
+          await LocalCache.removePendingQr(entry.key);
+          debugPrint('Pending QR eldobva (ismeretlen kód): ${entry.key}');
         } catch (e) {
+          // Transient (network/Firestore) — keep it queued for the next attempt.
           debugPrint('Pending QR sync failed for ${entry.key}: $e');
         }
       }

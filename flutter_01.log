@@ -1,0 +1,91 @@
+Flutter crash report.
+Please report a bug at https://github.com/flutter/flutter/issues.
+
+## command
+
+flutter test mobile_app
+
+## exception
+
+PathNotFoundException: PathNotFoundException: Directory listing failed, path = 'C:\Users\rafae\Documents\Egyetem\Szakdoga\negyes\mobile_app\build\flutter_plugin_android_lifecycle\.transforms\7367fa2c3692d6952d6f6c672cdf0017\transformed\bundleLibRuntimeToDirDebug\bundleLibRuntimeToDirDebug_dex\io\flutter\embedding\engine\plugins\lifecycle\*' (OS Error: A rendszer nem találja a megadott elérési utat.
+, errno = 3)
+
+```
+#0      _Directory._fillWithDirectoryListing (dart:io-patch/directory_patch.dart:49:4)
+#1      _Directory.listSync (dart:io/directory_impl.dart:273:5)
+#2      ForwardingDirectory.listSync (package:file/src/forwarding/forwarding_directory.dart:43:12)
+#3      ForwardingDirectory.listSync (package:file/src/forwarding/forwarding_directory.dart:43:12)
+#4      _findTests (package:flutter_tools/src/commands/test.dart:849:8)
+#5      TestCommand.verifyThenRunCommand (package:flutter_tools/src/commands/test.dart:359:32)
+#6      FlutterCommand.run.<anonymous closure> (package:flutter_tools/src/runner/flutter_command.dart:1559:33)
+<asynchronous suspension>
+#7      AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#8      CommandRunner.runCommand (package:args/command_runner.dart:212:13)
+<asynchronous suspension>
+#9      FlutterCommandRunner.runCommand.<anonymous closure> (package:flutter_tools/src/runner/flutter_command_runner.dart:487:9)
+<asynchronous suspension>
+#10     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#11     FlutterCommandRunner.runCommand (package:flutter_tools/src/runner/flutter_command_runner.dart:422:5)
+<asynchronous suspension>
+#12     run.<anonymous closure>.<anonymous closure> (package:flutter_tools/runner.dart:104:11)
+<asynchronous suspension>
+#13     AppContext.run.<anonymous closure> (package:flutter_tools/src/base/context.dart:154:19)
+<asynchronous suspension>
+#14     main (package:flutter_tools/executable.dart:103:3)
+<asynchronous suspension>
+```
+
+## flutter doctor
+
+```
+[32m[✓][39m Flutter (Channel stable, 3.38.3, on Microsoft Windows [Version
+    10.0.26200.8655], locale hu-HU) [463ms]
+    [32m•[39m Flutter version 3.38.3 on channel stable at C:\src\flutter
+    [32m•[39m Upstream repository https://github.com/flutter/flutter.git
+    [32m•[39m Framework revision 19074d12f7 (7 months ago), 2025-11-20 17:53:13 -0500
+    [32m•[39m Engine revision 13e658725d
+    [32m•[39m Dart version 3.10.1
+    [32m•[39m DevTools version 2.51.1
+    [32m•[39m Feature flags: enable-web, enable-linux-desktop, enable-macos-desktop,
+      enable-windows-desktop, enable-android, enable-ios, cli-animations,
+      enable-native-assets, omit-legacy-version-file, enable-lldb-debugging
+
+[32m[✓][39m Windows Version (11 Pro 64-bit, 25H2, 2009) [2,4s]
+
+[33m[!][39m Android toolchain - develop for Android devices (Android SDK version 36.1.0)
+    [768ms]
+    [32m•[39m Android SDK at C:\Users\rafae\AppData\Local\Android\sdk
+    [32m•[39m Emulator version 36.2.12.0 (build_id 14214601) (CL:N/A)
+    [31m✗[39m cmdline-tools component is missing.
+      Try installing or updating Android Studio.
+      Alternatively, download the tools from
+      https://developer.android.com/studio#command-line-tools-only and make sure
+      to set the ANDROID_HOME environment variable.
+      See https://developer.android.com/studio/command-line for more details.
+    [31m✗[39m Android license status unknown.
+      Run `flutter doctor --android-licenses` to accept the SDK licenses.
+      See https://flutter.dev/to/windows-android-setup for more details.
+
+[31m[✗][39m Chrome - develop for the web (Cannot find Chrome executable at
+    .\Google\Chrome\Application\chrome.exe) [142ms]
+    [33m![39m Cannot find Chrome. Try setting CHROME_EXECUTABLE to a Chrome executable.
+
+[32m[✓][39m Visual Studio - develop Windows apps (Visual Studio Community 2022 17.14.1)
+    [141ms]
+    [32m•[39m Visual Studio at C:\Program Files\Microsoft Visual Studio\2022\Community
+    [32m•[39m Visual Studio Community 2022 version 17.14.36119.2
+    [32m•[39m Windows 10 SDK version 10.0.26100.0
+
+[32m[✓][39m Connected device (2 available) [141ms]
+    [32m•[39m Windows (desktop) • windows • windows-x64    • Microsoft Windows [Version
+      10.0.26200.8655]
+    [32m•[39m Edge (web)        • edge    • web-javascript • Microsoft Edge
+      149.0.4022.62
+
+[32m[✓][39m Network resources [1 281ms]
+    [32m•[39m All expected network resources are available.
+
+[33m![39m Doctor found issues in 2 categories.
+```

@@ -88,6 +88,14 @@ describe("Stations", () => {
     await waitFor(() => expect(screen.getByText("Teszt állomás")).toBeInTheDocument());
   });
 
+  it("renders the placeholder instead of an empty-src cover img when no photo", async () => {
+    getDocs.mockResolvedValue(makeSnap([makeStation()]));
+    renderStations();
+    await waitFor(() => expect(screen.getByText("Teszt állomás")).toBeInTheDocument());
+    // normalizePhotosFromDoc is mocked to [] → cover falls back to the 📷 placeholder
+    expect(screen.getByText("📷")).toBeInTheDocument();
+  });
+
   it("shows multiple station names", async () => {
     getDocs.mockResolvedValue(
       makeSnap([

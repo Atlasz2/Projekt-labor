@@ -20,6 +20,18 @@ class QrProcessResult {
   final int completedEventsCount;
 }
 
+/// Permanent failure: the scanned code maps to no existing station.
+/// Distinct from transient (network/Firestore) errors so the offline queue
+/// can drop poison codes instead of retrying them forever.
+class QrStationNotFoundException implements Exception {
+  const QrStationNotFoundException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => 'Ismeretlen QR kod: $code';
+}
+
 class QrProcessingService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -29,7 +41,7 @@ class QrProcessingService {
   }) async {
     final station = await _findStationByCode(code);
     if (station == null) {
-      throw Exception('Ismeretlen QR kod: $code');
+      throw QrStationNotFoundException(code);
     }
     return _applyStationProgress(
       uid: uid,

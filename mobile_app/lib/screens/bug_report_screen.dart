@@ -226,36 +226,43 @@ class _BugReportScreenState extends State<BugReportScreen> {
                   .where('reported_by.user_id', isEqualTo: uid)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SizedBox.shrink();
-                }
-
-                final docs = snapshot.data!.docs.toList()
-                  ..sort((a, b) {
-                    final aTs = (a.data()['created_at_ms'] ?? 0) as num;
-                    final bTs = (b.data()['created_at_ms'] ?? 0) as num;
-                    return bTs.compareTo(aTs);
-                  });
-
-                if (docs.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                final Widget content;
+                if (snapshot.hasError) {
+                  content = const Text(
+                    'A korábbi bejelentéseid betöltése most nem sikerült. '
+                    'Ellenőrizd a kapcsolatot, és próbáld újra később.',
+                    style: TextStyle(color: Color(0xFF92400E), height: 1.45),
+                  );
+                } else if (snapshot.connectionState == ConnectionState.waiting) {
+                  content = const Row(
                     children: [
-                      const Text(
-                        'Korábbi hibabejelentéseid',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      const SizedBox(height: 12),
-                      ...docs.map((doc) {
+                      SizedBox(width: 12),
+                      Text('Korábbi bejelentéseid betöltése...'),
+                    ],
+                  );
+                } else {
+                  final docs = [...?snapshot.data?.docs]
+                    ..sort((a, b) {
+                      final aTs = (a.data()['created_at_ms'] ?? 0) as num;
+                      final bTs = (b.data()['created_at_ms'] ?? 0) as num;
+                      return bTs.compareTo(aTs);
+                    });
+
+                  if (docs.isEmpty) {
+                    content = const Text(
+                      'Még nincs korábbi hibabejelentésed. Az elküldött '
+                      'bejelentéseid és az admin válaszai itt jelennek meg.',
+                      style: TextStyle(color: Color(0xFF475569), height: 1.45),
+                    );
+                  } else {
+                    content = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: docs.map((doc) {
                         final item = doc.data();
                         final response = (item['admin_response'] ?? '')
                             .toString()
@@ -315,7 +322,26 @@ class _BugReportScreenState extends State<BugReportScreen> {
                             ],
                           ),
                         );
-                      }),
+                      }).toList(),
+                    );
+                  }
+                }
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Korábbi hibabejelentéseid',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 12),
+                      content,
                     ],
                   ),
                 );

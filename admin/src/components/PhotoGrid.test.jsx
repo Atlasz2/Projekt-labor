@@ -101,6 +101,23 @@ describe("PhotoGrid", () => {
     expect(screen.queryByText("Sikeres feltöltés")).not.toBeInTheDocument();
   });
 
+  it("does not render an <img> for an empty url but keeps the thumb removable", () => {
+    render(
+      <PhotoGrid
+        photos={["", "b.jpg"]}
+        uploading={false}
+        feedback={idleFeedback}
+        onUpload={vi.fn()}
+        onRemove={vi.fn()}
+      />
+    );
+    const imgs = document.querySelectorAll("img");
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0].getAttribute("src")).toBe("b.jpg");
+    // both entries still render their remove button
+    expect(screen.getAllByText("x")).toHaveLength(2);
+  });
+
   it("calls onRemove with correct index when remove button is clicked", async () => {
     const onRemove = vi.fn();
     render(

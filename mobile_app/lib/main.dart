@@ -113,19 +113,27 @@ class _FirebaseInitErrorScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 56, color: Colors.redAccent),
+              const Icon(Icons.wifi_off_rounded, size: 56, color: Colors.redAccent),
               const SizedBox(height: 16),
               const Text(
-                'A Firebase inicializalasa sikertelen.',
+                'Nem sikerült csatlakozni',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
-              Text(
-                errorText ?? 'Ismeretlen hiba',
+              const Text(
+                'Ellenőrizd az internetkapcsolatot, majd indítsd újra az alkalmazást.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.black54),
+                style: TextStyle(fontSize: 15, color: Colors.black54, height: 1.4),
               ),
+              if (errorText != null) ...[
+                const SizedBox(height: 20),
+                Text(
+                  errorText!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: Colors.black38),
+                ),
+              ],
             ],
           ),
         ),

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/local_cache.dart';
 import '../services/offline_sync_service.dart';
 import '../theme/app_colors.dart';
 import 'accommodation_screen.dart';
@@ -230,25 +231,30 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       ),
                       ValueListenableBuilder<int>(
                         valueListenable: _offlineSyncService.pendingCountNotifier,
-                        builder: (context, pending, _) {
-                          if (pending <= 0) return const SizedBox.shrink();
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFDBEAFE),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '$pending függő művelet',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1D4ED8),
+                        builder: (context, actionPending, _) =>
+                            ValueListenableBuilder<int>(
+                          valueListenable: LocalCache.pendingQrCountNotifier,
+                          builder: (context, qrPending, _) {
+                            final pending = actionPending + qrPending;
+                            if (pending <= 0) return const SizedBox.shrink();
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDBEAFE),
+                                borderRadius: BorderRadius.circular(999),
                               ),
-                            ),
-                          );
-                        },
+                              child: Text(
+                                '$pending függő művelet',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1D4ED8),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ],
                   ),

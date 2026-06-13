@@ -69,17 +69,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
         throw Exception('Nincs bejelentkezett felhasználó.');
       }
 
-      final progressDoc = await _firestore
-          .collection('user_progress')
-          .doc(currentUid)
-          .get();
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(currentUid)
-          .get();
+      // Fetch the two profile docs together; if the network is slow/unreachable
+      // fall back to the local cache so the screen never hangs on a spinner.
+      List<DocumentSnapshot<Map<String, dynamic>>> userDocs;
+      try {
+        userDocs = await Future.wait([
+          _firestore.collection('user_progress').doc(currentUid).get(),
+          _firestore.collection('users').doc(currentUid).get(),
+        ]).timeout(const Duration(seconds: 10));
+      } catch (_) {
+        userDocs = await Future.wait([
+          _firestore
+              .collection('user_progress')
+              .doc(currentUid)
+              .get(const GetOptions(source: Source.cache)),
+          _firestore
+              .collection('users')
+              .doc(currentUid)
+              .get(const GetOptions(source: Source.cache)),
+        ]);
+      }
 
-      final progressData = progressDoc.data() ?? <String, dynamic>{};
-      final userData = userDoc.data() ?? <String, dynamic>{};
+      final progressData = userDocs[0].data() ?? <String, dynamic>{};
+      final userData = userDocs[1].data() ?? <String, dynamic>{};
 
       final current = <String, dynamic>{
         'id': currentUid,
@@ -102,27 +114,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs túra',
       };
 
-      await LeaderboardService.syncEntry(
-        uid: currentUid,
-        displayName: current['name']?.toString(),
-        points: _safeInt(current['points']),
-        completedStationsCount: _safeInt(current['completedStations']),
-        completedEventsCount: _safeInt(current['completedEvents']),
+      // The public leaderboard is already kept fresh when points change (QR
+      // scan / name setup), so don't block the profile render on this write.
+      unawaited(
+        LeaderboardService.syncEntry(
+          uid: currentUid,
+          displayName: current['name']?.toString(),
+          points: _safeInt(current['points']),
+          completedStationsCount: _safeInt(current['completedStations']),
+          completedEventsCount: _safeInt(current['completedEvents']),
+        ).catchError((Object e) => debugPrint('Leaderboard sync skipped: $e')),
       );
 
-      final leaderboardSnap = await _firestore
-          .collection('public_leaderboard')
-          .orderBy('points', descending: true)
-          .limit(50)
-          .get();
+      // Top list + rank count run together; if the leaderboard is slow or
+      // unavailable, still show the profile (just without the ranking).
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> leaderboardDocs =
+          const [];
+      int? higherCount;
+      try {
+        final leaderboardResults = await Future.wait<Object>([
+          _firestore
+              .collection('public_leaderboard')
+              .orderBy('points', descending: true)
+              .limit(50)
+              .get(),
+          _firestore
+              .collection('public_leaderboard')
+              .where('points', isGreaterThan: _safeInt(current['points']))
+              .count()
+              .get(),
+        ]).timeout(const Duration(seconds: 10));
+        leaderboardDocs =
+            (leaderboardResults[0] as QuerySnapshot<Map<String, dynamic>>).docs;
+        higherCount = (leaderboardResults[1] as AggregateQuerySnapshot).count;
+      } catch (_) {
+        // Leaderboard slow/unavailable — keep the profile usable without it.
+      }
 
-      final higherCountSnap = await _firestore
-          .collection('public_leaderboard')
-          .where('points', isGreaterThan: _safeInt(current['points']))
-          .count()
-          .get();
-
-      final users = leaderboardSnap.docs.map((doc) {
+      final users = leaderboardDocs.map((doc) {
         final data = doc.data();
         return <String, dynamic>{
           'id': doc.id,
@@ -143,15 +172,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       users.sort(
         (a, b) => _safeInt(b['points']).compareTo(_safeInt(a['points'])),
       );
-      final userRank = (higherCountSnap.count ?? 0) + 1;
+      final userRank = higherCount == null ? 0 : higherCount + 1;
 
+      if (!mounted) return;
       setState(() {
         _currentUserData = current;
         _allUsers = users;
-        _userRank = userRank > 0 ? userRank : 0;
+        _userRank = userRank;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = 'Hiba az adatok betöltésekor: $e';
         _isLoading = false;

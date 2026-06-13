@@ -4,8 +4,11 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:latlong2/latlong.dart' as ll;
@@ -13,6 +16,7 @@ import 'package:latlong2/latlong.dart' as ll;
 import '../services/local_cache.dart';
 import '../services/offline_image_service.dart';
 import '../services/offline_tiles_service.dart';
+import 'full_screen_map_screen.dart';
 
 class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
@@ -81,37 +85,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
   String _stationName(Map<String, dynamic> station) {
     return station['name']?.toString() ?? 'Állomás';
-  }
-
-  List<String> _stationPhotos(Map<String, dynamic> station) {
-    final photos = station['photos'];
-    if (photos is List && photos.isNotEmpty) {
-      return photos
-          .map((entry) {
-            if (entry is String) return entry;
-            if (entry is Map) return entry['url']?.toString() ?? '';
-            return '';
-          })
-          .where((url) => url.isNotEmpty)
-          .cast<String>()
-          .toList(growable: false);
-    }
-
-    final photoUrls = station['photoUrls'];
-    if (photoUrls is List && photoUrls.isNotEmpty) {
-      return photoUrls
-          .map((entry) => entry?.toString() ?? '')
-          .where((url) => url.isNotEmpty)
-          .cast<String>()
-          .toList(growable: false);
-    }
-
-    final imageUrl = station['imageUrl']?.toString();
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      return [imageUrl];
-    }
-
-    return const [];
   }
 
   void _openImageViewer(
@@ -189,7 +162,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
   }
 
   void _showStationSheet(Map<String, dynamic> station) {
-    final photos = _stationPhotos(station);
+    final photos = photoListFromDoc(station);
     final isCompleted = _completedIds.contains(station['id'] as String? ?? '');
 
     showModalBottomSheet<void>(
@@ -684,7 +657,68 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     });
   }
 
-  Future<void> _downloadOfflineTiles() async {
+  Future<void> _startOfflineTilesDownload() async {
+    if (_downloadingTiles) return;
+    final maxZoom = await _askTileQuality();
+    if (maxZoom == null || !mounted) return;
+    await _downloadOfflineTiles(maxZoom: maxZoom);
+  }
+
+  /// Lets the user trade detail for storage: space-saving caps at street level
+  /// (z17), detailed goes to full HD (z19) — the top zoom dominates tile count.
+  Future<int?> _askTileQuality() {
+    return showModalBottomSheet<int>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 18, 20, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Offline térkép letöltése',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Mennyire legyen részletes a letöltött térkép? A részletesebb több helyet foglal.',
+                  style: TextStyle(color: Colors.black54, fontSize: 13),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.save_outlined, color: Color(0xFF2E7D32)),
+              title: const Text('Helytakarékos'),
+              subtitle: const Text('Kisebb méret, utcaszintű részletesség'),
+              onTap: () => Navigator.pop(sheetContext, 17),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.high_quality_outlined,
+                color: Color(0xFF1D4ED8),
+              ),
+              title: const Text('Részletes (HD)'),
+              subtitle: const Text('Nagyobb méret, maximális részletesség'),
+              onTap: () => Navigator.pop(sheetContext, 19),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadOfflineTiles({required int maxZoom}) async {
     if (_downloadingTiles) return;
 
     final selectedTripId = _selectedTripId;
@@ -694,7 +728,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         ? const <LatLng>[]
         : (_routeCache[_selectedTripId!] ?? const <LatLng>[]);
     final photoUrls = tripStations
-        .expand(_stationPhotos)
+        .expand(photoListFromDoc)
         .toSet()
         .toList(growable: false);
 
@@ -716,7 +750,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     final downloaded = await OfflineTilesService.downloadNagyvazsonyTiles(
       focusPoints: focusPoints,
       minZoom: 13,
-      maxZoom: 19,
+      maxZoom: maxZoom,
       onProgress: (done, total) async {
         if (!mounted) return;
         setState(() {
@@ -750,6 +784,40 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       }
       _downloadStatus =
           'Offline kész: $downloaded térképcsempe, $downloadedImages kép';
+    });
+  }
+
+  Future<void> _clearOfflineTiles() async {
+    if (_downloadingTiles) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Offline térkép törlése'),
+        content: const Text(
+          'Biztosan törlöd a letöltött offline térképcsempéket? Felszabadul a tárhely, '
+          'de offline használathoz később újra le kell töltened.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Törlés'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _downloadStatus = 'Offline térkép törlése...');
+    await OfflineTilesService.clearTiles();
+    await LocalCache.clearOfflineTileTripIds();
+    if (!mounted) return;
+    setState(() {
+      _offlineTileTripIds.clear();
+      _downloadStatus = 'Offline térkép törölve.';
     });
   }
 
@@ -1102,6 +1170,28 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     await _refreshSelectedTripMap();
   }
 
+  void _openFullScreenMap() {
+    final tripStations = _tripStationsFor(_selectedTripId);
+    final routePoints = _selectedTripId == null
+        ? const <LatLng>[]
+        : (_routeCache[_selectedTripId!] ?? const <LatLng>[]);
+    final fitPoints = routePoints.isNotEmpty
+        ? routePoints
+        : tripStations.map(_stationPoint).whereType<LatLng>().toList();
+    final center = fitPoints.isNotEmpty ? fitPoints.first : _defaultCenter;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => FullScreenMapScreen(
+          markers: _markers,
+          polylines: _polylines,
+          initialPosition: center,
+          fitPoints: fitPoints,
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildMapSkeleton(BuildContext context) {
     final grey = Colors.grey.shade200;
@@ -1264,7 +1354,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _downloadingTiles
                           ? null
-                          : _downloadOfflineTiles,
+                          : _startOfflineTilesDownload,
                       icon: Icon(
                         tripHasOfflineTiles
                             ? Icons.check_circle
@@ -1273,11 +1363,20 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                       ),
                       label: Text(
                         _downloadingTiles
-                            ? 'HD letöltés...'
-                            : 'Offline térkép HD',
+                            ? 'Letöltés...'
+                            : 'Offline térkép',
                       ),
                     ),
                   ),
+                  if (_offlineTileTripIds.isNotEmpty && !_downloadingTiles)
+                    TextButton.icon(
+                      onPressed: _clearOfflineTiles,
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Offline térkép törlése'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFC62828),
+                      ),
+                    ),
                   if (_downloadStatus != null)
                     Text(
                       _downloadStatus!,
@@ -1294,31 +1393,57 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
           child: Column(
             children: [
               Expanded(
-                child: GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: center,
-                    zoom: 13,
-                  ),
-                  markers: _markers,
-                  polylines: _polylines,
-                  zoomControlsEnabled: true,
-                  zoomGesturesEnabled: true,
-                  scrollGesturesEnabled: true,
-                  rotateGesturesEnabled: true,
-                  tiltGesturesEnabled: true,
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-                    _fitRouteOrStations(
-                      _selectedTripId == null
-                          ? const []
-                          : (_routeCache[_selectedTripId!] ?? const []),
-                      tripStations,
-                    );
-                  },
-                  myLocationButtonEnabled: true,
-                  myLocationEnabled: true,
-                  mapToolbarEnabled: false,
-                  compassEnabled: true,
+                child: Stack(
+                  children: [
+                    GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: center,
+                        zoom: 13,
+                      ),
+                      markers: _markers,
+                      polylines: _polylines,
+                      zoomControlsEnabled: true,
+                      zoomGesturesEnabled: true,
+                      scrollGesturesEnabled: true,
+                      rotateGesturesEnabled: true,
+                      tiltGesturesEnabled: true,
+                      // Claim the gesture immediately so pan/zoom feel native
+                      // instead of fighting the surrounding scroll views.
+                      gestureRecognizers:
+                          <Factory<OneSequenceGestureRecognizer>>{
+                            Factory<OneSequenceGestureRecognizer>(
+                              EagerGestureRecognizer.new,
+                            ),
+                          },
+                      onMapCreated: (controller) {
+                        _mapController = controller;
+                        _fitRouteOrStations(
+                          _selectedTripId == null
+                              ? const []
+                              : (_routeCache[_selectedTripId!] ?? const []),
+                          tripStations,
+                        );
+                      },
+                      myLocationButtonEnabled: true,
+                      myLocationEnabled: true,
+                      mapToolbarEnabled: false,
+                      compassEnabled: true,
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Material(
+                        color: Colors.white,
+                        shape: const CircleBorder(),
+                        elevation: 3,
+                        child: IconButton(
+                          icon: const Icon(Icons.fullscreen),
+                          tooltip: 'Teljes képernyős térkép',
+                          onPressed: _openFullScreenMap,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (tripStations.isNotEmpty)
@@ -1331,7 +1456,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                     separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       final station = tripStations[index];
-                      final photos = _stationPhotos(station);
+                      final photos = photoListFromDoc(station);
                       final done = _completedIds.contains(
                         station['id'] as String? ?? '',
                       );

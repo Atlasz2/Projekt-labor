@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -26,29 +27,6 @@ class _EventsScreenState extends State<EventsScreen> {
     if (v == null) return fallback;
     if (v is String) return v.isEmpty ? fallback : v;
     return v.toString().trim().isEmpty ? fallback : v.toString().trim();
-  }
-
-  List<String> _photoUrls(Map<String, dynamic> data) {
-    final photos = data['photos'];
-    if (photos is List && photos.isNotEmpty) {
-      return photos
-          .map((entry) {
-            if (entry is String) return entry;
-            if (entry is Map && entry['url'] != null) {
-              return entry['url'].toString();
-            }
-            return '';
-          })
-          .where((url) => url.isNotEmpty)
-          .cast<String>()
-          .toList();
-    }
-    final photoUrls = data['photoUrls'];
-    if (photoUrls is List && photoUrls.isNotEmpty) {
-      return photoUrls.map((entry) => entry.toString()).toList();
-    }
-    final single = _safeString(data['imageUrl']);
-    return single.isEmpty ? <String>[] : <String>[single];
   }
 
   DateTime _sortDateKey(dynamic raw) {
@@ -150,7 +128,7 @@ class _EventsScreenState extends State<EventsScreen> {
     Map<String, dynamic> event,
     Color accent,
   ) {
-    final photos = _photoUrls(event);
+    final photos = photoListFromDoc(event);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -438,7 +416,7 @@ class _EventsScreenState extends State<EventsScreen> {
                       final event = events[index];
                       final accent =
                           _accentColors[index % _accentColors.length];
-                      final photos = _photoUrls(event);
+                      final photos = photoListFromDoc(event);
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
