@@ -261,7 +261,7 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
 
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) {
-          return Center(child: Text(isRestaurant ? 'Nincsenek ettermek.' : 'Nincsenek szallasok.'));
+          return Center(child: Text(isRestaurant ? 'Nincsenek éttermek.' : 'Nincsenek szállások.'));
         }
 
         final items = docs.map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>}).toList();
@@ -319,10 +319,10 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Szállás es etterem'),
+        title: const Text('Szállás és étterem'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Szallasok'), Tab(text: 'Ettermek')],
+          tabs: const [Tab(text: 'Szállások'), Tab(text: 'Éttermek')],
         ),
       ),
       body: TabBarView(

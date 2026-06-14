@@ -1,26 +1,73 @@
+import PropTypes from 'prop-types';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../firebaseConfig';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, setDoc, orderBy, limit } from 'firebase/firestore';
 import StateCard from '../components/StateCard';
 import '../styles/Dashboard.css';
+
+const TREND_METRICS = [
+  { key: 'totalPoints', label: 'Összpontszám', color: '#5b6f4c' },
+  { key: 'users',       label: 'Felhasználók', color: '#2563eb' },
+  { key: 'stations',    label: 'Állomások',    color: '#d97706' },
+];
+
+function TrendChart({ points, color }) {
+  if (points.length < 2) return null;
+
+  const W = 560;
+  const H = 150;
+  const P = 14;
+  const values = points.map((p) => p.value);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const stepX = (W - P * 2) / (points.length - 1);
+
+  const coords = points.map((p, i) => {
+    const x = P + i * stepX;
+    const y = H - P - ((p.value - min) / range) * (H - P * 2);
+    return [x, y];
+  });
+
+  const line = coords
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(' ');
+  const area = `${line} L${coords[coords.length - 1][0].toFixed(1)},${H - P} L${coords[0][0].toFixed(1)},${H - P} Z`;
+  const last = coords[coords.length - 1];
+
+  return (
+    <svg className="trend-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Trend grafikon">
+      <defs>
+        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#trendFill)" />
+      <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={last[0]} cy={last[1]} r="4.5" fill={color} />
+    </svg>
+  );
+}
+
+TrendChart.propTypes = {
+  points: PropTypes.arrayOf(PropTypes.object).isRequired,
+  color: PropTypes.string.isRequired,
+};
 
 function Dashboard() {
   const [stats, setStats] = useState({
     trips: 0, stations: 0, users: 0, trackedUsers: 0,
     activeTrips: 0, achievements: 0, totalPoints: 0, averagePoints: 0,
+    assignedStations: 0,
   });
   const [topAchievements, setTopAchievements] = useState([]);
+  const [topPlayers, setTopPlayers] = useState([]);
+  const [trendData, setTrendData] = useState([]);
+  const [trendMetric, setTrendMetric] = useState('totalPoints');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [darkMode, setDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
-
-  const toggleDarkMode = () => {
-    const next = !darkMode;
-    setDarkMode(next);
-    document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('adminDarkMode', String(next));
-  };
 
   const fetchStats = useCallback(async () => {
     try {
@@ -40,6 +87,7 @@ function Dashboard() {
 
       const totalPts = userProgressSnapshot.docs.reduce((sum, doc) => sum + (doc.data().totalPoints || 0), 0);
       const avgPts = userProgressSnapshot.size > 0 ? Math.round(totalPts / userProgressSnapshot.size) : 0;
+      const assignedStations = stationsSnapshot.docs.filter((d) => d.data().tripId).length;
 
       setStats({
         trips: tripsSnapshot.size,
@@ -50,6 +98,7 @@ function Dashboard() {
         achievements: achievementsSnapshot.size,
         totalPoints: totalPts,
         averagePoints: avgPts,
+        assignedStations,
       });
 
       const achData = achievementsSnapshot.docs
@@ -57,6 +106,51 @@ function Dashboard() {
         .sort((a, b) => (b.unlockedCount || 0) - (a.unlockedCount || 0))
         .slice(0, 3);
       setTopAchievements(achData);
+
+      const playerData = userProgressSnapshot.docs
+        .map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            name: data.userName || data.email || 'Ismeretlen játékos',
+            email: data.email || '',
+            points: Number(data.totalPoints ?? data.points ?? 0),
+          };
+        })
+        .sort((a, b) => b.points - a.points)
+        .slice(0, 5);
+      setTopPlayers(playerData);
+
+      // Persist a once-per-day snapshot so the dashboard can show real trends over time.
+      // Non-blocking: if security rules forbid the write, the trend simply stays empty.
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        await setDoc(
+          doc(db, 'stats_daily', today),
+          {
+            date: today,
+            trips: tripsSnapshot.size,
+            stations: stationsSnapshot.size,
+            users: usersSnapshot.size,
+            trackedUsers: userProgressSnapshot.size,
+            totalPoints: totalPts,
+            achievements: achievementsSnapshot.size,
+            updatedAt: Date.now(),
+          },
+          { merge: true },
+        );
+      } catch {
+        // ignore — trends are optional
+      }
+
+      try {
+        const trendSnapshot = await getDocs(
+          query(collection(db, 'stats_daily'), orderBy('date', 'desc'), limit(14)),
+        );
+        setTrendData(trendSnapshot.docs.map((d) => d.data()).reverse());
+      } catch {
+        setTrendData([]);
+      }
     } catch (err) {
       setError('Nem sikerült betölteni az adatokat: ' + err.message);
     } finally {
@@ -90,6 +184,17 @@ function Dashboard() {
     { to: '/users', title: 'Felhasználók', desc: 'Haladás és statisztikák', badge: 'F' },
   ];
 
+  const activeMetric = TREND_METRICS.find((m) => m.key === trendMetric) || TREND_METRICS[0];
+  const metricPoints = trendData.map((row) => ({
+    date: row.date,
+    value: Number(row[trendMetric] || 0),
+  }));
+  const currentValue = metricPoints.length ? metricPoints[metricPoints.length - 1].value : 0;
+  const previousValue = metricPoints.length > 1
+    ? metricPoints[metricPoints.length - 2].value
+    : currentValue;
+  const trendDelta = currentValue - previousValue;
+
   return (
     <div className="dashboard-shell">
       <header className="dashboard-hero">
@@ -103,14 +208,6 @@ function Dashboard() {
           </button>
           <Link className="cta primary" to="/trips">Új túra</Link>
           <Link className="cta ghost" to="/stations">Új állomás</Link>
-          <button
-            className="cta ghost"
-            onClick={toggleDarkMode}
-            title={darkMode ? 'Világos mód' : 'Sötét mód'}
-            style={{ fontSize: '1.1rem', padding: '8px 14px', lineHeight: 1 }}
-          >
-            {darkMode ? '☀' : '☾'}
-          </button>
         </div>
       </header>
 
@@ -138,6 +235,47 @@ function Dashboard() {
 
       {!loading && !error && (
         <div className="dashboard-grid">
+          <section className="card trend-card">
+            <div className="card-header">
+              <div>
+                <h2>📈 Trend</h2>
+                <p>Az utóbbi {trendData.length} napi pillanatkép alapján</p>
+              </div>
+              <div className="trend-metric-tabs">
+                {TREND_METRICS.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    className={`trend-tab${trendMetric === m.key ? ' active' : ''}`}
+                    onClick={() => setTrendMetric(m.key)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {trendData.length < 2 ? (
+              <p className="trend-empty">
+                📅 A trend épül — legalább két különböző nap pillanatképe szükséges.
+                A rendszer naponta automatikusan ment egyet, nézz vissza holnap!
+              </p>
+            ) : (
+              <>
+                <div className="trend-headline">
+                  <span className="trend-current">
+                    {currentValue.toLocaleString('hu-HU')}
+                  </span>
+                  <span className={`trend-delta ${trendDelta >= 0 ? 'up' : 'down'}`}>
+                    {trendDelta >= 0 ? '▲' : '▼'} {Math.abs(trendDelta).toLocaleString('hu-HU')}
+                    <span className="trend-delta-label"> a tegnapihoz képest</span>
+                  </span>
+                </div>
+                <TrendChart points={metricPoints} color={activeMetric.color} />
+              </>
+            )}
+          </section>
+
           <section className="card kpi-card">
             <div className="card-header">
               <div>
@@ -205,6 +343,31 @@ function Dashboard() {
             </section>
           )}
 
+          {topPlayers.length > 0 && (
+            <section className="card achievement-card">
+              <div className="card-header">
+                <div>
+                  <h2>🥇 Legaktívabb játékosok</h2>
+                  <p>Legtöbb pontot gyűjtő felhasználók</p>
+                </div>
+                <Link className="card-chip" to="/users">Összes</Link>
+              </div>
+              <div className="achievement-list">
+                {topPlayers.map((player, i) => (
+                  <div key={player.id} className="achievement-row">
+                    <span className="achievement-rank">{['🥇', '🥈', '🥉'][i] || `#${i + 1}`}</span>
+                    <span className="achievement-icon">👤</span>
+                    <div className="achievement-info">
+                      <p className="achievement-name">{player.name}</p>
+                      <p className="achievement-desc">{player.email || 'Nincs email'}</p>
+                    </div>
+                    <span className="achievement-count">{player.points} pont</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section className="card activity-card">
             <div className="card-header">
               <div>
@@ -217,7 +380,7 @@ function Dashboard() {
                 <p>{stats.trips === 0 ? 'Még nincs túra az adatbázisban.' : `${stats.trips} túra regisztrálva, ${stats.activeTrips} aktív.`}</p>
               </div>
               <div className="activity-row"><span className="activity-dot"></span>
-                <p>{stats.stations === 0 ? 'Nincsenek állomások feltöltve.' : `${stats.stations} állomás aktív.`}</p>
+                <p>{stats.stations === 0 ? 'Nincsenek állomások feltöltve.' : `${stats.stations} állomás, ebből ${stats.assignedStations} túrához rendelve.`}</p>
               </div>
               <div className="activity-row"><span className="activity-dot"></span>
                 <p>{stats.trackedUsers === 0 ? 'Nincs haladási rekord.' : `${stats.trackedUsers} játékos követ haladást, átlag ${stats.averagePoints} ponttal.`}</p>

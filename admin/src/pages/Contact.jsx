@@ -3,6 +3,7 @@ import { db } from "../firebaseConfig";
 import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import "../styles/Content.css";
 import { safeString } from "../utils/safeString";
+import StateCard from "../components/StateCard";
 
 function Contact() {
   const [contact, setContact] = useState({
@@ -14,6 +15,7 @@ function Contact() {
   const [docId, setDocId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
   async function fetchContact() {
     try {
@@ -48,6 +50,7 @@ function Contact() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    setSaved(false);
     setContact((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -65,6 +68,7 @@ function Contact() {
       };
       await updateDoc(doc(db, "contact", docId), cleanData);
       setSaving(false);
+      setSaved(true);
       setError(null);
     } catch {
       setError("Hiba a mentés során");
@@ -72,7 +76,16 @@ function Contact() {
     }
   };
 
-  if (loading) return <p>Betöltés...</p>;
+  if (loading) {
+    return (
+      <StateCard
+        variant="loading"
+        icon="📇"
+        title="Kapcsolati adatok betöltése..."
+        description="Kérlek várj, az adatok betöltése folyamatban van."
+      />
+    );
+  }
 
   return (
     <div className="content-page">
@@ -82,6 +95,7 @@ function Contact() {
       </div>
 
       {error && <div className="error-message">{error}</div>}
+      {saved && <div className="success-message">✅ A kapcsolati adatok elmentve.</div>}
 
       <div className="form-container" style={{ maxWidth: "600px", margin: "30px auto" }}>
         <h2>Nagyvázsony Információs Iroda</h2>
@@ -137,7 +151,7 @@ function Contact() {
         </div>
       </div>
 
-      <div className="contact-preview" style={{ maxWidth: "600px", margin: "40px auto", padding: "20px", backgroundColor: "#f5f5f5", borderRadius: "8px" }}>
+      <div className="contact-preview">
         <h3>Előnézet</h3>
         {contact.name && <p><strong>{contact.name}</strong></p>}
         {contact.address && <p>📍 {contact.address}</p>}

@@ -457,11 +457,60 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.details-stations h4 {
+.details-stations-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   margin: 20px 0 15px 0;
+}
+
+.details-stations h4 {
+  margin: 0;
   color: #2b2720;
   font-size: 1.2em;
 }
+
+.btn-add-station {
+  background: #eef2e6;
+  color: #3a4a2f;
+  border: 1px solid #d5e0c2;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.88em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.btn-add-station:hover { background: #e4ecd7; transform: translateY(-1px); }
+
+.details-stations-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn-add-station.btn-qr-all {
+  background: #f1f5f9;
+  color: #46583b;
+  border-color: #e2e8f0;
+}
+.btn-add-station.btn-qr-all:hover { background: #e2e8f0; }
+.btn-add-station:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.btn-station-edit {
+  align-self: flex-start;
+  margin-top: 8px;
+  background: transparent;
+  color: #5b6f4c;
+  border: 1px solid #d5e0c2;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-station-edit:hover { background: #eef2e6; }
 
 .stations-list {
   list-style: none;
@@ -754,5 +803,30 @@
 .route-save-panel .form-note {
   margin: 0;
 }
+
+/* ================================================================
+   DARK MODE — expanded trip details (station list)
+   ================================================================ */
+html.dark .trip-details { border-top-color: var(--admin-border); }
+html.dark .details-stations h4 { color: var(--admin-text); }
+
+html.dark .station-item {
+  background: var(--admin-bg-soft);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+html.dark .station-item:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+html.dark .station-info strong { color: var(--admin-text); }
+html.dark .station-info p { color: var(--admin-text-muted); }
+html.dark .btn-add-station { background: rgba(123,150,98,0.18); color: #b7c89b; border-color: rgba(168,190,138,0.3); }
+html.dark .btn-add-station:hover { background: rgba(123,150,98,0.28); }
+html.dark .btn-add-station.btn-qr-all { background: var(--admin-bg-soft); color: var(--admin-text); border-color: var(--admin-border); }
+html.dark .btn-add-station.btn-qr-all:hover { background: var(--admin-border); }
+html.dark .btn-station-edit { color: #b7c89b; border-color: rgba(168,190,138,0.3); }
+html.dark .btn-station-edit:hover { background: rgba(123,150,98,0.18); }
+html.dark .station-qr img { border-color: var(--admin-border); }
+html.dark .empty-stations { color: var(--admin-text-muted); }
+html.dark .status-toggle { background: var(--admin-surface-muted); border-color: var(--admin-border); color: var(--admin-text); }
 
 

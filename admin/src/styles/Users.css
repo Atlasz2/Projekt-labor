@@ -2,35 +2,38 @@
 .users-page {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 32px 24px;
-  min-height: 100vh;
 }
 
-/* Header */
-.page-header { margin-bottom: 24px; }
+/* Header — consistent with the other content pages */
+.users-page .page-header {
+  position: relative;
+  margin-bottom: 22px;
+  padding: 4px 0 18px 16px;
+  border-bottom: 1px solid var(--admin-border);
+}
 
-.page-header h1 {
-  font-size: 1.6rem;
-  color: #2b2720;
+.users-page .page-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 22px;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--admin-accent), var(--admin-accent-deep));
+}
+
+.users-page .page-header h1 {
+  font-size: 1.7rem;
+  color: var(--admin-text);
   margin: 0 0 6px;
   font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
-.page-header p { font-size: 0.9rem; color: #64748b; margin: 0; }
+.users-page .page-header p { font-size: 0.95rem; color: var(--admin-text-muted); margin: 0; }
 
-/* Error */
-.error {
-  background: #fef2f2;
-  color: #991b1b;
-  padding: 14px 18px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  border-left: 4px solid #dc2626;
-  font-weight: 500;
-  font-size: 0.9rem;
-}
-
-/* Stats row */
+/* Stats row — overview first */
 .users-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -39,98 +42,115 @@
 }
 
 .stat-box {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--admin-surface);
+  border-radius: var(--r-md);
   padding: 18px 16px;
   text-align: center;
-  box-shadow: 0 1px 4px rgba(15,23,42,0.07);
-  border: 1px solid #e2e8f0;
+  box-shadow: var(--admin-shadow-sm);
+  border: 1px solid var(--admin-border);
 }
 
 .stat-number {
   font-size: 1.9rem;
   font-weight: 800;
-  color: #5b6f4c;
+  color: var(--admin-accent);
   margin: 0 0 4px;
   line-height: 1;
 }
 
-.stat-label { font-size: 0.82rem; color: #64748b; font-weight: 500; }
+.stat-label { font-size: 0.82rem; color: var(--admin-text-muted); font-weight: 500; }
 
 /* Ranking table */
 .users-ranking {
-  background: #fff;
-  border-radius: 14px;
+  background: var(--admin-surface);
+  border-radius: var(--r-lg);
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(15,23,42,0.07);
-  border: 1px solid #e2e8f0;
+  box-shadow: var(--admin-shadow-sm);
+  border: 1px solid var(--admin-border);
   margin-bottom: 24px;
 }
 
 .users-header {
   display: grid;
-  grid-template-columns: 70px 1.3fr 120px 120px 230px 1.2fr;
+  grid-template-columns: 64px minmax(0, 1.5fr) 130px 110px 230px 150px;
   gap: 14px;
-  padding: 12px 18px;
-  background: #2b2720;
-  color: #e2e8f0;
+  padding: 13px 20px;
+  background: var(--admin-accent-deep);
+  color: #ece6d8;
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
 }
 
 .user-row {
   display: grid;
-  grid-template-columns: 70px 1.3fr 120px 120px 230px 1.2fr;
+  grid-template-columns: 64px minmax(0, 1.5fr) 130px 110px 230px 150px;
   gap: 14px;
-  padding: 14px 18px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--admin-border);
   align-items: center;
   transition: background 0.12s;
 }
 
-.user-row:hover { background: #f8fafc; }
+.user-row:hover { background: var(--admin-surface-muted); }
 .user-row:last-child { border-bottom: none; }
+
+/* Subtle highlight for the top 3 */
+.user-row.top { background: var(--admin-accent-soft); }
+.user-row.top:hover { background: var(--admin-accent-soft); }
 
 /* Rank */
 .rank-col { display: flex; justify-content: center; }
 
 .rank-badge {
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  color: #64748b;
-  min-width: 36px;
+  color: var(--admin-text-muted);
+  min-width: 34px;
   text-align: center;
 }
 
 /* Name */
-.name-col { display: flex; flex-direction: column; gap: 2px; }
-.name-col strong { font-size: 0.92rem; color: #2b2720; font-weight: 600; }
-.name-col small  { font-size: 0.78rem; color: #94a3b8; }
+.name-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.name-col strong {
+  font-size: 0.92rem;
+  color: var(--admin-text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.name-col small {
+  font-size: 0.78rem;
+  color: var(--admin-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Role badge */
 .role-badge {
   display: inline-block;
   text-align: center;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
 }
 
 .role-badge.admin {
-  background: #eef2e6;
-  color: #3a4a2f;
-  border: 1px solid #d5e0c2;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-deep);
+  border-color: var(--admin-accent-border);
 }
 
 .role-badge.user {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
+  background: var(--admin-green-soft);
+  color: var(--admin-green);
+  border-color: rgba(46,125,50,0.25);
 }
 
 /* Points */
@@ -138,63 +158,54 @@
 
 .points-badge {
   display: inline-block;
-  background: #5b6f4c;
+  background: var(--admin-accent);
   color: #fff;
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 999px;
   font-weight: 700;
   font-size: 0.85rem;
 }
 
 /* Progress */
-.progress-col { display: flex; flex-direction: column; gap: 4px; }
-.progress-text { font-size: 0.84rem; color: #5c5142; font-weight: 500; }
+.progress-col { display: flex; flex-direction: column; gap: 5px; }
 
 .progress-bar {
-  height: 6px;
-  background: #e2e8f0;
+  height: 7px;
+  background: var(--admin-bg-soft);
   border-radius: 4px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #5b6f4c;
+  background: linear-gradient(90deg, var(--admin-accent), var(--admin-accent-deep));
   border-radius: 4px;
   transition: width 0.3s ease;
 }
 
-.progress-percent { font-size: 0.78rem; color: #94a3b8; font-weight: 600; }
+.progress-text { font-size: 0.78rem; color: var(--admin-text-muted); font-weight: 500; }
 
-/* Server col */
-.server-col { display: flex; flex-direction: column; gap: 3px; }
-
-.server-col code {
-  font-size: 0.74rem;
-  color: #5c5142;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 3px 7px;
-  width: fit-content;
-  max-width: 100%;
-  overflow-wrap: anywhere;
+/* Last activity */
+.activity-col {
+  font-size: 0.8rem;
+  color: var(--admin-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-.server-col small { font-size: 0.74rem; color: #94a3b8; }
 
 /* ---- Responsive ---- */
 @media (max-width: 1200px) {
   .users-header,
-  .user-row { grid-template-columns: 60px 1.3fr 110px 110px 1fr; }
-  .server-col,
+  .user-row { grid-template-columns: 56px minmax(0, 1.4fr) 120px 100px 1fr; }
+  .activity-col,
   .users-header > div:last-child,
   .user-row > div:last-child { display: none; }
 }
 
 @media (max-width: 860px) {
   .users-header,
-  .user-row { grid-template-columns: 50px 1fr 100px; gap: 10px; }
+  .user-row { grid-template-columns: 48px 1fr 100px; gap: 10px; }
   .role-col,
   .progress-col,
   .users-header > div:nth-child(3),
@@ -204,41 +215,10 @@
 }
 
 @media (max-width: 560px) {
-  .users-page { padding: 16px 12px; }
   .users-header,
   .user-row { grid-template-columns: 1fr; padding: 12px; }
   .rank-col,
   .users-header > div:first-child,
   .user-row > div:first-child { display: none; }
   .points-badge { width: 100%; }
-}
-/* Empty state */
-.users-empty-state {
-  text-align: center;
-  padding: 64px 24px;
-  background: #fff;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 4px rgba(15,23,42,0.07);
-}
-
-.users-empty-icon {
-  font-size: 3rem;
-  margin-bottom: 12px;
-  line-height: 1;
-}
-
-.users-empty-state h3 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #2b2720;
-  margin: 0 0 8px;
-}
-
-.users-empty-state p {
-  font-size: 0.9rem;
-  color: #64748b;
-  margin: 0;
-  max-width: 340px;
-  margin-inline: auto;
 }

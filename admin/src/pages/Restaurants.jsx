@@ -6,6 +6,7 @@ import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePhotoManager } from '../hooks/usePhotoManager';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PhotoGrid from '../components/PhotoGrid';
+import StateCard from '../components/StateCard';
 import '../styles/Content.css';
 
 const EMPTY_FORM = {
@@ -48,11 +49,19 @@ function Restaurants() {
     usePhotoManager({ storage, folder: 'content-images' });
 
   const restaurants = query.data ?? [];
+  const [search, setSearch] = useState('');
 
   const subtitle = useMemo(
-    () => `${restaurants.length} vendeglatohely - kepfeltoltes tamogatva`,
+    () => `${restaurants.length} vendéglátóhely · képfeltöltés támogatással`,
     [restaurants.length],
   );
+
+  const visibleItems = restaurants.filter((item) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [item.name, item.type, item.cuisine, item.description]
+      .some((field) => field?.toLowerCase().includes(q));
+  });
 
   const openEditor = (item = null) => {
     if (item) {
@@ -105,7 +114,7 @@ function Restaurants() {
       await commitRemovals();
       closeEditor();
     } catch {
-      setMutateError('Hiba a menteskor');
+      setMutateError('Hiba a mentéskor');
     }
   };
 
@@ -115,28 +124,60 @@ function Restaurants() {
       await remove.mutateAsync(deleteDialog.id);
       setDeleteDialog({ open: false, id: null });
     } catch {
-      setMutateError('Hiba a torleskor');
+      setMutateError('Hiba a törléskor');
       setDeleteDialog({ open: false, id: null });
     }
   };
 
-  if (query.isLoading) return <p>Betoltes...</p>;
-  if (query.isError)   return <p className="error-message">Hiba az adatok betoltesekor.</p>;
+  if (query.isLoading) {
+    return (
+      <StateCard
+        variant="loading"
+        icon="🍽️"
+        title="Vendéglátóhelyek betöltése..."
+        description="Kérlek várj, az adatok betöltése folyamatban van."
+      />
+    );
+  }
+  if (query.isError) {
+    return (
+      <StateCard
+        variant="empty"
+        icon="⚠️"
+        title="Nem sikerült betölteni"
+        description="Hiba történt az adatok betöltésekor. Próbáld újra később."
+      />
+    );
+  }
 
   const isBusy = uploading || add.isPending || update.isPending;
 
   return (
     <div className="content-page">
       <div className="page-header">
-        <h1>Vendeglatohelyek</h1>
+        <h1>Vendéglátóhelyek</h1>
         <p>{subtitle}</p>
       </div>
 
       {mutateError && <div className="error-message">{mutateError}</div>}
 
-      <button className="btn-primary" onClick={() => openEditor()}>
-        + Uj vendeglatohely
-      </button>
+      <div className="content-toolbar">
+        <button className="btn-primary" onClick={() => openEditor()}>
+          + Új vendéglátóhely
+        </button>
+        {restaurants.length > 0 && (
+          <>
+            <input
+              className="content-search"
+              type="search"
+              placeholder="🔍 Keresés név, kategória vagy leírás alapján..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <span className="content-search-count">{visibleItems.length} / {restaurants.length}</span>
+          </>
+        )}
+      </div>
 
       {showForm && (
         <div
@@ -146,8 +187,8 @@ function Restaurants() {
           <div className="editor-modal">
             <div className="editor-header">
               <div>
-                <p className="editor-kicker">Vendeglatohelyek szerkeszto</p>
-                <h2>{editingId ? 'Vendeglatohely frissitese' : 'Uj vendeglatohely'}</h2>
+                <p className="editor-kicker">Vendéglátóhely szerkesztő</p>
+                <h2>{editingId ? 'Vendéglátóhely frissítése' : 'Új vendéglátóhely'}</h2>
               </div>
               <button className="editor-close" onClick={closeEditor}>x</button>
             </div>
@@ -156,32 +197,32 @@ function Restaurants() {
               {mutateError && <div className="error-message editor-error">{mutateError}</div>}
               <div className="editor-main">
                 <div className="editor-field">
-                  <label>Nev *</label>
+                  <label>Név *</label>
                   <input type="text" value={formData.name} onChange={setField('name')} required />
                 </div>
                 <div className="editor-row">
                   <div className="editor-field">
-                    <label>Kategoria</label>
+                    <label>Kategória</label>
                     <select value={formData.type} onChange={setField('type')}>
                       <option value="hungarian">Magyar konyha</option>
-                      <option value="fish">Haleitelek</option>
-                      <option value="cafe">Kavero</option>
-                      <option value="pizzeria">Pizzeria</option>
-                      <option value="icecream">Fagylaltozo</option>
-                      <option value="bar">Bar</option>
+                      <option value="fish">Halételek</option>
+                      <option value="cafe">Kávézó</option>
+                      <option value="pizzeria">Pizzéria</option>
+                      <option value="icecream">Fagylaltozó</option>
+                      <option value="bar">Bár</option>
                     </select>
                   </div>
                   <div className="editor-field">
-                    <label>Arszint</label>
+                    <label>Árszint</label>
                     <input type="text" value={formData.priceRange} onChange={setField('priceRange')} />
                   </div>
                 </div>
                 <div className="editor-field">
-                  <label>Konyha tipusa</label>
+                  <label>Konyha típusa</label>
                   <input type="text" value={formData.cuisine} onChange={setField('cuisine')} />
                 </div>
                 <div className="editor-field">
-                  <label>Leiras</label>
+                  <label>Leírás</label>
                   <textarea rows="4" value={formData.description} onChange={setField('description')} />
                 </div>
               </div>
@@ -197,9 +238,9 @@ function Restaurants() {
               </div>
 
               <div className="editor-actions">
-                <button type="button" className="btn-secondary" onClick={closeEditor}>Megse</button>
+                <button type="button" className="btn-secondary" onClick={closeEditor}>Mégse</button>
                 <button type="submit" className="btn-primary" disabled={isBusy}>
-                  {isBusy ? 'Folyamatban...' : editingId ? 'Frissites' : 'Mentes'}
+                  {isBusy ? 'Folyamatban...' : editingId ? 'Frissítés' : 'Mentés'}
                 </button>
               </div>
             </form>
@@ -208,19 +249,33 @@ function Restaurants() {
       )}
 
       <div className="cards-grid">
-        {restaurants.map((rest) => (
+        {restaurants.length === 0 && (
+          <div className="content-empty">
+            <span className="empty-icon" aria-hidden="true">🍽️</span>
+            <h3>Még nincs vendéglátóhely</h3>
+            <p>Add hozzá az első helyet a fenti gombbal.</p>
+          </div>
+        )}
+        {restaurants.length > 0 && visibleItems.length === 0 && (
+          <div className="content-empty">
+            <span className="empty-icon" aria-hidden="true">🔎</span>
+            <h3>Nincs találat</h3>
+            <p>Próbálj másik kulcsszót, vagy töröld a keresést.</p>
+          </div>
+        )}
+        {visibleItems.map((rest) => (
           <div key={rest.id} className="card">
-            <h3>{rest.name || 'Nincs nev'}</h3>
+            <h3>{rest.name || 'Nincs név'}</h3>
             {rest.imageUrl && (
               <img src={rest.imageUrl} alt={rest.name} loading="lazy" className="content-cover" />
             )}
-            {rest.type        && <p><strong>Kategoria:</strong> {rest.type}</p>}
+            {rest.type        && <p><strong>Kategória:</strong> {rest.type}</p>}
             {rest.cuisine     && <p><strong>Konyha:</strong> {rest.cuisine}</p>}
-            {rest.priceRange  && <p><strong>Arszint:</strong> {rest.priceRange}</p>}
+            {rest.priceRange  && <p><strong>Árszint:</strong> {rest.priceRange}</p>}
             {rest.description && <p>{rest.description}</p>}
             <div className="card-actions">
-              <button className="btn-edit"   onClick={() => openEditor(rest)}>Szerkesztes</button>
-              <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: rest.id })}>Torles</button>
+              <button className="btn-edit"   onClick={() => openEditor(rest)}>Szerkesztés</button>
+              <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: rest.id })}>Törlés</button>
             </div>
           </div>
         ))}
@@ -228,9 +283,9 @@ function Restaurants() {
 
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Vendeglatohely torlese"
-        message="Biztosan torlod ezt a vendeglatohelyet?"
-        confirmText="Torles"
+        title="Vendéglátóhely törlése"
+        message="Biztosan törlöd ezt a vendéglátóhelyet?"
+        confirmText="Törlés"
         onClose={() => setDeleteDialog({ open: false, id: null })}
         onConfirm={confirmDelete}
       />

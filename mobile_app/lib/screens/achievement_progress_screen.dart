@@ -74,7 +74,7 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
           userData['displayName']?.toString() ??
           userData['name']?.toString() ??
           progressData['name']?.toString() ??
-          'Felhasznalo';
+          'Felhasználó';
 
       await LeaderboardService.syncEntry(
         uid: uid,
@@ -261,7 +261,7 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
                     const SizedBox(height: 12),
                     FilledButton(
                       onPressed: _loadData,
-                      child: const Text('Ujraprobalas'),
+                      child: const Text('Újrapróbálás'),
                     ),
                   ],
                 ),

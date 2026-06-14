@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import Stations from "./Stations";
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -9,7 +10,7 @@ vi.mock("../firebaseConfig", () => ({ db: {}, storage: {} }));
 vi.mock("../styles/Stations.css", () => ({}));
 
 vi.mock("firebase/firestore", () => ({
-  collection: vi.fn(),
+  collection: vi.fn((_db, name) => name),
   getDocs: vi.fn(),
   addDoc: vi.fn().mockResolvedValue({ id: "new1" }),
   updateDoc: vi.fn().mockResolvedValue(undefined),
@@ -55,14 +56,23 @@ const makeSnap = (items) => ({
   docs: items.map((item) => ({ id: item.id, data: () => item })),
 });
 
+// Route getDocs by collection name so the stations grid and the trip-filter
+// dropdown (populated from the trips collection) get distinct data sets.
+const setData = (stationItems, tripItems = []) =>
+  getDocs.mockImplementation((col) =>
+    Promise.resolve(makeSnap(col === "trips" ? tripItems : stationItems))
+  );
+
 const mkClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const renderStations = (client = mkClient()) =>
   render(
-    <QueryClientProvider client={client}>
-      <Stations />
-    </QueryClientProvider>
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <Stations />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 
 describe("Stations", () => {
@@ -75,7 +85,7 @@ describe("Stations", () => {
   });
 
   it("shows empty StateCard when no stations", async () => {
-    getDocs.mockResolvedValue(makeSnap([]));
+    setData([]);
     renderStations();
     await waitFor(() =>
       expect(screen.getByText("Nincsenek még állomások")).toBeInTheDocument()
@@ -83,13 +93,13 @@ describe("Stations", () => {
   });
 
   it("shows station name after load", async () => {
-    getDocs.mockResolvedValue(makeSnap([makeStation()]));
+    setData([makeStation()]);
     renderStations();
     await waitFor(() => expect(screen.getByText("Teszt állomás")).toBeInTheDocument());
   });
 
   it("renders the placeholder instead of an empty-src cover img when no photo", async () => {
-    getDocs.mockResolvedValue(makeSnap([makeStation()]));
+    setData([makeStation()]);
     renderStations();
     await waitFor(() => expect(screen.getByText("Teszt állomás")).toBeInTheDocument());
     // normalizePhotosFromDoc is mocked to [] → cover falls back to the 📷 placeholder
@@ -97,12 +107,10 @@ describe("Stations", () => {
   });
 
   it("shows multiple station names", async () => {
-    getDocs.mockResolvedValue(
-      makeSnap([
-        makeStation({ id: "s1", name: "Állomás A" }),
-        makeStation({ id: "s2", name: "Állomás B" }),
-      ])
-    );
+    setData([
+      makeStation({ id: "s1", name: "Állomás A" }),
+      makeStation({ id: "s2", name: "Állomás B" }),
+    ]);
     renderStations();
     await waitFor(() => {
       expect(screen.getByText("Állomás A")).toBeInTheDocument();
@@ -111,12 +119,10 @@ describe("Stations", () => {
   });
 
   it("search filters visible stations", async () => {
-    getDocs.mockResolvedValue(
-      makeSnap([
-        makeStation({ id: "s1", name: "Vár" }),
-        makeStation({ id: "s2", name: "Malom" }),
-      ])
-    );
+    setData([
+      makeStation({ id: "s1", name: "Vár" }),
+      makeStation({ id: "s2", name: "Malom" }),
+    ]);
     renderStations();
     await waitFor(() => expect(screen.getByText("Vár")).toBeInTheDocument());
     const searchInput = screen.getByPlaceholderText(/Keresés/);
@@ -126,7 +132,7 @@ describe("Stations", () => {
   });
 
   it("shows search-empty StateCard when no match", async () => {
-    getDocs.mockResolvedValue(makeSnap([makeStation({ id: "s1", name: "Vár" })]));
+    setData([makeStation({ id: "s1", name: "Vár" })]);
     renderStations();
     await waitFor(() => expect(screen.getByText("Vár")).toBeInTheDocument());
     const searchInput = screen.getByPlaceholderText(/Keresés/);
@@ -137,7 +143,7 @@ describe("Stations", () => {
   });
 
   it("Keresés törlése CTA clears search", async () => {
-    getDocs.mockResolvedValue(makeSnap([makeStation({ id: "s1", name: "Vár" })]));
+    setData([makeStation({ id: "s1", name: "Vár" })]);
     renderStations();
     await waitFor(() => expect(screen.getByText("Vár")).toBeInTheDocument());
     const searchInput = screen.getByPlaceholderText(/Keresés/);

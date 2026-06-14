@@ -451,6 +451,40 @@ html.dark .timeline-img {
   border-color: #2d3f55;
 }
 
+/* ── Dark mode: About editor modal surfaces ── */
+html.dark .about-editor-shell {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+}
+html.dark .about-editor-header {
+  border-bottom-color: var(--admin-border);
+  background:
+    radial-gradient(circle at top right, rgba(123,150,98,0.16), transparent 36%),
+    linear-gradient(135deg, var(--admin-bg-soft), var(--admin-surface));
+}
+html.dark .about-editor-header h2,
+html.dark .about-editor-section-head h3,
+html.dark .about-editor-preview-body h3,
+html.dark .about-editor-tips h4 { color: var(--admin-text); }
+html.dark .about-editor-header p,
+html.dark .about-editor-section-head p,
+html.dark .about-editor-preview-body p,
+html.dark .about-editor-preview-label,
+html.dark .about-editor-tips ul { color: var(--admin-text-muted); }
+html.dark .about-editor-kicker { color: #b7c89b; }
+html.dark .about-editor-close {
+  background: var(--admin-surface-muted);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+html.dark .about-editor-section,
+html.dark .about-editor-preview-card,
+html.dark .about-editor-tips {
+  background: var(--admin-bg-soft);
+  border-color: var(--admin-border);
+}
+html.dark .about-editor-preview-year { background: rgba(123,150,98,0.2); border-color: rgba(168,190,138,0.3); color: #b7c89b; }
+
 @media (max-width: 960px) {
   .about-editor-backdrop {
     padding: 14px;

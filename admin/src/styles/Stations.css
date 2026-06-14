@@ -151,9 +151,25 @@
   to { opacity: 1; transform: scale(1); }
 }
 /* ---- Search bar ---- */
-.stations-search { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
-.search-input { flex: 1; padding: 12px 16px; border: 1.5px solid #e2e8f0; border-radius: 12px; font-size: 14px; color: #2b2720; background: white; transition: border-color .2s, box-shadow .2s; outline: none; }
+.stations-search { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+.search-input { flex: 1; min-width: 220px; padding: 12px 16px; border: 1.5px solid #e2e8f0; border-radius: 12px; font-size: 14px; color: #2b2720; background: white; transition: border-color .2s, box-shadow .2s; outline: none; }
 .search-input:focus { border-color: #5b6f4c; box-shadow: 0 0 0 3px rgba(37,99,235,0.09); }
+.trip-filter-select { padding: 12px 14px; border: 1.5px solid #e2e8f0; border-radius: 12px; font-size: 14px; color: #2b2720; background: white; cursor: pointer; outline: none; transition: border-color .2s, box-shadow .2s; max-width: 260px; }
+.trip-filter-select:focus { border-color: #5b6f4c; box-shadow: 0 0 0 3px rgba(37,99,235,0.09); }
 .search-count { font-size: 12px; color: #94a3b8; white-space: nowrap; font-weight: 600; }
+
+/* Unassigned station badge */
+.trip-badge.unassigned { background: #fbf1de; color: #b0760f; }
+
+/* ---- Dark mode: search + filter controls ---- */
+html.dark .search-input,
+html.dark .trip-filter-select {
+  background: var(--admin-surface);
+  border-color: var(--admin-border);
+  color: var(--admin-text);
+}
+html.dark .search-input:focus,
+html.dark .trip-filter-select:focus { border-color: #5b6f4c; box-shadow: 0 0 0 3px var(--admin-accent-soft); }
+html.dark .trip-badge.unassigned { background: rgba(176,118,15,0.18); color: #e0b873; }
 
 

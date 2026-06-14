@@ -1,5 +1,6 @@
 import PropTypes from "prop-types";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { db, storage } from '../firebaseConfig';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -66,6 +67,8 @@ const EMPTY_FORM = {
 
 export default function Stations() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [paramsHandled, setParamsHandled] = useState(false);
   const { data: stations = [], isLoading } = useQuery({
     queryKey: ['stations'],
     queryFn: async () => {
@@ -88,6 +91,7 @@ export default function Stations() {
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [activeSection, setActiveSection] = useState(0);
   const [search, setSearch] = useState('');
+  const [tripFilter, setTripFilter] = useState('all');
 
   const showMsg = (msg, severity = 'error') => setSnack({ open: true, msg, severity });
   const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY });
@@ -117,9 +121,9 @@ export default function Stations() {
     setShowModal(true);
   };
 
-  const handleAdd = () => {
+  const handleAdd = (prefillTripId = '') => {
     setEditingId(null);
-    setFormData(EMPTY_FORM);
+    setFormData({ ...EMPTY_FORM, tripId: prefillTripId || '' });
     setActiveSection(0);
     setShowModal(true);
   };
@@ -249,9 +253,42 @@ export default function Stations() {
     }
   };
 
+  // Deep-link support: open the editor pre-filled when navigated from the Trips page
+  // (?addForTrip=<tripId> opens a blank station for that trip, ?edit=<stationId> edits one)
+  useEffect(() => {
+    if (paramsHandled || isLoading) return undefined;
+
+    const addForTrip = searchParams.get('addForTrip');
+    const editId = searchParams.get('edit');
+    if (!addForTrip && !editId) return undefined;
+
+    const timer = setTimeout(() => {
+      if (editId) {
+        const station = stations.find((item) => item.id === editId);
+        if (station) {
+          handleEdit(station);
+          setTripFilter(station.tripId || 'all');
+        }
+      } else if (addForTrip) {
+        handleAdd(addForTrip);
+        setTripFilter(addForTrip);
+      }
+      setParamsHandled(true);
+      setSearchParams({}, { replace: true });
+    }, 0);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, stations, searchParams, paramsHandled]);
+
   const sections = ['🏷️ Alap adatok', '📍 Helyszín', '📖 Tartalom', '🔓 Feloldható info'];
 
+  const unassignedCount = stations.filter((station) => !station.tripId).length;
+
   const filtered = stations.filter((station) => {
+    if (tripFilter === 'none' && station.tripId) return false;
+    if (tripFilter !== 'all' && tripFilter !== 'none' && station.tripId !== tripFilter) return false;
+
     const query = search.toLowerCase();
     return !query
       || station.name?.toLowerCase().includes(query)
@@ -272,7 +309,7 @@ export default function Stations() {
           <p className="hero-subtitle">Helyszínek, leírások és QR kódok egy helyen.</p>
         </div>
         <div className="hero-actions">
-          <button onClick={handleAdd} className="btn-primary">+ Új állomás</button>
+          <button onClick={() => handleAdd()} className="btn-primary">+ Új állomás</button>
         </div>
       </div>
 
@@ -284,6 +321,18 @@ export default function Stations() {
           onChange={(e) => setSearch(e.target.value)}
           className="search-input"
         />
+        <select
+          className="trip-filter-select"
+          value={tripFilter}
+          onChange={(e) => setTripFilter(e.target.value)}
+          aria-label="Szűrés túra szerint"
+        >
+          <option value="all">🗺️ Összes túra</option>
+          {trips.map((trip) => (
+            <option key={trip.id} value={trip.id}>{trip.name || trip.id}</option>
+          ))}
+          <option value="none">🚩 Nincs túrához rendelve ({unassignedCount})</option>
+        </select>
         <span className="search-count">{filtered.length} / {stations.length} állomás</span>
       </div>
 
@@ -294,7 +343,7 @@ export default function Stations() {
           title="Nincsenek még állomások"
           description="Adj hozzá egy új állomást a túráidhoz."
           actionLabel="Első állomás hozzáadása"
-          onAction={handleAdd}
+          onAction={() => handleAdd()}
         />
       ) : filtered.length === 0 ? (
         <StateCard
@@ -321,7 +370,9 @@ export default function Stations() {
                       <div className="station-body">
                         <div className="station-title">
                           <h3>{station.name}</h3>
-                          {tripName && <span className="trip-badge">🗺️ {tripName}</span>}
+                          {tripName
+                            ? <span className="trip-badge">🗺️ {tripName}</span>
+                            : <span className="trip-badge unassigned">🚩 Nincs túrához rendelve</span>}
                         </div>
                         <p className="station-desc">{station.description || 'Nincs leírás megadva.'}</p>
                         {station.funFact && <p className="station-fun-fact">💡 {station.funFact}</p>}

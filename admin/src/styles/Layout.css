@@ -128,28 +128,63 @@
 
 /* ---- User card ---- */
 .current-user-card {
+  display: flex;
+  align-items: center;
+  gap: 11px;
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   margin-bottom: 14px;
   background: rgba(255,255,255,0.06);
   border: 1px solid var(--sb-border);
 }
 
-.current-user-label {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--sb-text-muted);
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.current-user-avatar {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #5b6f4c, #46583b);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: 0 3px 10px rgba(123,150,98,0.35);
 }
 
-.current-user {
-  margin: 0;
-  color: #cbd5e1;
-  font-size: 0.86rem;
-  line-height: 1.4;
-  word-break: break-all;
+.current-user-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.current-user-email {
+  color: #e9eede;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-pill {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(168,190,138,0.2);
+  color: #c5d6a5;
+  border: 1px solid rgba(168,190,138,0.3);
+}
+
+.role-pill.role-admin {
+  background: rgba(168,190,138,0.26);
+  color: #d2e2b0;
 }
 
 /* ---- Nav ---- */
@@ -227,7 +262,40 @@
 }
 
 /* ---- Footer / logout ---- */
-.sidebar-footer { margin-top: 14px; flex-shrink: 0; }
+.sidebar-footer {
+  margin-top: 14px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sb-border);
+}
+
+.theme-toggle-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--sb-border);
+  background: rgba(255,255,255,0.05);
+  color: var(--sb-text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.theme-toggle-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.theme-toggle-icon { font-size: 1rem; line-height: 1; }
 
 .logout-btn {
   width: 100%;
@@ -313,6 +381,28 @@
   background: rgba(255,255,255,0.12);
   border-radius: 999px;
 }
+
+/* ---- Dark mode — deepen sidebar to harmonize with dark shell ---- */
+html.dark {
+  --sb-bg-top:       #16201b;
+  --sb-bg-bottom:    #111a22;
+  --sb-text:         #e2e8f0;
+  --sb-text-muted:   rgba(148,163,184,0.92);
+  --sb-border:       rgba(255,255,255,0.07);
+  --sb-hover-bg:     rgba(255,255,255,0.05);
+}
+
+html.dark .sidebar {
+  box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+}
+
+html.dark .current-user-email { color: #e2e8f0; }
+
+html.dark .sidebar-open-btn {
+  background: #16201b;
+  color: #e2e8f0;
+}
+html.dark .sidebar-open-btn:hover { background: #111a22; }
 
 /* ---- Responsive ---- */
 @media (max-width: 960px) {

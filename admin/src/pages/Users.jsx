@@ -150,8 +150,8 @@ function Users() {
     return (
       <div className="users-page">
         <div className="page-header">
-          <h1>👥 Felhasználók és szerver adatok</h1>
-          <p>Minden felhasználó (admin + app user) egy helyen, teljes áttekintéssel</p>
+          <h1>👥 Felhasználók</h1>
+          <p>Regisztrált fiókok és haladásuk áttekintése</p>
         </div>
         <StateCard
           variant="loading"
@@ -167,8 +167,8 @@ function Users() {
     return (
       <div className="users-page">
         <div className="page-header">
-          <h1>👥 Felhasználók és szerver adatok</h1>
-          <p>Minden felhasználó (admin + app user) egy helyen, teljes áttekintéssel</p>
+          <h1>👥 Felhasználók</h1>
+          <p>Regisztrált fiókok és haladásuk áttekintése</p>
         </div>
         <StateCard
           icon="⚠️"
@@ -195,8 +195,23 @@ function Users() {
   return (
     <div className="users-page">
       <div className="page-header">
-        <h1>👥 Felhasználók és szerver adatok</h1>
-        <p>Minden felhasználó (admin + app user) egy helyen, teljes áttekintéssel</p>
+        <h1>👥 Felhasználók</h1>
+        <p>Regisztrált fiókok és haladásuk áttekintése</p>
+      </div>
+
+      <div className="users-stats">
+        <div className="stat-box">
+          <div className="stat-number">{users.length}</div>
+          <div className="stat-label">Összes felhasználó</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-number">{adminCount}</div>
+          <div className="stat-label">Admin</div>
+        </div>
+        <div className="stat-box">
+          <div className="stat-number">{Math.max(...users.map((u) => u.points), 0)}</div>
+          <div className="stat-label">Legtöbb pont</div>
+        </div>
       </div>
 
       {users.length === 0 ? (
@@ -213,24 +228,28 @@ function Users() {
             <div className="role-col">Szerepkör</div>
             <div className="points-col">Pontok</div>
             <div className="progress-col">Haladás</div>
-            <div className="server-col">Szerver infó</div>
+            <div className="activity-col">Utolsó aktivitás</div>
           </div>
 
           {users.map((user, index) => (
-            <div key={user.id || user.userId} className="user-row">
+            <div
+              key={user.id || user.userId}
+              className={`user-row${index < 3 ? " top" : ""}`}
+            >
               <div className="rank-col">
                 <div className="rank-badge">{getRankBadge(index)}</div>
               </div>
 
               <div className="name-col">
-                <strong>{user.userName}</strong>
+                <strong title={user.uid ? `uid: ${user.uid}` : undefined}>
+                  {user.userName}
+                </strong>
                 <small>{user.email || "Nincs email"}</small>
-                <small>Túra: {user.tripId !== "N/A" ? user.tripId : "nincs"}</small>
               </div>
 
               <div className="role-col">
                 <span className={`role-badge ${user.role === "admin" ? "admin" : "user"}`}>
-                  {user.role === "admin" ? "admin" : "user"}
+                  {user.role === "admin" ? "Admin" : "Felhasználó"}
                 </span>
               </div>
 
@@ -239,42 +258,24 @@ function Users() {
               </div>
 
               <div className="progress-col">
-                <span className="progress-text">
-                  {user.completedStations}/{user.totalStations || "?"}
-                </span>
                 <div className="progress-bar">
                   <div
                     className="progress-fill"
                     style={{ width: `${Math.max(0, Math.min(100, user.progress))}%` }}
                   ></div>
                 </div>
-                <span className="progress-percent">{user.progress}%</span>
+                <span className="progress-text">
+                  {user.completedStations}/{user.totalStations || "?"} állomás · {user.progress}%
+                </span>
               </div>
 
-              <div className="server-col">
-                <code>uid: {user.uid || "N/A"}</code>
-                <small>doc: {user.id || "N/A"}</small>
-                <small>last: {formatDate(user.lastUpdated)}</small>
+              <div className="activity-col" title={`doc: ${user.id || "N/A"}`}>
+                {formatDate(user.lastUpdated)}
               </div>
             </div>
           ))}
         </div>
       )}
-
-      <div className="users-stats">
-        <div className="stat-box">
-          <div className="stat-number">{users.length}</div>
-          <div className="stat-label">Összes felhasználó</div>
-        </div>
-        <div className="stat-box">
-          <div className="stat-number">{adminCount}</div>
-          <div className="stat-label">Admin felhasználó</div>
-        </div>
-        <div className="stat-box">
-          <div className="stat-number">{Math.max(...users.map((u) => u.points), 0)}</div>
-          <div className="stat-label">Max pontszám</div>
-        </div>
-      </div>
     </div>
   );
 }

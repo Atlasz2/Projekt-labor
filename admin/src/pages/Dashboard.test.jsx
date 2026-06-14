@@ -12,6 +12,10 @@ vi.mock("firebase/firestore", () => ({
   getDocs: vi.fn(),
   query: vi.fn(),
   where: vi.fn(),
+  doc: vi.fn(),
+  setDoc: vi.fn().mockResolvedValue(undefined),
+  orderBy: vi.fn(),
+  limit: vi.fn(),
 }));
 
 import { getDocs } from "firebase/firestore";
@@ -29,7 +33,8 @@ const mockSuccess = () => {
     .mockResolvedValueOnce(makeSnap(5))    // stations
     .mockResolvedValueOnce(makeSnap(2))    // users
     .mockResolvedValueOnce(makeProgressSnap([100, 200]))  // user_progress
-    .mockResolvedValueOnce({ docs: [], size: 0 });         // achievements
+    .mockResolvedValueOnce({ docs: [], size: 0 })          // achievements
+    .mockResolvedValueOnce({ docs: [], size: 0 });         // stats_daily trend read
 };
 
 const renderDashboard = () => render(<MemoryRouter><Dashboard /></MemoryRouter>);

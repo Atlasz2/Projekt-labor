@@ -6,6 +6,7 @@ import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePhotoManager } from '../hooks/usePhotoManager';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PhotoGrid from '../components/PhotoGrid';
+import StateCard from '../components/StateCard';
 import '../styles/Content.css';
 
 const EMPTY_FORM = {
@@ -48,11 +49,19 @@ function Accommodations() {
     usePhotoManager({ storage, folder: 'content-images' });
 
   const accommodations = query.data ?? [];
+  const [search, setSearch] = useState('');
 
   const subtitle = useMemo(
-    () => `${accommodations.length} szallas - kepfeltoltes tamogatva`,
+    () => `${accommodations.length} szállás · képfeltöltés támogatással`,
     [accommodations.length],
   );
+
+  const visibleItems = accommodations.filter((item) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [item.name, item.type, item.description]
+      .some((field) => field?.toLowerCase().includes(q));
+  });
 
   const openEditor = (item = null) => {
     if (item) {
@@ -105,7 +114,7 @@ function Accommodations() {
       await commitRemovals();
       closeEditor();
     } catch {
-      setMutateError('Hiba a menteskor');
+      setMutateError('Hiba a mentéskor');
     }
   };
 
@@ -115,28 +124,60 @@ function Accommodations() {
       await remove.mutateAsync(deleteDialog.id);
       setDeleteDialog({ open: false, id: null });
     } catch {
-      setMutateError('Hiba a torleskor');
+      setMutateError('Hiba a törléskor');
       setDeleteDialog({ open: false, id: null });
     }
   };
 
-  if (query.isLoading) return <p>Betoltes...</p>;
-  if (query.isError)   return <p className="error-message">Hiba az adatok betoltesekor.</p>;
+  if (query.isLoading) {
+    return (
+      <StateCard
+        variant="loading"
+        icon="🏠"
+        title="Szállások betöltése..."
+        description="Kérlek várj, az adatok betöltése folyamatban van."
+      />
+    );
+  }
+  if (query.isError) {
+    return (
+      <StateCard
+        variant="empty"
+        icon="⚠️"
+        title="Nem sikerült betölteni"
+        description="Hiba történt az adatok betöltésekor. Próbáld újra később."
+      />
+    );
+  }
 
   const isBusy = uploading || add.isPending || update.isPending;
 
   return (
     <div className="content-page">
       <div className="page-header">
-        <h1>Szallasok</h1>
+        <h1>Szállások</h1>
         <p>{subtitle}</p>
       </div>
 
       {mutateError && <div className="error-message">{mutateError}</div>}
 
-      <button className="btn-primary" onClick={() => openEditor()}>
-        + Uj szallas
-      </button>
+      <div className="content-toolbar">
+        <button className="btn-primary" onClick={() => openEditor()}>
+          + Új szállás
+        </button>
+        {accommodations.length > 0 && (
+          <>
+            <input
+              className="content-search"
+              type="search"
+              placeholder="🔍 Keresés név, típus vagy leírás alapján..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <span className="content-search-count">{visibleItems.length} / {accommodations.length}</span>
+          </>
+        )}
+      </div>
 
       {showForm && (
         <div
@@ -146,8 +187,8 @@ function Accommodations() {
           <div className="editor-modal">
             <div className="editor-header">
               <div>
-                <p className="editor-kicker">Szallas szerkeszto</p>
-                <h2>{editingId ? 'Szallas frissitese' : 'Uj szallas'}</h2>
+                <p className="editor-kicker">Szállás szerkesztő</p>
+                <h2>{editingId ? 'Szállás frissítése' : 'Új szállás'}</h2>
               </div>
               <button className="editor-close" onClick={closeEditor}>x</button>
             </div>
@@ -156,30 +197,30 @@ function Accommodations() {
               {mutateError && <div className="error-message editor-error">{mutateError}</div>}
               <div className="editor-main">
                 <div className="editor-field">
-                  <label>Nev *</label>
+                  <label>Név *</label>
                   <input type="text" value={formData.name} onChange={setField('name')} required />
                 </div>
                 <div className="editor-row">
                   <div className="editor-field">
-                    <label>Tipus</label>
+                    <label>Típus</label>
                     <select value={formData.type} onChange={setField('type')}>
                       <option value="hotel">Hotel</option>
-                      <option value="guesthouse">Vendeghaz</option>
+                      <option value="guesthouse">Vendégház</option>
                       <option value="apartment">Apartman</option>
                       <option value="campsite">Kemping</option>
                     </select>
                   </div>
                   <div className="editor-field">
-                    <label>Kapacitas</label>
+                    <label>Kapacitás</label>
                     <input type="number" min="1" value={formData.capacity} onChange={setField('capacity')} />
                   </div>
                 </div>
                 <div className="editor-field">
-                  <label>Ar / ejszaka</label>
+                  <label>Ár / éjszaka</label>
                   <input type="text" value={formData.pricePerNight} onChange={setField('pricePerNight')} />
                 </div>
                 <div className="editor-field">
-                  <label>Leiras</label>
+                  <label>Leírás</label>
                   <textarea rows="4" value={formData.description} onChange={setField('description')} />
                 </div>
               </div>
@@ -195,9 +236,9 @@ function Accommodations() {
               </div>
 
               <div className="editor-actions">
-                <button type="button" className="btn-secondary" onClick={closeEditor}>Megse</button>
+                <button type="button" className="btn-secondary" onClick={closeEditor}>Mégse</button>
                 <button type="submit" className="btn-primary" disabled={isBusy}>
-                  {isBusy ? 'Folyamatban...' : editingId ? 'Frissites' : 'Mentes'}
+                  {isBusy ? 'Folyamatban...' : editingId ? 'Frissítés' : 'Mentés'}
                 </button>
               </div>
             </form>
@@ -206,19 +247,33 @@ function Accommodations() {
       )}
 
       <div className="cards-grid">
-        {accommodations.map((acc) => (
+        {accommodations.length === 0 && (
+          <div className="content-empty">
+            <span className="empty-icon" aria-hidden="true">🏠</span>
+            <h3>Még nincs szállás</h3>
+            <p>Add hozzá az első szálláshelyet a fenti gombbal.</p>
+          </div>
+        )}
+        {accommodations.length > 0 && visibleItems.length === 0 && (
+          <div className="content-empty">
+            <span className="empty-icon" aria-hidden="true">🔎</span>
+            <h3>Nincs találat</h3>
+            <p>Próbálj másik kulcsszót, vagy töröld a keresést.</p>
+          </div>
+        )}
+        {visibleItems.map((acc) => (
           <div key={acc.id} className="card">
-            <h3>{acc.name || 'Nincs nev'}</h3>
+            <h3>{acc.name || 'Nincs név'}</h3>
             {acc.imageUrl && (
               <img src={acc.imageUrl} alt={acc.name} loading="lazy" className="content-cover" />
             )}
-            {acc.type          && <p><strong>Tipus:</strong> {acc.type}</p>}
-            {acc.pricePerNight && <p><strong>Ar:</strong> {acc.pricePerNight}</p>}
-            {acc.capacity      && <p><strong>Kapacitas:</strong> {acc.capacity}</p>}
+            {acc.type          && <p><strong>Típus:</strong> {acc.type}</p>}
+            {acc.pricePerNight && <p><strong>Ár:</strong> {acc.pricePerNight}</p>}
+            {acc.capacity      && <p><strong>Kapacitás:</strong> {acc.capacity}</p>}
             {acc.description   && <p>{acc.description}</p>}
             <div className="card-actions">
-              <button className="btn-edit"   onClick={() => openEditor(acc)}>Szerkesztes</button>
-              <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: acc.id })}>Torles</button>
+              <button className="btn-edit"   onClick={() => openEditor(acc)}>Szerkesztés</button>
+              <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: acc.id })}>Törlés</button>
             </div>
           </div>
         ))}
@@ -226,9 +281,9 @@ function Accommodations() {
 
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Szallas torlese"
-        message="Biztosan torlod ezt a szallast?"
-        confirmText="Torles"
+        title="Szállás törlése"
+        message="Biztosan törlöd ezt a szállást?"
+        confirmText="Törlés"
         onClose={() => setDeleteDialog({ open: false, id: null })}
         onConfirm={confirmDelete}
       />

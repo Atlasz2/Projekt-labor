@@ -7,6 +7,18 @@ function Layout() {
   const navigate = useNavigate();
   const { userEmail, userRole, logout } = useAdminAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [darkMode, setDarkMode] = useState(
+    () => document.documentElement.classList.contains('dark')
+  );
+
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('adminDarkMode', String(next));
+  };
+
+  const userInitial = (userEmail || '?').charAt(0).toUpperCase();
 
   const handleLogout = async () => {
     await logout();
@@ -34,63 +46,80 @@ function Layout() {
               <div className="brand-mark">NV</div>
               <div className="header-content">
                 <p className="brand-kicker">Admin</p>
-                <h2>Nagyvazsony</h2>
+                <h2>Nagyvázsony</h2>
               </div>
             </div>
             <button
               className="sidebar-close-btn"
               onClick={() => setSidebarOpen(false)}
-              title="Bezaras"
+              title="Bezárás"
             >
               x
             </button>
           </div>
 
           <div className="current-user-card">
-            <span className="current-user-label">Aktiv fiok</span>
-            <div className="current-user">
-              {userEmail || 'Nincs bejelentkezve'} ({userRole})
+            <div className="current-user-avatar" aria-hidden="true">
+              {userInitial}
+            </div>
+            <div className="current-user-info">
+              <span className="current-user-email" title={userEmail || ''}>
+                {userEmail || 'Nincs bejelentkezve'}
+              </span>
+              <span className={`role-pill role-${userRole}`}>{userRole}</span>
             </div>
           </div>
 
           <nav className="sidebar-nav">
             <ul className="nav-links">
-              {renderNavLink('/dashboard', 'DB', 'Dashboard')}
+              {renderNavLink('/dashboard', 'DB', 'Vezérlőpult')}
 
               {userRole === 'admin' && (
                 <>
-                  <li className="nav-header">Turak kezelese</li>
-                  {renderNavLink('/trips',    'TU', 'Turak')}
-                  {renderNavLink('/stations', 'AL', 'Allomosok')}
+                  <li className="nav-header">Túrák kezelése</li>
+                  {renderNavLink('/trips',    'TÚ', 'Túrák')}
+                  {renderNavLink('/stations', 'ÁL', 'Állomások')}
 
-                  <li className="nav-header">Települesi tartalom</li>
-                  {renderNavLink('/about',          'NT', 'Nagyvazsony tortenete')}
-                  {renderNavLink('/events',          'RE', 'Rendezvenyek')}
-                  {renderNavLink('/accommodations',  'SZ', 'Szallasok')}
-                  {renderNavLink('/restaurants',     'VE', 'Vendeglatohelyek')}
+                  <li className="nav-header">Települési tartalom</li>
+                  {renderNavLink('/about',          'NT', 'Nagyvázsony története')}
+                  {renderNavLink('/events',          'RE', 'Rendezvények')}
+                  {renderNavLink('/accommodations',  'SZ', 'Szállások')}
+                  {renderNavLink('/restaurants',     'VE', 'Vendéglátóhelyek')}
                   {renderNavLink('/contact',         'KA', 'Kapcsolat')}
                 </>
               )}
 
-              <li className="nav-header">Nezetek</li>
-              {renderNavLink('/achievements', 'AC', 'Achievementek')}
-              {renderNavLink('/bug-reports',  'HB', 'Hibajelentesek')}
-              {renderNavLink('/map',          'TE', 'Terkep')}
-              {renderNavLink('/users',        'FU', 'Felhasznalok')}
+              <li className="nav-header">Nézetek</li>
+              {renderNavLink('/achievements', 'JU', 'Jutalmak')}
+              {renderNavLink('/bug-reports',  'HB', 'Hibajelentések')}
+              {renderNavLink('/map',          'TÉ', 'Térkép')}
+              {renderNavLink('/users',        'FE', 'Felhasználók')}
 
               {userRole === 'admin' && (
                 <>
                   <li className="nav-header">Rendszer</li>
-                  {renderNavLink('/seed-database', 'AD', 'Adatbazis feltoltes')}
+                  {renderNavLink('/seed-database', 'AD', 'Adatbázis kezelése')}
                 </>
               )}
             </ul>
           </nav>
 
           <div className="sidebar-footer">
+            <button
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              title={darkMode ? 'Világos mód' : 'Sötét mód'}
+            >
+              <span className="theme-toggle-icon" aria-hidden="true">
+                {darkMode ? '☀' : '☾'}
+              </span>
+              <span className="theme-toggle-label">
+                {darkMode ? 'Világos mód' : 'Sötét mód'}
+              </span>
+            </button>
             <button className="logout-btn" onClick={handleLogout}>
               <span className="logout-icon">KI</span>
-              <span className="logout-label">Kijelentkezes</span>
+              <span className="logout-label">Kijelentkezés</span>
             </button>
           </div>
         </div>
@@ -100,7 +129,7 @@ function Layout() {
         <button
           className="sidebar-open-btn"
           onClick={() => setSidebarOpen(true)}
-          title="Megnyitas"
+          title="Megnyitás"
         >
           [=]
         </button>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../firebaseConfig";
 import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from "firebase/firestore";
+import "../styles/Content.css";
 import "../styles/About.css";
 import { safeString } from "../utils/safeString";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -26,6 +27,7 @@ function About() {
   const [imagePreview, setImagePreview] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [snack, setSnack] = useState({ open: false, msg: "", severity: "error" });
+  const [search, setSearch] = useState("");
 
   const showMsg = useCallback((msg, severity = "error") => {
     setSnack({ open: true, msg, severity });
@@ -146,6 +148,13 @@ function About() {
     }
   };
 
+  const visibleEvents = events.filter((event) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [event.year, event.title, event.description]
+      .some((field) => field?.toLowerCase().includes(q));
+  });
+
   if (loading) {
     return (
       <div className="content-page">
@@ -171,9 +180,23 @@ function About() {
       </div>
 
       {!showForm && (
-        <button className="btn-primary" onClick={openCreateForm}>
-          + Új esemény
-        </button>
+        <div className="content-toolbar">
+          <button className="btn-primary" onClick={openCreateForm}>
+            + Új esemény
+          </button>
+          {events.length > 0 && (
+            <>
+              <input
+                className="content-search"
+                type="search"
+                placeholder="🔍 Keresés év, cím vagy leírás alapján..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <span className="content-search-count">{visibleEvents.length} / {events.length}</span>
+            </>
+          )}
+        </div>
       )}
 
       {showForm && (
@@ -341,12 +364,21 @@ function About() {
             onAction={openCreateForm}
             title="Még nincs idővonali esemény"
           />
+        ) : visibleEvents.length === 0 ? (
+          <StateCard
+            variant="empty"
+            icon="🔎"
+            title="Nincs találat"
+            description="Próbálj másik kulcsszót, vagy töröld a keresést."
+            actionLabel="Keresés törlése"
+            onAction={() => setSearch("")}
+          />
         ) : (
-          events.map((event, idx) => (
+          visibleEvents.map((event, idx) => (
             <div className="timeline-item" key={event.id}>
               <div className="timeline-marker">
                 <div className="timeline-dot" />
-                {idx < events.length - 1 && <div className="timeline-line" />}
+                {idx < visibleEvents.length - 1 && <div className="timeline-line" />}
               </div>
               <div className="timeline-content">
                 <div className="timeline-year">{event.year}</div>

@@ -8,6 +8,7 @@ import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePhotoManager } from '../hooks/usePhotoManager';
 import ConfirmDialog from '../components/ConfirmDialog';
 import PhotoGrid from '../components/PhotoGrid';
+import StateCard from '../components/StateCard';
 import '../styles/Content.css';
 
 const EMPTY_FORM = {
@@ -53,6 +54,7 @@ function Events() {
   const [mutateError,  setMutateError]  = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [formData,     setFormData]     = useState(EMPTY_FORM);
+  const [search,       setSearch]       = useState('');
 
   const { photos, uploading, uploadFeedback, upload, remove: removePhoto,
           reset: resetPhotos, commitRemovals } =
@@ -61,7 +63,7 @@ function Events() {
   const events = query.data ?? [];
 
   const subtitle = useMemo(
-    () => `${events.length} rendezveny - QR pecset es foto tamogatas`,
+    () => `${events.length} rendezvény · QR-kód és fotó támogatással`,
     [events.length],
   );
 
@@ -121,7 +123,7 @@ function Events() {
       await commitRemovals();
       closeEditor();
     } catch {
-      setMutateError('Hiba a menteskor');
+      setMutateError('Hiba a mentéskor');
     }
   };
 
@@ -131,28 +133,67 @@ function Events() {
       await remove.mutateAsync(deleteDialog.id);
       setDeleteDialog({ open: false, id: null });
     } catch {
-      setMutateError('Hiba a torleskor');
+      setMutateError('Hiba a törléskor');
       setDeleteDialog({ open: false, id: null });
     }
   };
 
-  if (query.isLoading) return <p>Betoltes...</p>;
-  if (query.isError)   return <p className="error-message">Hiba az adatok betoltesekor.</p>;
+  if (query.isLoading) {
+    return (
+      <StateCard
+        variant="loading"
+        icon="📅"
+        title="Rendezvények betöltése..."
+        description="Kérlek várj, az adatok betöltése folyamatban van."
+      />
+    );
+  }
+  if (query.isError) {
+    return (
+      <StateCard
+        variant="empty"
+        icon="⚠️"
+        title="Nem sikerült betölteni"
+        description="Hiba történt az adatok betöltésekor. Próbáld újra később."
+      />
+    );
+  }
 
   const isBusy = uploading || add.isPending || update.isPending;
+
+  const visibleEvents = events.filter((event) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return [event.name, event.location, event.description]
+      .some((field) => field?.toLowerCase().includes(q));
+  });
 
   return (
     <div className="content-page">
       <div className="page-header">
-        <h1>Rendezvenyek</h1>
+        <h1>Rendezvények</h1>
         <p>{subtitle}</p>
       </div>
 
       {mutateError && <div className="error-message">{mutateError}</div>}
 
-      <button className="btn-primary" onClick={() => openEditor()}>
-        + Uj rendezveny
-      </button>
+      <div className="content-toolbar">
+        <button className="btn-primary" onClick={() => openEditor()}>
+          + Új rendezvény
+        </button>
+        {events.length > 0 && (
+          <>
+            <input
+              className="content-search"
+              type="search"
+              placeholder="🔍 Keresés név, helyszín vagy leírás alapján..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <span className="content-search-count">{visibleEvents.length} / {events.length}</span>
+          </>
+        )}
+      </div>
 
       {showForm && (
         <div
@@ -162,8 +203,8 @@ function Events() {
           <div className="editor-modal">
             <div className="editor-header">
               <div>
-                <p className="editor-kicker">Rendezveny szerkeszto</p>
-                <h2>{editingId ? 'Rendezveny frissitese' : 'Uj rendezveny'}</h2>
+                <p className="editor-kicker">Rendezvény szerkesztő</p>
+                <h2>{editingId ? 'Rendezvény frissítése' : 'Új rendezvény'}</h2>
               </div>
               <button className="editor-close" onClick={closeEditor}>x</button>
             </div>
@@ -173,12 +214,12 @@ function Events() {
 
               <div className="editor-main">
                 <div className="editor-field">
-                  <label>Nev *</label>
+                  <label>Név *</label>
                   <input type="text" value={formData.name} onChange={setField('name')} required />
                 </div>
                 <div className="editor-row">
                   <div className="editor-field">
-                    <label>Datum *</label>
+                    <label>Dátum *</label>
                     <input type="date" value={formData.date} onChange={setField('date')} required />
                   </div>
                   <div className="editor-field">
@@ -187,20 +228,20 @@ function Events() {
                   </div>
                 </div>
                 <div className="editor-field">
-                  <label>Helyszin</label>
+                  <label>Helyszín</label>
                   <input type="text" value={formData.location} onChange={setField('location')} />
                 </div>
                 <div className="editor-field">
-                  <label>QR kod</label>
+                  <label>QR-kód</label>
                   <input
                     type="text"
                     value={formData.qrCode}
                     onChange={setField('qrCode')}
-                    placeholder="ha ures, doc ID lesz"
+                    placeholder="ha üres, a dokumentum azonosítója lesz"
                   />
                 </div>
                 <div className="editor-field">
-                  <label>Leiras</label>
+                  <label>Leírás</label>
                   <textarea rows="4" value={formData.description} onChange={setField('description')} />
                 </div>
               </div>
@@ -217,10 +258,10 @@ function Events() {
 
               <div className="editor-actions">
                 <button type="button" className="btn-secondary" onClick={closeEditor}>
-                  Megse
+                  Mégse
                 </button>
                 <button type="submit" className="btn-primary" disabled={isBusy}>
-                  {isBusy ? 'Folyamatban...' : editingId ? 'Frissites' : 'Mentes'}
+                  {isBusy ? 'Folyamatban...' : editingId ? 'Frissítés' : 'Mentés'}
                 </button>
               </div>
             </form>
@@ -229,13 +270,27 @@ function Events() {
       )}
 
       <div className="cards-grid">
-        {events.map((event) => {
+        {events.length === 0 && (
+          <div className="content-empty">
+            <span className="empty-icon" aria-hidden="true">📅</span>
+            <h3>Még nincs rendezvény</h3>
+            <p>Hozd létre az elsőt a „+ Új rendezvény” gombbal.</p>
+          </div>
+        )}
+        {events.length > 0 && visibleEvents.length === 0 && (
+          <div className="content-empty">
+            <span className="empty-icon" aria-hidden="true">🔎</span>
+            <h3>Nincs találat</h3>
+            <p>Próbálj másik kulcsszót, vagy töröld a keresést.</p>
+          </div>
+        )}
+        {visibleEvents.map((event) => {
           const qrValue = getQrValue(event);
           return (
             <div key={event.id} className="card">
-              <h3>{event.name || 'Nincs nev'}</h3>
-              {event.date     && <p><strong>Datum:</strong> {event.date}</p>}
-              {event.location && <p><strong>Helyszin:</strong> {event.location}</p>}
+              <h3>{event.name || 'Nincs név'}</h3>
+              {event.date     && <p><strong>Dátum:</strong> {event.date}</p>}
+              {event.location && <p><strong>Helyszín:</strong> {event.location}</p>}
               <p><strong>Pont:</strong> {event.points}</p>
               {event.imageUrl && (
                 <img src={event.imageUrl} alt={event.name} loading="lazy" className="content-cover" />
@@ -248,8 +303,8 @@ function Events() {
               />
               {event.description && <p>{event.description}</p>}
               <div className="card-actions">
-                <button className="btn-edit"   onClick={() => openEditor(event)}>Szerkesztes</button>
-                <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: event.id })}>Torles</button>
+                <button className="btn-edit"   onClick={() => openEditor(event)}>Szerkesztés</button>
+                <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: event.id })}>Törlés</button>
               </div>
             </div>
           );
@@ -258,9 +313,9 @@ function Events() {
 
       <ConfirmDialog
         open={deleteDialog.open}
-        title="Rendezveny torlese"
-        message="Biztosan torlod ezt a rendezvenyt?"
-        confirmText="Torles"
+        title="Rendezvény törlése"
+        message="Biztosan törlöd ezt a rendezvényt?"
+        confirmText="Törlés"
         onClose={() => setDeleteDialog({ open: false, id: null })}
         onConfirm={confirmDelete}
       />

@@ -165,6 +165,12 @@ service cloud.firestore {
         || (isSignedIn() && resource.data.reported_by.user_id == request.auth.uid);
       allow update, delete: if isAdmin();
     }
+
+    // Daily analytics snapshots written by the admin dashboard (one doc per day).
+    // Internal-only: admins read and write, nobody else.
+    match /stats_daily/{day} {
+      allow read, write: if isAdmin();
+    }
   }
 }
 

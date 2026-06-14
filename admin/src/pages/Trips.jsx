@@ -1,5 +1,6 @@
 import PropTypes from "prop-types";
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { db } from "../firebaseConfig";
 import {
   collection,
@@ -130,15 +131,15 @@ function TripMap({ center, routePath, stations, isLoaded, loadError }) {
   const path = routePath ? routePath.map(([lat, lng]) => ({ lat, lng })) : [];
 
   if (loadError) {
-    return <div className="no-stations">Google Maps hiba. Ellenorizd az API kulcsot.</div>;
+    return <div className="no-stations">Google Maps hiba. Ellenőrizd az API kulcsot.</div>;
   }
 
   if (!isLoaded) {
-    return <div className="no-stations">Terkep betoltese...</div>;
+    return <div className="no-stations">Térkép betöltése...</div>;
   }
 
   if (stations.length === 0) {
-    return <div className="no-stations">Nincs meg allomas ehhez a turahoz</div>;
+    return <div className="no-stations">Nincs még állomás ehhez a túrához</div>;
   }
 
   return (
@@ -206,6 +207,7 @@ TripMap.defaultProps = {
 };
 
 function Trips() {
+  const navigate = useNavigate();
   const [trips, setTrips] = useState([]);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -215,6 +217,7 @@ function Trips() {
   const [routeCoordinates, setRouteCoordinates] = useState({});
   const [tripMetrics, setTripMetrics] = useState({});
   const [routeSavingId, setRouteSavingId] = useState(null);
+  const [tripPdfId, setTripPdfId] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [snack, setSnack] = useState({ open: false, msg: "", severity: "error" });
   const showMsg = useCallback((msg, severity = "error") => {
@@ -529,6 +532,48 @@ function Trips() {
     }
   };
 
+  const handleDownloadTripPdf = async (trip, tripStations) => {
+    if (tripStations.length === 0) {
+      showMsg("Ehhez a túrához még nincs állomás");
+      return;
+    }
+    try {
+      setTripPdfId(trip.id);
+      const docPdf = new jsPDF({ unit: "mm", format: "a4" });
+
+      for (let i = 0; i < tripStations.length; i++) {
+        const station = tripStations[i];
+        if (i > 0) docPdf.addPage();
+
+        const qrValue = getQrValue(station);
+        const qrData = await fetchDataUrl(getQrImageUrl(qrValue, 220));
+
+        docPdf.setFont("helvetica", "bold");
+        docPdf.setFontSize(16);
+        docPdf.text(`${i + 1}. ${station.name || "Allomas"}`, 20, 24);
+
+        docPdf.setFont("helvetica", "normal");
+        docPdf.setFontSize(11);
+        if (trip.name) docPdf.text(`Tura: ${trip.name}`, 20, 34);
+        docPdf.setFontSize(9);
+        docPdf.text(`QR: ${qrValue}`, 20, 42);
+
+        docPdf.addImage(qrData, "PNG", 20, 50, 75, 75);
+
+        docPdf.setFontSize(9);
+        docPdf.text(`${i + 1} / ${tripStations.length}`, 20, 135);
+      }
+
+      const fileName = `${(trip.name || "tura").replace(/\s+/g, "_")}_QR_kodok.pdf`;
+      docPdf.save(fileName);
+      showMsg("Túra QR-kódjai letöltve!", "success");
+    } catch {
+      showMsg("Hiba a PDF letöltése közben");
+    } finally {
+      setTripPdfId(null);
+    }
+  };
+
   const handleDownloadPdf = async (station, tripName) => {
     try {
       const docPdf = new jsPDF({ unit: "mm", format: "a4" });
@@ -756,7 +801,28 @@ function Trips() {
                       </div>
 
                       <div className="details-stations">
-                        <h4>📍 Állomások ({tripStations.length})</h4>
+                        <div className="details-stations-head">
+                          <h4>📍 Állomások ({tripStations.length})</h4>
+                          <div className="details-stations-actions">
+                            {tripStations.length > 0 && (
+                              <button
+                                type="button"
+                                className="btn-add-station btn-qr-all"
+                                onClick={() => handleDownloadTripPdf(trip, tripStations)}
+                                disabled={tripPdfId === trip.id}
+                              >
+                                {tripPdfId === trip.id ? "🖨️ Készül..." : "🖨️ Összes QR (PDF)"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="btn-add-station"
+                              onClick={() => navigate(`/stations?addForTrip=${trip.id}`)}
+                            >
+                              + Állomás ehhez a túrához
+                            </button>
+                          </div>
+                        </div>
                         {tripStations.length > 0 ? (
                           <ul className="stations-list">
                             {tripStations.map((station, idx) => {
@@ -782,6 +848,13 @@ function Trips() {
                                   <div className="station-info">
                                     <strong>{station.name}</strong>
                                     <p>{station.description}</p>
+                                    <button
+                                      type="button"
+                                      className="btn-station-edit"
+                                      onClick={() => navigate(`/stations?edit=${station.id}`)}
+                                    >
+                                      ✏️ Szerkesztés
+                                    </button>
                                   </div>
                                   <div className="station-qr">
                                     <img src={qrUrl} alt={`QR ${station.name}`} loading="lazy" />
