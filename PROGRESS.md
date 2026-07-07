@@ -15,7 +15,8 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
 
 ### Mobilapp (Flutter)
 - Firebase Auth + játékosprofil (felhasználónév-foglalás tranzakcióval)
-- QR-beolvasás (mobile_scanner), pontjóváírás, jutalom-feloldás
+- QR-beolvasás (mobile_scanner): állomás- ÉS esemény-QR-ek, tranzakciós
+  pontjóváírás (párhuzamos feldolgozás nem duplázhat), jutalom-feloldás
 - Offline működés: Firestore cache, Hive, offline QR-várólista szinkronnal,
   offline térképcsempék és képek
 - Interaktív térkép a túraútvonalakkal, esemény- és szálláslisták
@@ -34,17 +35,16 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
 | Ellenőrzés | Állapot |
 |---|---|
 | Admin: Vitest (103 teszt, 13 fájl) | Zöld |
-| Mobil: flutter test (22 teszt) | Zöld |
+| Mobil: flutter test (31 teszt, fake_cloud_firestore-ral) | Zöld |
 | Mobil: flutter analyze | Hibamentes |
 | CI: GitHub Actions (admin lint/test/build + Flutter release build) | Bekötve |
 
 ## Ismert hiányosságok, korlátok
 
-- **Esemény-QR beolvasás**: az admin generál QR-t az eseményekhez, de a mobil
-  feldolgozó jelenleg csak az állomásokat ismeri fel *(folyamatban)*.
 - **Kliensoldali pontszámítás**: a pontjóváírást a kliens írja a Firestore-ba;
-  a szabályok a csökkentést tiltják, de a felfújást nem — teljes védelemhez
-  Cloud Function-alapú szerveroldali validáció kellene *(a dolgozatban
-  korlátként dokumentálva)*.
+  a szabályok a csökkentést és a hamis kezdőértéket tiltják, de a felfújást
+  nem — teljes védelemhez Cloud Function-alapú szerveroldali validáció
+  kellene *(a dolgozatban korlátként dokumentálva, részletek a README
+  "Ismert biztonsagi korlatok" szakaszában)*.
 - Push értesítések: nem implementált.
 - Admin email-értesítők: nem implementált.

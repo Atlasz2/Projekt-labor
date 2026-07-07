@@ -340,8 +340,20 @@ VITE_GOOGLE_MAPS_API_KEY=...
 - **Iras `users` gyjtemeny**: csak a sajat doc-jat modosithatja (role mezo kivételevel)
 - **Iras tobbi gyjtemeny**: csak `admin` role-u felhasznalo
 - **`isAdmin()`**: UID-alapu elsodleges ellenorzes; email-doc fallback csak ha a doc `uid` mezoje megegyezik a caller UID-javal
+- **`user_progress` letrehozas**: felhasznalo csak nullazott szamlalokkal hozhatja letre (totalPoints == 0, ures completed-listak)
 - **`user_progress` iras**: felhasznalo csak monoton novelhet pontot / allomast (csokkenetes tiltva)
 - **`public_leaderboard` iras**: pontszam csak akkor fogadott el, ha megegyezik a `user_progress.totalPoints`-al (Firestore cross-referencia)
+
+### Ismert biztonsagi korlatok
+
+A pontjovairast a kliens szamolja es irja a Firestore-ba. A szabalyok a
+pontcsokkentest es a hamis kezdoertekkel valo letrehozast tiltjak, de egy
+modositott kliens az update-agon tetszoleges mertekben novelhetne a sajat
+pontszamat, es a `stations`/`events` kollekciok publikus olvashatosaga miatt
+a QR-ertekek beolvasas nelkul is lekerdezhetok. Teljes vedelemhez a beolvasast
+szerveroldalon kellene validalni (Cloud Function: a kliens csak a nyers kodot
+kuldi be, a pontjovairast a fuggveny vegzi Admin SDK-val). Ez a projekt
+kereteben tudatosan vallalt korlat; a szakdolgozat reszletesen targyalja.
 
 ### Storage szabalyok (`storage.rules`)
 
@@ -366,6 +378,8 @@ VITE_GOOGLE_MAPS_API_KEY=...
 | Flutter auth + profil | Kész |
 | Flutter QR beolvaso | Kész |
 | Flutter pont szamlas | Kész |
+| Esemény-QR beolvasas (mobil) | Kész |
+| Tranzakcios pontjovairas (dupla jóváírás ellen) | Kész |
 | Flutter offline mod | Kész |
 | Flutter terkep | Kész |
 | Admin UI teljes újratervezés (kék/slate téma, Inter betűtípus) | Kész |
