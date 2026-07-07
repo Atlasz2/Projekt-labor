@@ -1,8 +1,12 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { logger } from 'firebase-functions/v2';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 
 import { redeemQrCore } from './lib/redeem-core.js';
+import { buildEventNotification } from './lib/notification-builder.js';
 
 initializeApp();
 
@@ -29,3 +33,37 @@ export const redeemQr = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('internal', 'A jóváírás nem sikerült, próbáld újra.');
   }
 });
+
+// Új esemény létrehozásakor push-értesítés az 'events' topicra feliratkozott
+// mobil klienseknek. A tényleges üzenetet a notification-builder állítja össze.
+export const notifyOnNewEvent = onDocumentCreated(
+  { region: 'europe-west1', document: 'events/{eventId}' },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const message = buildEventNotification({
+      id: event.params.eventId,
+      data: snap.data(),
+    });
+    if (!message) {
+      logger.info('Esemény név nélkül — értesítés kihagyva', {
+        eventId: event.params.eventId,
+      });
+      return;
+    }
+
+    try {
+      const messageId = await getMessaging().send(message);
+      logger.info('Esemény-értesítés elküldve', {
+        eventId: event.params.eventId,
+        messageId,
+      });
+    } catch (err) {
+      logger.error('Esemény-értesítés sikertelen', {
+        eventId: event.params.eventId,
+        err,
+      });
+    }
+  },
+);

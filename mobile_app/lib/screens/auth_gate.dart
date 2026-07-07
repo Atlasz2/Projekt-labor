@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'name_screen.dart';
 import '../services/bootstrap_service.dart';
+import '../services/notification_service.dart';
 import '../services/pending_qr_sync_service.dart';
 import '../theme/app_colors.dart';
 import 'main_menu_screen.dart';
@@ -43,6 +44,7 @@ class _AuthGateState extends State<AuthGate> {
     _servicesStoppedForSignedOut = false;
     unawaited(BootstrapService.run());
     unawaited(PendingQrSyncService.start());
+    unawaited(NotificationService.init());
   }
 
   Future<void> _stopBackgroundServices() async {

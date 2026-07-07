@@ -386,7 +386,7 @@ a vegso rules-lockdown: [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md).
 | Admin UI teljes újratervezés (kék/slate téma, Inter betűtípus) | Kész |
 | Dark mode (Admin panel, localStorage-perzisztált) | Kész |
 | Nagyvázsony Történet képfeltöltés | Kész |
-| Flutter Push notifications | Nem implementalt |
+| Flutter Push notifications (FCM, esemény-topic) | Kész (deploy: Blaze-csomag) |
 | Admin email ertesitok | Nem implementalt |
 
 ---

@@ -112,12 +112,28 @@ FirebaseFunctions.instanceFor(region: 'europe-west1')
     .useFunctionsEmulator('localhost', 5001);
 ```
 
+## Push értesítések (notifyOnNewEvent)
+
+A `functions/` ugyanebben a workspace-ben tartalmaz egy `notifyOnNewEvent`
+Firestore-triggert: új `events/{id}` dokumentum létrehozásakor push-üzenetet
+küld az `events` FCM-topicra. Az üzenetet a tesztelhető
+`functions/lib/notification-builder.js` állítja össze (cím, dátum+helyszín,
+rövidített leírás). A mobil kliens (`NotificationService`) bejelentkezés után
+engedélyt kér és feliratkozik a topicra; kijelentkezéskor leiratkoztatható.
+
+Ez is a `firebase deploy --only functions` paranccsal élesedik (Blaze-csomag).
+Androidon opcionálisan létrehozható egy `events` nevű notification-csatorna a
+natív rétegben; ennek hiányában az FCM a default csatornát használja.
+
 ## Tesztek
 
 | Réteg | Teszt | Darab |
 |---|---|---|
-| Cloud Function | `functions/test/redeem-core.test.js` (node:test) | 12 |
+| Cloud Function (mag + értesítés) | `functions/test/*.test.js` (node:test) | 22 |
+| Cloud Function (emulátor ellen) | `firestore-tests/tests/redeem-core-emulator.test.js` | 6 |
+| Firestore rules (emulátor) | `firestore-tests/tests/rules-*.test.js` | 22 |
 | Admin util | `admin/src/utils/qrMapping.test.js` (Vitest) | 13 |
-| Flutter | `mobile_app/test/qr_processing_service_test.dart` | 12 |
+| Flutter | `mobile_app/test/qr_processing_service_test.dart` | 20 |
 
-A CI (`.github/workflows/ci.yml`) mindhármat futtatja.
+A CI (`.github/workflows/ci.yml`) minden réteget futtat; a rules-job Temurin
+JDK 21 + `firebase emulators:exec` alatt fut.

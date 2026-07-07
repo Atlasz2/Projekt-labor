@@ -22,6 +22,8 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
 - Interaktív térkép a túraútvonalakkal, esemény- és szálláslisták
 - Ranglista (`public_leaderboard`), profil, beolvasási előzmények
 - Crashlytics + Performance monitoring
+- Push értesítések (FCM): feliratkozás az esemény-topicra, a szerver új
+  esemény létrehozásakor küld (notifyOnNewEvent Cloud Function)
 - Natív splash screen (flutter_native_splash) és launcher ikonok
 
 ### Backend / biztonság
@@ -51,5 +53,4 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
   tesztjei készek, de a deploy Blaze-csomagot igényel; addig az app a
   legacy kliensoldali úton működik. A végső rules-lockdown lépései:
   docs/SERVER_VALIDATION.md.
-- Push értesítések: nem implementált.
 - Admin email-értesítők: nem implementált.
