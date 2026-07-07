@@ -80,7 +80,10 @@ class _CameraScreenState extends State<CameraScreen> {
             .map((id) => byId[id] ?? <String, dynamic>{'id': id, 'name': id})
             .toList(growable: false);
       });
-    } catch (_) {}
+    } catch (e) {
+      // Az előzmény-lista dísz, a beolvasást nem blokkolhatja.
+      debugPrint('QR előzmények betöltése sikertelen: $e');
+    }
   }
 
   Future<void> _onQrDetected(String code) async {

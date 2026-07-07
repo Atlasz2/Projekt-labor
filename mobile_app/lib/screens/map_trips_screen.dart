@@ -1,7 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-import 'dart:math' as math;
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -13,9 +9,11 @@ import '../widgets/offline_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:latlong2/latlong.dart' as ll;
 
+import '../services/hiking_route_service.dart';
 import '../services/local_cache.dart';
 import '../services/offline_image_service.dart';
 import '../services/offline_tiles_service.dart';
+import '../widgets/station_detail_sheet.dart';
 import 'full_screen_map_screen.dart';
 
 class MapTripsScreen extends StatefulWidget {
@@ -87,283 +85,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     return station['name']?.toString() ?? 'Állomás';
   }
 
-  void _openImageViewer(
-    BuildContext context,
-    List<String> photos,
-    int initialIndex,
-  ) {
-    if (photos.isEmpty) return;
-    var currentIndex = initialIndex;
-    final pageController = PageController(initialPage: initialIndex);
-
-    final dialogFuture = showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog.fullscreen(
-          backgroundColor: Colors.black,
-          child: Stack(
-            children: [
-              PageView.builder(
-                controller: pageController,
-                itemCount: photos.length,
-                onPageChanged: (index) =>
-                    setDialogState(() => currentIndex = index),
-                itemBuilder: (_, index) => InteractiveViewer(
-                  minScale: 1,
-                  maxScale: 4,
-                  child: Center(
-                    child: OfflineImage.network(
-                      photos[index],
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.white54,
-                        size: 64,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 16,
-                left: 16,
-                child: IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () => Navigator.pop(dialogContext),
-                ),
-              ),
-              Positioned(
-                top: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '${currentIndex + 1}/${photos.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    dialogFuture.whenComplete(pageController.dispose);
-  }
-
-  void _showStationSheet(Map<String, dynamic> station) {
-    final photos = photoListFromDoc(station);
-    final isCompleted = _completedIds.contains(station['id'] as String? ?? '');
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.62,
-        maxChildSize: 0.9,
-        minChildSize: 0.42,
-        builder: (context, controller) => Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF8F4EC),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: ListView(
-            controller: controller,
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
-            children: [
-              Center(
-                child: Container(
-                  width: 56,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD1C2AE),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _stationName(station),
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          isCompleted
-                              ? 'Teljesítve • ${station['points'] ?? 10} pont'
-                              : '${station['points'] ?? 10} pont szerezhető',
-                          style: TextStyle(
-                            color: isCompleted
-                                ? const Color(0xFF2E7D32)
-                                : const Color(0xFF8B5E34),
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (photos.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text('${photos.length} fotó'),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (photos.isNotEmpty)
-                SizedBox(
-                  height: 210,
-                  child: PageView.builder(
-                    controller: PageController(viewportFraction: 0.9),
-                    itemCount: photos.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: GestureDetector(
-                        onTap: () => _openImageViewer(context, photos, index),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              OfflineImage.network(
-                                photos[index],
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  color: const Color(0xFFEADFCC),
-                                  alignment: Alignment.center,
-                                  child: const Icon(
-                                    Icons.broken_image_outlined,
-                                    size: 34,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 12,
-                                right: 12,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.56),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    '${index + 1}/${photos.length}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  height: 140,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEADFCC),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Text('Ehhez az állomáshoz még nincs fotó.'),
-                ),
-              if ((station['description']?.toString() ?? '').isNotEmpty) ...[
-                const SizedBox(height: 18),
-                const Text(
-                  'Leírás',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  station['description'].toString(),
-                  style: const TextStyle(height: 1.45),
-                ),
-              ],
-              if (isCompleted &&
-                  (station['funFact']?.toString() ?? '').isNotEmpty) ...[
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('✨', style: TextStyle(fontSize: 20)),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Feloldott fun fact',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              station['funFact'].toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   List<Map<String, dynamic>> _tripStationsFor(String? tripId) {
     final items =
@@ -381,232 +102,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     return items;
   }
 
-  String _formatDistance(double meters) {
-    if (meters <= 0) return 'Nincs adat';
-    return '${(meters / 1000).toStringAsFixed(1)} km';
-  }
-
-  String _formatDuration(double seconds) {
-    if (seconds <= 0) return 'Nincs adat';
-    final totalMinutes = (seconds / 60).round().clamp(1, 1 << 20);
-    final hours = totalMinutes ~/ 60;
-    final minutes = totalMinutes % 60;
-    if (hours > 0) {
-      return '$hours ó $minutes p';
-    }
-    return '$totalMinutes p';
-  }
-
-  List<LatLng> _decodeStoredRoute(dynamic value) {
-    if (value is! List) return const [];
-    final points = <LatLng>[];
-
-    for (final item in value) {
-      if (item is List && item.length >= 2) {
-        final lat = item[0];
-        final lng = item[1];
-        if (lat is num && lng is num) {
-          points.add(LatLng(lat.toDouble(), lng.toDouble()));
-        }
-        continue;
-      }
-
-      if (item is Map) {
-        final lat = item['latitude'] ?? item['lat'];
-        final lng = item['longitude'] ?? item['lng'] ?? item['lon'];
-        if (lat is num && lng is num) {
-          points.add(LatLng(lat.toDouble(), lng.toDouble()));
-        }
-      }
-    }
-
-    return points.length >= 2 ? points : const [];
-  }
-
-  Future<Map<String, dynamic>> _fetchHikingRoute(List<LatLng> waypoints) async {
-    if (waypoints.length < 2) {
-      return {
-        'points': <LatLng>[],
-        'distanceLabel': 'Nincs adat',
-        'durationLabel': 'Nincs adat',
-      };
-    }
-
-    final locations = waypoints
-        .map(
-          (p) =>
-              '{"lon": ${p.longitude}, "lat": ${p.latitude}, "type": "break"}',
-        )
-        .join(',');
-    final body =
-        '{"locations": [$locations], "costing": "pedestrian", "costing_options": {"pedestrian": {"use_tracks": 1.0, "use_hills": 0.6, "walking_speed": 3.5, "transit_start_end_max_distance": 0}}, "directions_type": "none"}';
-
-    // 1. Valhalla: OSM-alapu erdei/turaoszvenyek
-    try {
-      final valhallaClient = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 14);
-      try {
-        final request = await valhallaClient.postUrl(
-          Uri.parse('https://valhalla1.openstreetmap.de/route'),
-        );
-        request.headers.contentType = ContentType('application', 'json');
-        request.write(body);
-        final response = await request.close().timeout(
-          const Duration(seconds: 12),
-        );
-        if (response.statusCode == 200) {
-          final responseBody = await response
-              .transform(utf8.decoder)
-              .join()
-              .timeout(const Duration(seconds: 10));
-          final data = jsonDecode(responseBody);
-          if (data is Map && data['trip'] is Map) {
-            final trip = data['trip'] as Map;
-            final legs = trip['legs'];
-            if (legs is List && legs.isNotEmpty) {
-              final points = <LatLng>[];
-              for (final item in legs) {
-                if (item is! Map) continue;
-                final shape = item['shape'] as String?;
-                if (shape == null || shape.isEmpty) continue;
-                _appendRoutePoints(points, _decodePolyline6(shape));
-              }
-              final summary = trip['summary'] as Map?;
-              if (points.length >= 2) {
-                final lengthKm = (summary?['length'] as num? ?? 0).toDouble();
-                final timeSec = (summary?['time'] as num? ?? 0).toDouble();
-                return {
-                  'points': points,
-                  'distanceLabel': _formatDistance(lengthKm * 1000),
-                  'durationLabel': _formatDuration(timeSec),
-                };
-              }
-            }
-          }
-        }
-      } finally {
-        valhallaClient.close(force: true);
-      }
-    } catch (_) {}
-
-    // 2. Tartalek: OSRM foot (turazasi sebesseggel korrigalva)
-    final coords = waypoints
-        .map((pt) => '${pt.longitude},${pt.latitude}')
-        .join(';');
-    final osrmUri = Uri.parse(
-      'https://router.project-osrm.org/route/v1/foot/$coords?overview=full&geometries=geojson&steps=false&continue_straight=false',
-    );
-    final osrmClient = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 12);
-    try {
-      final request = await osrmClient.getUrl(osrmUri);
-      final response = await request.close().timeout(
-        const Duration(seconds: 10),
-      );
-      if (response.statusCode == 200) {
-        final responseBody = await response
-            .transform(utf8.decoder)
-            .join()
-            .timeout(const Duration(seconds: 8));
-        final data = jsonDecode(responseBody);
-        if (data is Map &&
-            data['code'] == 'Ok' &&
-            data['routes'] is List &&
-            (data['routes'] as List).isNotEmpty) {
-          final route = (data['routes'] as List).first as Map;
-          final geometry = route['geometry'];
-          final coordsRaw = geometry is Map ? geometry['coordinates'] : null;
-          if (coordsRaw is List && coordsRaw.isNotEmpty) {
-            final points = <LatLng>[];
-            for (final item in coordsRaw) {
-              if (item is List && item.length >= 2) {
-                final lng = item[0];
-                final lat = item[1];
-                if (lat is num && lng is num) {
-                  points.add(LatLng(lat.toDouble(), lng.toDouble()));
-                }
-              }
-            }
-            if (points.length >= 2) {
-              final dist = ((route['distance'] as num?) ?? 0).toDouble();
-              // OSRM foot ~5 km/h, turazas ~3.5 km/h -> 1.43x
-              final duration =
-                  ((route['duration'] as num?) ?? 0).toDouble() * 1.43;
-              return {
-                'points': points,
-                'distanceLabel': _formatDistance(dist),
-                'durationLabel': _formatDuration(duration),
-                'osrm': true,
-              };
-            }
-          }
-        }
-      }
-    } catch (_) {
-    } finally {
-      osrmClient.close(force: true);
-    }
-
-    return {
-      'points': waypoints,
-      'distanceLabel': 'Nincs adat',
-      'durationLabel': 'Nincs adat',
-      'fallback': true,
-    };
-  }
-
-  static List<LatLng> _decodePolyline6(String encoded) {
-    const precision = 6;
-    final factor = math.pow(10, precision).toInt();
-    final list = <LatLng>[];
-    int index = 0;
-    final len = encoded.length;
-    int lat = 0;
-    int lng = 0;
-    while (index < len) {
-      int result = 0;
-      int shift = 0;
-      int b = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      lat += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-      result = 0;
-      shift = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      lng += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-      list.add(LatLng(lat / factor, lng / factor));
-    }
-    return list.length >= 2 ? list : const <LatLng>[];
-  }
-
-  void _appendRoutePoints(List<LatLng> target, List<LatLng> segment) {
-    if (segment.isEmpty) return;
-    if (target.isEmpty) {
-      target.addAll(segment);
-      return;
-    }
-
-    final first = segment.first;
-    final last = target.last;
-    if (_pointsClose(last, first)) {
-      target.addAll(segment.skip(1));
-      return;
-    }
-
-    target.addAll(segment);
-  }
-
-  bool _pointsClose(LatLng a, LatLng b, [double tolerance = 0.00002]) {
-    return (a.latitude - b.latitude).abs() <= tolerance &&
-        (a.longitude - b.longitude).abs() <= tolerance;
-  }
 
   int _completedPrefixCount(List<Map<String, dynamic>> visibleStations) {
     var count = 0;
@@ -926,7 +421,8 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
     final persistedRoute = LocalCache.getRoute(tripId);
     if (persistedRoute != null) {
-      final persistedPoints = _decodeStoredRoute(persistedRoute['points']);
+      final persistedPoints =
+          HikingRouteService.decodeStoredRoute(persistedRoute['points']);
       final persistedMetrics = persistedRoute['metrics'];
       if (persistedPoints.length >= 2) {
         _routeCache[tripId] = persistedPoints;
@@ -969,7 +465,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     // Elsodlegesen Valhalla-t hasznalunk, hogy turistautak/foldutak legyenek preferalva.
     if (stationPoints.length >= 2) {
       try {
-        final routeData = await _fetchHikingRoute(stationPoints);
+        final routeData = await HikingRouteService.fetchRoute(stationPoints);
         final fetchedPoints = (routeData['points'] as List<dynamic>)
             .whereType<LatLng>()
             .toList();
@@ -1038,7 +534,11 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
         return Marker(
           markerId: MarkerId(s['id'] as String),
           position: point,
-          onTap: () => _showStationSheet(s),
+          onTap: () => showStationDetailSheet(
+            context,
+            station: s,
+            isCompleted: _completedIds.contains(s['id'] as String? ?? ''),
+          ),
           infoWindow: InfoWindow(
             title: '$orderText ${s['name'] ?? 'Állomás'}',
             snippet: done ? '✅ Teljesítve' : '${s['points'] ?? 10} pont',
@@ -1464,7 +964,13 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                         width: 248,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(18),
-                          onTap: () => _showStationSheet(station),
+                          onTap: () => showStationDetailSheet(
+                            context,
+                            station: station,
+                            isCompleted: _completedIds.contains(
+                              station['id'] as String? ?? '',
+                            ),
+                          ),
                           child: Ink(
                             decoration: BoxDecoration(
                               color: Colors.white,

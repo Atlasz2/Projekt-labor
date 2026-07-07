@@ -118,7 +118,10 @@ class OfflineTilesService {
                 await markProgress(true);
                 return;
               }
-            } catch (_) {}
+            } catch (_) {
+              // Egy-egy csempe letöltési hibája nem állítja meg a kötegelt
+              // letöltést — a markProgress(false) számolja a kimaradókat.
+            }
 
             await markProgress(false);
           }),
