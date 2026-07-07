@@ -92,25 +92,39 @@ class FakeDocRef {
 }
 
 class FakeQuery {
-  constructor(store, path, filters, limitN) {
+  constructor(store, path, filters, limitN, order) {
     this.store = store;
     this.path = path;
     this.filters = filters;
     this.limitN = limitN;
+    this.order = order;
   }
 
   where(field, op, value) {
     if (op !== '==') throw new Error(`unsupported operator: ${op}`);
-    return new FakeQuery(this.store, this.path, [...this.filters, { field, value }], this.limitN);
+    return new FakeQuery(
+      this.store,
+      this.path,
+      [...this.filters, { field, value }],
+      this.limitN,
+      this.order,
+    );
+  }
+
+  orderBy(field, direction = 'asc') {
+    return new FakeQuery(this.store, this.path, this.filters, this.limitN, {
+      field,
+      direction,
+    });
   }
 
   limit(n) {
-    return new FakeQuery(this.store, this.path, this.filters, n);
+    return new FakeQuery(this.store, this.path, this.filters, n, this.order);
   }
 
   async get() {
     const prefix = `${this.path}/`;
-    const docs = [];
+    let docs = [];
     for (const [path, data] of this.store.data.entries()) {
       if (!path.startsWith(prefix)) continue;
       // Csak közvetlen gyerek dokumentumok (alkollekciók kizárva).
@@ -118,7 +132,18 @@ class FakeQuery {
       if (this.filters.every((f) => data[f.field] === f.value)) {
         docs.push(new FakeDocSnapshot(path.slice(prefix.length), data));
       }
-      if (this.limitN !== undefined && docs.length >= this.limitN) break;
+    }
+    if (this.order) {
+      const { field, direction } = this.order;
+      docs.sort((a, b) => {
+        const av = a.data()[field];
+        const bv = b.data()[field];
+        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        return direction === 'desc' ? -cmp : cmp;
+      });
+    }
+    if (this.limitN !== undefined) {
+      docs = docs.slice(0, this.limitN);
     }
     return { docs, empty: docs.length === 0 };
   }
@@ -126,7 +151,7 @@ class FakeQuery {
 
 class FakeCollectionRef extends FakeQuery {
   constructor(store, path) {
-    super(store, path, [], undefined);
+    super(store, path, [], undefined, undefined);
   }
 
   doc(id) {

@@ -266,22 +266,36 @@ class QrProcessingService {
       );
     });
 
+    var completedTripIds = List<String>.from(
+      outcome.progressData['completedTripIds'] ?? [],
+    );
+
     List<Map<String, dynamic>> newAchievements = const [];
     if (!outcome.alreadyDone) {
-      newAchievements = await _checkAchievements(
+      completedTripIds = await _detectTripCompletion(
         uid: uid,
+        kind: kind,
+        targetData: targetData,
         completedStations: outcome.completedStations,
-        completedEvents: outcome.completedEvents,
-        totalPoints: outcome.updatedPoints,
-        progressData: outcome.progressData,
+        completedTripIds: completedTripIds,
       );
 
+      // Előbb a leaderboard, hogy a top_n feltétel már a friss pontszámmal
+      // értékelődjön ki.
       await LeaderboardService.syncEntry(
         uid: uid,
         points: outcome.updatedPoints,
         completedStationsCount: outcome.completedStations.length,
         completedEventsCount: outcome.completedEvents.length,
         displayName: outcome.progressData['name']?.toString(),
+      );
+
+      newAchievements = await _checkAchievements(
+        uid: uid,
+        completedStations: outcome.completedStations,
+        completedEvents: outcome.completedEvents,
+        completedTripIds: completedTripIds,
+        totalPoints: outcome.updatedPoints,
       );
     }
 
@@ -296,12 +310,61 @@ class QrProcessingService {
     );
   }
 
+  /// Túra-teljesítés detektálása állomás-jóváírás után: ha a beolvasott
+  /// állomás túrájának minden állomása megvan, a túra bekerül a
+  /// completedTripIds-be. A bővített listát adja vissza.
+  static Future<List<String>> _detectTripCompletion({
+    required String uid,
+    required QrTargetKind kind,
+    required Map<String, dynamic> targetData,
+    required List<String> completedStations,
+    required List<String> completedTripIds,
+  }) async {
+    final result = List<String>.from(completedTripIds);
+    if (kind != QrTargetKind.station) return result;
+
+    final tripId = (targetData['tripId'] ?? '').toString().trim();
+    if (tripId.isEmpty || result.contains(tripId)) return result;
+
+    try {
+      final tripStations = await firestore
+          .collection('stations')
+          .where('tripId', isEqualTo: tripId)
+          .get();
+      if (tripStations.docs.isEmpty) return result;
+
+      final allDone = tripStations.docs.every(
+        (d) => completedStations.contains(d.id),
+      );
+      if (!allDone) return result;
+
+      result.add(tripId);
+      await firestore.collection('user_progress').doc(uid).update({
+        'completedTripIds': FieldValue.arrayUnion([tripId]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e, stack) {
+      // A túra-detektálás hibája nem blokkolja a beolvasást.
+      try {
+        await FirebaseCrashlytics.instance.recordError(
+          e,
+          stack,
+          reason: 'trip completion detection failed',
+        );
+      } catch (_) {
+        // Crashlytics nem elérhető (pl. tesztfuttatásban).
+      }
+      return List<String>.from(completedTripIds);
+    }
+    return result;
+  }
+
   static Future<List<Map<String, dynamic>>> _checkAchievements({
     required String uid,
     required List<String> completedStations,
     required List<String> completedEvents,
+    required List<String> completedTripIds,
     required int totalPoints,
-    required Map<String, dynamic> progressData,
   }) async {
     try {
       final results = await Future.wait([
@@ -317,9 +380,6 @@ class QrProcessingService {
       final unlockedSnap = results[1] as QuerySnapshot;
       final alreadyUnlocked = unlockedSnap.docs.map((d) => d.id).toSet();
 
-      final completedTripIds = List<String>.from(
-        progressData['completedTripIds'] ?? [],
-      );
       final newlyUnlocked = <Map<String, dynamic>>[];
 
       final batch = firestore.batch();
@@ -342,6 +402,15 @@ class QrProcessingService {
           met = totalPoints >= target;
         } else if (type == 'trip_complete') {
           met = completedTripIds.length >= target;
+        } else if (type == 'top_n') {
+          // A leaderboard-szinkron előbb futott, így a saját friss
+          // pontszámunkkal versenyzünk.
+          final top = await firestore
+              .collection('public_leaderboard')
+              .orderBy('points', descending: true)
+              .limit(target)
+              .get();
+          met = top.docs.any((d) => d.id == uid);
         }
 
         if (met) {

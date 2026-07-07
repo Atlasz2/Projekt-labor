@@ -59,6 +59,43 @@ function targetPoints(data) {
   return Number.isFinite(p) ? Math.trunc(p) : 10;
 }
 
+/** Túra-teljesítés detektálása állomás-jóváírás után: ha a beolvasott
+ *  állomás túrájának minden állomása megvan, a túra bekerül a
+ *  completedTripIds-be. A bővített listát adja vissza. */
+async function detectTripCompletion({
+  db,
+  FieldValue,
+  uid,
+  kind,
+  targetData,
+  completedStations,
+  completedTripIds,
+}) {
+  const result = [...completedTripIds];
+  if (kind !== 'station') return result;
+
+  const tripId = String(targetData?.tripId ?? '').trim();
+  if (!tripId || result.includes(tripId)) return result;
+
+  const tripStations = await db
+    .collection('stations')
+    .where('tripId', '==', tripId)
+    .get();
+  if (tripStations.docs.length === 0) return result;
+
+  const allDone = tripStations.docs.every((d) =>
+    completedStations.includes(d.id),
+  );
+  if (!allDone) return result;
+
+  result.push(tripId);
+  await db.collection('user_progress').doc(uid).update({
+    completedTripIds: FieldValue.arrayUnion(tripId),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return result;
+}
+
 async function checkAchievements({ db, FieldValue, uid, counts }) {
   const [achSnap, unlockedSnap] = await Promise.all([
     db.collection('achievements').get(),
@@ -81,6 +118,16 @@ async function checkAchievements({ db, FieldValue, uid, counts }) {
     else if (type === 'qr_count') met = counts.stations + counts.events >= target;
     else if (type === 'points_threshold') met = counts.points >= target;
     else if (type === 'trip_complete') met = counts.trips >= target;
+    else if (type === 'top_n') {
+      // A leaderboard-szinkron ELŐBB fut, így a saját friss pontszámunkkal
+      // versenyzünk. Holtversenynél a limit(N) találati sorrendje dönt.
+      const top = await db
+        .collection('public_leaderboard')
+        .orderBy('points', 'desc')
+        .limit(target)
+        .get();
+      met = top.docs.some((d) => d.id === uid);
+    }
 
     if (met) {
       batch.set(
@@ -196,16 +243,31 @@ export async function redeemQrCore({ db, FieldValue, uid, code }) {
     };
   });
 
-  const counts = {
-    stations: outcome.completedStations.length,
-    events: outcome.completedEvents.length,
-    trips: (outcome.progressData.completedTripIds ?? []).length,
-    points: outcome.updatedPoints,
-  };
+  let completedTripIds = [...(outcome.progressData.completedTripIds ?? [])];
 
   let newAchievements = [];
   if (!outcome.alreadyDone) {
-    newAchievements = await checkAchievements({ db, FieldValue, uid, counts });
+    completedTripIds = await detectTripCompletion({
+      db,
+      FieldValue,
+      uid,
+      kind: target.kind,
+      targetData: target.data,
+      completedStations: outcome.completedStations,
+      completedTripIds,
+    });
+  }
+
+  const counts = {
+    stations: outcome.completedStations.length,
+    events: outcome.completedEvents.length,
+    trips: completedTripIds.length,
+    points: outcome.updatedPoints,
+  };
+
+  if (!outcome.alreadyDone) {
+    // Előbb a leaderboard, hogy a top_n feltétel már a friss pontszámmal
+    // értékelődjön ki.
     await syncLeaderboard({
       db,
       FieldValue,
@@ -214,6 +276,7 @@ export async function redeemQrCore({ db, FieldValue, uid, code }) {
       counts,
       progressData: outcome.progressData,
     });
+    newAchievements = await checkAchievements({ db, FieldValue, uid, counts });
   }
 
   return {

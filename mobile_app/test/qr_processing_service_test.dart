@@ -203,6 +203,130 @@ void main() {
     });
   });
 
+  group('túra-teljesítés (legacy út)', () {
+    test('az utolsó állomás beolvasásával a completedTripIds bővül és a trip_complete jutalom feloldódik',
+        () async {
+      await firestore.collection('user_progress').doc(uid).set({
+        'name': 'Teszt Elek',
+        'totalPoints': 10,
+        'completedStations': ['st1'],
+        'completedEvents': <String>[],
+        'completedTripIds': <String>[],
+      });
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Első',
+        'tripId': 'trip1',
+        'points': 10,
+      });
+      await firestore.collection('stations').doc('st2').set({
+        'name': 'Második',
+        'qrCode': 'ST2',
+        'tripId': 'trip1',
+        'points': 10,
+      });
+      await firestore.collection('achievements').doc('local_legend').set({
+        'name': 'Helyi legenda',
+        'conditionType': 'trip_complete',
+        'conditionValue': 1,
+      });
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'ST2',
+      );
+
+      final progress = await firestore
+          .collection('user_progress')
+          .doc(uid)
+          .get();
+      expect(progress.data()!['completedTripIds'], ['trip1']);
+      expect(result.newAchievements.single['id'], 'local_legend');
+    });
+
+    test('hiányzó túra-állomásnál nem íródik completedTripIds', () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Első',
+        'qrCode': 'ST1',
+        'tripId': 'trip1',
+        'points': 10,
+      });
+      await firestore.collection('stations').doc('st2').set({
+        'name': 'Második',
+        'tripId': 'trip1',
+        'points': 10,
+      });
+
+      await QrProcessingService.processByCode(uid: uid, code: 'ST1');
+
+      final progress = await firestore
+          .collection('user_progress')
+          .doc(uid)
+          .get();
+      expect(progress.data()!['completedTripIds'] ?? [], isEmpty);
+    });
+  });
+
+  group('top_n jutalom (legacy út)', () {
+    test('a friss pontszámmal top 2-be kerülve feloldódik', () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Kinizsi vár',
+        'qrCode': 'VAR-001',
+        'points': 50,
+      });
+      await firestore.collection('public_leaderboard').doc('masik-1').set({
+        'displayName': 'Éllovas',
+        'points': 100,
+      });
+      await firestore.collection('public_leaderboard').doc('masik-2').set({
+        'displayName': 'Második',
+        'points': 30,
+      });
+      await firestore.collection('achievements').doc('podium').set({
+        'name': 'Dobogós',
+        'conditionType': 'top_n',
+        'conditionValue': 2,
+      });
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'VAR-001',
+      );
+
+      expect(result.newAchievements.single['id'], 'podium');
+    });
+
+    test('rangon kívül nem oldódik fel', () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Kinizsi vár',
+        'qrCode': 'VAR-001',
+        'points': 5,
+      });
+      await firestore.collection('public_leaderboard').doc('masik-1').set({
+        'displayName': 'A',
+        'points': 100,
+      });
+      await firestore.collection('public_leaderboard').doc('masik-2').set({
+        'displayName': 'B',
+        'points': 90,
+      });
+      await firestore.collection('achievements').doc('podium').set({
+        'name': 'Dobogós',
+        'conditionType': 'top_n',
+        'conditionValue': 2,
+      });
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'VAR-001',
+      );
+
+      expect(result.newAchievements, isEmpty);
+    });
+  });
+
   group('szerveroldali jóváírás (redeemQr)', () {
     test('sikeres szerver-válaszból épül az eredmény, kliens-írás nélkül',
         () async {

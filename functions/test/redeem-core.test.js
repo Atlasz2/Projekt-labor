@@ -187,6 +187,71 @@ test('már feloldott jutalom nem oldódik fel újra', async () => {
   assert.equal(db.read('achievements/event_hunter').unlockedCount, 3);
 });
 
+test('túra-teljesítés: az utolsó állomással a completedTripIds bővül és a trip_complete jutalom feloldódik', async () => {
+  db.seed(`user_progress/${uid}`, {
+    name: 'Teszt Elek',
+    totalPoints: 10,
+    completedStations: ['st1'],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  db.seed('stations/st1', { name: 'Első', tripId: 'trip1', points: 10 });
+  db.seed('stations/st2', { name: 'Második', qrCode: 'ST2', tripId: 'trip1', points: 10 });
+  db.seed('stations/other', { name: 'Másik túráé', tripId: 'trip2', points: 10 });
+  db.seed('achievements/local_legend', {
+    name: 'Helyi legenda',
+    conditionType: 'trip_complete',
+    conditionValue: 1,
+  });
+
+  const result = await redeem('ST2');
+
+  assert.deepEqual(db.read(`user_progress/${uid}`).completedTripIds, ['trip1']);
+  assert.equal(result.newAchievements.length, 1);
+  assert.equal(result.newAchievements[0].id, 'local_legend');
+});
+
+test('túra-teljesítés: hiányzó állomásnál nem íródik completedTripIds', async () => {
+  db.seed('stations/st1', { name: 'Első', qrCode: 'ST1', tripId: 'trip1', points: 10 });
+  db.seed('stations/st2', { name: 'Második', tripId: 'trip1', points: 10 });
+
+  await redeem('ST1');
+
+  assert.deepEqual(db.read(`user_progress/${uid}`).completedTripIds ?? [], []);
+});
+
+test('top_n jutalom: a friss pontszámmal top 2-be kerülve feloldódik', async () => {
+  db.seed('stations/st1', { name: 'Kinizsi vár', qrCode: 'VAR-001', points: 50 });
+  db.seed('public_leaderboard/masik-1', { displayName: 'Éllovas', points: 100 });
+  db.seed('public_leaderboard/masik-2', { displayName: 'Második', points: 30 });
+  db.seed('achievements/podium', {
+    name: 'Dobogós',
+    conditionType: 'top_n',
+    conditionValue: 2,
+  });
+
+  const result = await redeem('VAR-001');
+
+  // 50 ponttal a 100 mögött, a 30 előtt: 2. hely -> top 2 teljesül.
+  assert.equal(result.newAchievements.length, 1);
+  assert.equal(result.newAchievements[0].id, 'podium');
+});
+
+test('top_n jutalom: rangon kívül nem oldódik fel', async () => {
+  db.seed('stations/st1', { name: 'Kinizsi vár', qrCode: 'VAR-001', points: 5 });
+  db.seed('public_leaderboard/masik-1', { displayName: 'A', points: 100 });
+  db.seed('public_leaderboard/masik-2', { displayName: 'B', points: 90 });
+  db.seed('achievements/podium', {
+    name: 'Dobogós',
+    conditionType: 'top_n',
+    conditionValue: 2,
+  });
+
+  const result = await redeem('VAR-001');
+
+  assert.equal(result.newAchievements.length, 0);
+});
+
 test('árva qr_codes leképezés (törölt cél) found:false-ra fut', async () => {
   db.seed(`qr_codes/${qrMappingDocId('ARVA')}`, {
     kind: 'station',
