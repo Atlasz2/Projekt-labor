@@ -40,9 +40,9 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
 | Ellenőrzés | Állapot |
 |---|---|
 | Admin: Vitest (116 teszt, 14 fájl) | Zöld |
-| Mobil: flutter test (35 teszt, fake_cloud_firestore-ral) | Zöld |
+| Mobil: flutter test (49 teszt, fake_cloud_firestore-ral) | Zöld |
 | Mobil: flutter analyze | Hibamentes |
-| Cloud Functions: node --test (12 teszt, in-memory Firestore-stub) | Zöld |
+| Cloud Functions: node --test (16 teszt, in-memory Firestore-stub) | Zöld |
 | CI: GitHub Actions (admin + functions + Flutter) | Bekötve |
 
 ## Ismert hiányosságok, korlátok
