@@ -46,8 +46,18 @@ service cloud.firestore {
       // Admin: unrestricted write
       allow write: if isAdmin();
 
-      // User: can only write to their own doc, with monotonic constraints
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      // User: can only write to their own doc, with monotonic constraints.
+      // Create is restricted to zeroed counters so a fresh doc cannot start
+      // with fabricated points or completed items.
+      allow create: if isSignedIn() && request.auth.uid == userId
+        && (!request.resource.data.keys().hasAny(['totalPoints'])
+            || request.resource.data.totalPoints == 0)
+        && (!request.resource.data.keys().hasAny(['completedStations'])
+            || request.resource.data.completedStations.size() == 0)
+        && (!request.resource.data.keys().hasAny(['completedEvents'])
+            || request.resource.data.completedEvents.size() == 0)
+        && (!request.resource.data.keys().hasAny(['completedTripIds'])
+            || request.resource.data.completedTripIds.size() == 0);
       allow update: if isSignedIn() && request.auth.uid == userId && isValidProgressUpdate();
 
       match /completed_stations/{stationId} {

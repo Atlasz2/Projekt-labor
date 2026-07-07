@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'leaderboard_service.dart';
 
@@ -289,7 +290,18 @@ class QrProcessingService {
       }
       await batch.commit();
       return newlyUnlocked;
-    } catch (_) {
+    } catch (e, stack) {
+      // A jutalom-ellenőrzés hibája nem blokkolja a beolvasást, de ne
+      // vesszen el nyomtalanul.
+      try {
+        await FirebaseCrashlytics.instance.recordError(
+          e,
+          stack,
+          reason: 'QR achievement check failed',
+        );
+      } catch (_) {
+        // Crashlytics nem elérhető (pl. tesztfuttatásban).
+      }
       return [];
     }
   }
