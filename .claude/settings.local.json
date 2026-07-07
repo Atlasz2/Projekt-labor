@@ -32,7 +32,25 @@
       "PowerShell(Set-Location 'c:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\admin'; npx eslint src/pages/Dashboard.jsx; Write-Output \"LINT=$LASTEXITCODE\"; npm run build 2>&1 | Select-Object -Last 2; Write-Output \"BUILD=$LASTEXITCODE\"; npx vitest run 2>&1 | Select-Object -Last 8; Write-Output \"TEST=$LASTEXITCODE\")",
       "PowerShell(Set-Location 'c:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\admin'; npx eslint src/pages/Contact.jsx; Write-Output \"LINT=$LASTEXITCODE\"; npm run build 2>&1 | Select-Object -Last 2; Write-Output \"BUILD=$LASTEXITCODE\"; npx vitest run 2>&1 | Select-Object -Last 6; Write-Output \"TEST=$LASTEXITCODE\")",
       "PowerShell(Set-Location 'c:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\admin'; npx eslint src/pages/Trips.jsx src/pages/Dashboard.jsx src/pages/Dashboard.test.jsx; Write-Output \"LINT=$LASTEXITCODE\"; npx vitest run src/pages/Dashboard.test.jsx 2>&1 | Select-Object -Last 8; Write-Output \"TEST=$LASTEXITCODE\")",
-      "PowerShell(Set-Location 'c:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\admin'; npm run build 2>&1 | Select-Object -Last 2; Write-Output \"BUILD=$LASTEXITCODE\"; npx vitest run 2>&1 | Select-Object -Last 5; Write-Output \"TEST=$LASTEXITCODE\")"
+      "PowerShell(Set-Location 'c:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\admin'; npm run build 2>&1 | Select-Object -Last 2; Write-Output \"BUILD=$LASTEXITCODE\"; npx vitest run 2>&1 | Select-Object -Last 5; Write-Output \"TEST=$LASTEXITCODE\")",
+      "PowerShell(Set-Location 'c:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\\\\admin'; npx eslint src/App.jsx src/pages/BugReports.jsx; Write-Output \"LINT=$LASTEXITCODE\"; npm run build 2>&1 | Select-Object -Last 2; Write-Output \"BUILD=$LASTEXITCODE\"; npx vitest run 2>&1 | Select-Object -Last 6; Write-Output \"TEST=$LASTEXITCODE\")",
+      "Bash(git -C \"C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\" diff --stat)",
+      "Bash(git -C \"C:\\\\Users\\\\rafae\\\\Documents\\\\Egyetem\\\\Szakdoga\\\\negyes\" status --short)",
+      "Bash(npm --prefix admin run test)",
+      "Bash(grep -iE '\\\\.\\(docx|log|jpg|png\\)$|copilot')",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(grep -rn \"catch \\(_\\) {}\\\\|} catch \\(_\\) {$\" mobile_app/lib --include=\"*.dart\")",
+      "Bash(npm --prefix admin run lint)",
+      "Bash(npm --version)",
+      "Bash(npm test *)",
+      "Bash(npm install *)",
+      "Bash(npm --prefix functions test)",
+      "Bash(grep -B1 -A2 \"catch \\(_\\) {$\\\\|catch \\(_\\) {}\")",
+      "Bash(python -)",
+      "Bash(java -version)",
+      "Bash(npx firebase-tools *)"
     ]
   }
 }
