@@ -131,8 +131,8 @@ class _CameraScreenState extends State<CameraScreen> {
 
       setState(() {
         _station = {
-          ...result.station,
-          'imageUrl': primaryPhotoFromDoc(result.station),
+          ...result.target,
+          'imageUrl': primaryPhotoFromDoc(result.target),
           'alreadyDone': result.alreadyDone,
           'newAchievements': result.newAchievements,
         };

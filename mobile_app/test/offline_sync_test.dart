@@ -46,16 +46,16 @@ void main() {
     });
   });
 
-  group('QrStationNotFoundException', () {
+  group('QrCodeNotFoundException', () {
     test('toString names the unknown code (drives the scan error message)', () {
       expect(
-        const QrStationNotFoundException('XYZ').toString(),
+        const QrCodeNotFoundException('XYZ').toString(),
         'Ismeretlen QR kod: XYZ',
       );
     });
 
     test('is an Exception', () {
-      expect(const QrStationNotFoundException('x'), isA<Exception>());
+      expect(const QrCodeNotFoundException('x'), isA<Exception>());
     });
   });
 }

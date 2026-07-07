@@ -62,9 +62,9 @@ class PendingQrSyncService {
         try {
           await QrProcessingService.processByCode(uid: uid, code: entry.key);
           await LocalCache.removePendingQr(entry.key);
-        } on QrStationNotFoundException {
-          // Permanent: the code maps to no station — drop it so the queue
-          // can drain instead of retrying this poison entry forever.
+        } on QrCodeNotFoundException {
+          // Permanent: the code maps to no station or event — drop it so the
+          // queue can drain instead of retrying this poison entry forever.
           await LocalCache.removePendingQr(entry.key);
           debugPrint('Pending QR eldobva (ismeretlen kód): ${entry.key}');
         } catch (e) {

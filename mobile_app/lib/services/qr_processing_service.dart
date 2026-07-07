@@ -2,9 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'leaderboard_service.dart';
 
+/// Mit azonosított a beolvasott QR-kód: állomást vagy eseményt.
+enum QrTargetKind { station, event }
+
 class QrProcessResult {
   const QrProcessResult({
-    required this.station,
+    required this.target,
+    required this.kind,
     required this.alreadyDone,
     required this.newAchievements,
     required this.updatedPoints,
@@ -12,7 +16,9 @@ class QrProcessResult {
     required this.completedEventsCount,
   });
 
-  final Map<String, dynamic> station;
+  /// A beolvasott állomás vagy esemény dokumentuma (`kind` mondja meg, melyik).
+  final Map<String, dynamic> target;
+  final QrTargetKind kind;
   final bool alreadyDone;
   final List<Map<String, dynamic>> newAchievements;
   final int updatedPoints;
@@ -20,11 +26,11 @@ class QrProcessResult {
   final int completedEventsCount;
 }
 
-/// Permanent failure: the scanned code maps to no existing station.
+/// Permanent failure: the scanned code maps to no existing station or event.
 /// Distinct from transient (network/Firestore) errors so the offline queue
 /// can drop poison codes instead of retrying them forever.
-class QrStationNotFoundException implements Exception {
-  const QrStationNotFoundException(this.code);
+class QrCodeNotFoundException implements Exception {
+  const QrCodeNotFoundException(this.code);
 
   final String code;
 
@@ -32,27 +38,59 @@ class QrStationNotFoundException implements Exception {
   String toString() => 'Ismeretlen QR kod: $code';
 }
 
+class _ProgressOutcome {
+  const _ProgressOutcome({
+    required this.alreadyDone,
+    required this.updatedPoints,
+    required this.completedStations,
+    required this.completedEvents,
+    required this.progressData,
+  });
+
+  final bool alreadyDone;
+  final int updatedPoints;
+  final List<String> completedStations;
+  final List<String> completedEvents;
+  final Map<String, dynamic> progressData;
+}
+
 class QrProcessingService {
-  static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  /// Tesztekben lecserélhető (fake_cloud_firestore); élesben az alapértelmezett.
+  static FirebaseFirestore firestore = FirebaseFirestore.instance;
 
   static Future<QrProcessResult> processByCode({
     required String uid,
     required String code,
   }) async {
-    final station = await _findStationByCode(code);
-    if (station == null) {
-      throw QrStationNotFoundException(code);
+    final station = await _findByCode('stations', code);
+    if (station != null) {
+      return _applyProgress(
+        uid: uid,
+        kind: QrTargetKind.station,
+        targetId: station['id'] as String,
+        targetData: station,
+      );
     }
-    return _applyStationProgress(
-      uid: uid,
-      stationId: station['id'] as String,
-      stationData: station,
-    );
+
+    final event = await _findByCode('events', code);
+    if (event != null) {
+      return _applyProgress(
+        uid: uid,
+        kind: QrTargetKind.event,
+        targetId: event['id'] as String,
+        targetData: event,
+      );
+    }
+
+    throw QrCodeNotFoundException(code);
   }
 
-  static Future<Map<String, dynamic>?> _findStationByCode(String code) async {
-    final snap = await _firestore
-        .collection('stations')
+  static Future<Map<String, dynamic>?> _findByCode(
+    String collection,
+    String code,
+  ) async {
+    final snap = await firestore
+        .collection(collection)
         .where('qrCode', isEqualTo: code)
         .limit(1)
         .get();
@@ -62,85 +100,124 @@ class QrProcessingService {
       return <String, dynamic>{'id': d.id, ...d.data()};
     }
 
-    final byId = await _firestore.collection('stations').doc(code).get();
-    if (byId.exists) {
-      return <String, dynamic>{'id': byId.id, ...byId.data()!};
+    // Doc-id fallback. A '/'-t tartalmazó kód nem lehet érvényes dokumentum-út,
+    // és a doc() hívás ArgumentError-t dobna rá.
+    if (!code.contains('/')) {
+      final byId = await firestore.collection(collection).doc(code).get();
+      if (byId.exists) {
+        return <String, dynamic>{'id': byId.id, ...byId.data()!};
+      }
     }
 
     return null;
   }
 
-  static Future<QrProcessResult> _applyStationProgress({
+  static Future<QrProcessResult> _applyProgress({
     required String uid,
-    required String stationId,
-    required Map<String, dynamic> stationData,
+    required QrTargetKind kind,
+    required String targetId,
+    required Map<String, dynamic> targetData,
   }) async {
-    final progressRef = _firestore.collection('user_progress').doc(uid);
-    final progressDoc = await progressRef.get();
-    final progressData = progressDoc.data() ?? <String, dynamic>{};
+    final progressRef = firestore.collection('user_progress').doc(uid);
+    final listField = kind == QrTargetKind.station
+        ? 'completedStations'
+        : 'completedEvents';
+    final points = (targetData['points'] as num?)?.toInt() ?? 10;
 
-    final completed = List<String>.from(
-      progressData['completedStations'] ?? [],
-    );
-    final completedEvents = List<String>.from(
-      progressData['completedEvents'] ?? [],
-    );
-
-    final alreadyDone = completed.contains(stationId);
-    final stationPoints = (stationData['points'] as num?)?.toInt() ?? 10;
-    final currentPoints = (progressData['totalPoints'] as num?)?.toInt() ?? 0;
-
-    var updatedPoints = currentPoints;
-    List<Map<String, dynamic>> newAchievements = const [];
-
-    if (!alreadyDone) {
-      completed.add(stationId);
-      updatedPoints = currentPoints + stationPoints;
-
+    // A security rules a user_progress létrehozását csak nullázott számlálókkal
+    // engedik, ezért az increment előtt biztosítjuk, hogy a doksi létezzen.
+    // (Normál esetben a regisztráció hozza létre; ez a legacy/edge eseteket fedi.)
+    final existing = await progressRef.get();
+    if (!existing.exists) {
       await progressRef.set({
-        'completedStations': completed,
-        'totalPoints': updatedPoints,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      newAchievements = await _checkAchievements(
-        uid: uid,
-        completedStations: completed,
-        totalPoints: updatedPoints,
-        progressData: progressData,
-      );
+        'totalPoints': 0,
+        'completedStations': <String>[],
+        'completedEvents': <String>[],
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     }
 
-    if (!alreadyDone) {
+    // Atomi jóváírás: az olvasás és a feltételes írás egy tranzakcióban fut,
+    // így két párhuzamos feldolgozás (pl. élő beolvasás + offline szinkron)
+    // nem tudja ugyanazt a kódot kétszer jóváírni.
+    final outcome = await firestore.runTransaction<_ProgressOutcome>((
+      tx,
+    ) async {
+      final snap = await tx.get(progressRef);
+      final data = snap.data() ?? <String, dynamic>{};
+
+      final completedStations = List<String>.from(
+        data['completedStations'] ?? [],
+      );
+      final completedEvents = List<String>.from(data['completedEvents'] ?? []);
+      final currentPoints = (data['totalPoints'] as num?)?.toInt() ?? 0;
+
+      final completedList = kind == QrTargetKind.station
+          ? completedStations
+          : completedEvents;
+      final alreadyDone = completedList.contains(targetId);
+
+      if (!alreadyDone) {
+        completedList.add(targetId);
+        // update (nem set+merge): a doksi létezését fentebb garantáltuk, és
+        // így a transzformok a meglévő értékekre épülnek.
+        tx.update(progressRef, {
+          listField: FieldValue.arrayUnion([targetId]),
+          'totalPoints': FieldValue.increment(points),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      return _ProgressOutcome(
+        alreadyDone: alreadyDone,
+        updatedPoints: alreadyDone ? currentPoints : currentPoints + points,
+        completedStations: completedStations,
+        completedEvents: completedEvents,
+        progressData: data,
+      );
+    });
+
+    List<Map<String, dynamic>> newAchievements = const [];
+    if (!outcome.alreadyDone) {
+      newAchievements = await _checkAchievements(
+        uid: uid,
+        completedStations: outcome.completedStations,
+        completedEvents: outcome.completedEvents,
+        totalPoints: outcome.updatedPoints,
+        progressData: outcome.progressData,
+      );
+
       await LeaderboardService.syncEntry(
         uid: uid,
-        points: updatedPoints,
-        completedStationsCount: completed.length,
-        completedEventsCount: completedEvents.length,
-        displayName: progressData['name']?.toString(),
+        points: outcome.updatedPoints,
+        completedStationsCount: outcome.completedStations.length,
+        completedEventsCount: outcome.completedEvents.length,
+        displayName: outcome.progressData['name']?.toString(),
       );
     }
 
     return QrProcessResult(
-      station: stationData,
-      alreadyDone: alreadyDone,
+      target: targetData,
+      kind: kind,
+      alreadyDone: outcome.alreadyDone,
       newAchievements: newAchievements,
-      updatedPoints: updatedPoints,
-      completedStationsCount: completed.length,
-      completedEventsCount: completedEvents.length,
+      updatedPoints: outcome.updatedPoints,
+      completedStationsCount: outcome.completedStations.length,
+      completedEventsCount: outcome.completedEvents.length,
     );
   }
 
   static Future<List<Map<String, dynamic>>> _checkAchievements({
     required String uid,
     required List<String> completedStations,
+    required List<String> completedEvents,
     required int totalPoints,
     required Map<String, dynamic> progressData,
   }) async {
     try {
       final results = await Future.wait([
-        _firestore.collection('achievements').get(),
-        _firestore
+        firestore.collection('achievements').get(),
+        firestore
             .collection('user_progress')
             .doc(uid)
             .collection('unlocked_achievements')
@@ -151,15 +228,12 @@ class QrProcessingService {
       final unlockedSnap = results[1] as QuerySnapshot;
       final alreadyUnlocked = unlockedSnap.docs.map((d) => d.id).toSet();
 
-      final completedEvents = List<String>.from(
-        progressData['completedEvents'] ?? [],
-      );
       final completedTripIds = List<String>.from(
         progressData['completedTripIds'] ?? [],
       );
       final newlyUnlocked = <Map<String, dynamic>>[];
 
-      final batch = _firestore.batch();
+      final batch = firestore.batch();
       for (final doc in achSnap.docs) {
         final id = doc.id;
         if (alreadyUnlocked.contains(id)) continue;
@@ -183,7 +257,7 @@ class QrProcessingService {
 
         if (met) {
           batch.set(
-            _firestore
+            firestore
                 .collection('user_progress')
                 .doc(uid)
                 .collection('unlocked_achievements')
@@ -201,7 +275,7 @@ class QrProcessingService {
       if (newlyUnlocked.isNotEmpty) {
         final first = newlyUnlocked.first;
         batch.set(
-          _firestore.collection('user_progress').doc(uid),
+          firestore.collection('user_progress').doc(uid),
           {
             'pendingAchievementBanner': {
               'title': first['name']?.toString() ?? 'Jutalom feloldva!',
