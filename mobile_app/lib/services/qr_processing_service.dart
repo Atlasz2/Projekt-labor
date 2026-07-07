@@ -190,10 +190,10 @@ class QrProcessingService {
                 .doc(id),
             {'unlockedAt': FieldValue.serverTimestamp()},
           );
-          batch.update(
-            _firestore.collection('achievements').doc(id),
-            {'unlockedCount': FieldValue.increment(1)},
-          );
+          // NOTE: we intentionally do NOT increment achievements/{id}.unlockedCount
+          // here — that collection is admin-write-only, so including it would make
+          // the whole batch fail with permission-denied and the unlock (plus its
+          // notification) would never commit.
           newlyUnlocked.add({'id': id, ...achData});
         }
       }
@@ -207,7 +207,7 @@ class QrProcessingService {
               'title': first['name']?.toString() ?? 'Jutalom feloldva!',
               'subtitle': newlyUnlocked.length == 1
                   ? (first['description']?.toString() ?? '')
-                  : "${newlyUnlocked.length} uj jutalom feloldva!",
+                  : "${newlyUnlocked.length} új jutalom feloldva!",
             },
           },
           SetOptions(merge: true),

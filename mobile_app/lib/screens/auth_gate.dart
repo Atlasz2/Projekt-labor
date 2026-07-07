@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'name_screen.dart';
 import '../services/bootstrap_service.dart';
 import '../services/pending_qr_sync_service.dart';
+import '../theme/app_colors.dart';
 import 'main_menu_screen.dart';
 
 class AuthGate extends StatefulWidget {
@@ -19,19 +20,21 @@ class _AuthGateState extends State<AuthGate> {
   bool _initialAuthResolved = FirebaseAuth.instance.currentUser != null;
   String? _lastBootstrappedUid;
   bool _servicesStoppedForSignedOut = false;
-  Future<DocumentSnapshot>? _userDocFuture;
-  String? _userDocFutureUid;
+  Stream<DocumentSnapshot>? _userDocStream;
+  String? _userDocStreamUid;
 
-  Future<DocumentSnapshot> _userDocByUid(String uid) {
-    if (_userDocFuture != null && _userDocFutureUid == uid) {
-      return _userDocFuture!;
+  // A live snapshot stream (not a one-shot get) so the gate reacts the moment
+  // the user document is created during registration — no app restart needed.
+  Stream<DocumentSnapshot> _userDocByUid(String uid) {
+    if (_userDocStream != null && _userDocStreamUid == uid) {
+      return _userDocStream!;
     }
-    _userDocFutureUid = uid;
-    _userDocFuture = FirebaseFirestore.instance
+    _userDocStreamUid = uid;
+    _userDocStream = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
-        .get();
-    return _userDocFuture!;
+        .snapshots();
+    return _userDocStream!;
   }
 
   void _startBackgroundServices(String uid) {
@@ -46,8 +49,8 @@ class _AuthGateState extends State<AuthGate> {
     if (_servicesStoppedForSignedOut) return;
     _servicesStoppedForSignedOut = true;
     _lastBootstrappedUid = null;
-    _userDocFuture = null;
-    _userDocFutureUid = null;
+    _userDocStream = null;
+    _userDocStreamUid = null;
     await PendingQrSyncService.stop();
   }
 
@@ -76,11 +79,11 @@ class _AuthGateState extends State<AuthGate> {
         final user = snapshot.data!;
         _startBackgroundServices(user.uid);
 
-        return FutureBuilder<DocumentSnapshot>(
-          future: _userDocByUid(user.uid),
+        return StreamBuilder<DocumentSnapshot>(
+          stream: _userDocByUid(user.uid),
           builder: (context, docSnapshot) {
             if (!docSnapshot.hasData) {
-              return const MainMenuScreen();
+              return const _LoadingSplashScreen();
             }
 
             if (!docSnapshot.data!.exists) {
@@ -101,22 +104,41 @@ class _LoadingSplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset('assets/loading_screen.jpg', fit: BoxFit.cover),
-          Container(color: Colors.black.withValues(alpha: 0.20)),
-          const Center(
-            child: SizedBox(
-              width: 36,
-              height: 36,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: Colors.white,
+      backgroundColor: AppColors.background,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/logo.png', width: 120, height: 120),
+            const SizedBox(height: 28),
+            const Text(
+              'Nagyvázsony',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primaryText,
+                letterSpacing: 0.5,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              'Túra alkalmazás',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.primaryText.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 36),
+            const SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: AppColors.seed,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

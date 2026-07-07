@@ -105,19 +105,22 @@ class _NameScreenState extends State<NameScreen> {
           },
           SetOptions(merge: true),
         );
-
-        transaction.set(
-          firestore.collection('public_leaderboard').doc(user.uid),
-          {
-            'displayName': displayName,
-            'points': 0,
-            'completedStationsCount': 0,
-            'completedEventsCount': 0,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
       });
+
+      // The public_leaderboard security rule requires the user_progress doc to
+      // already exist with a matching points value. Inside a transaction the
+      // rules see the pre-transaction state (so user_progress doesn't exist yet),
+      // which fails. Writing it after the transaction commits satisfies the rule.
+      await firestore.collection('public_leaderboard').doc(user.uid).set(
+        {
+          'displayName': displayName,
+          'points': 0,
+          'completedStationsCount': 0,
+          'completedEventsCount': 0,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
