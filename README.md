@@ -55,6 +55,7 @@ Admin oldali clean-code es stabilitasi refaktor keszult:
 | Firebase Firestore | Realtime adatbazis (NoSQL) |
 | Firebase Authentication | Google / email bejelentkezes |
 | Firebase Storage | Kep / media tarolas |
+| Firebase Cloud Functions | Szerveroldali QR-validacio (redeemQr, Node 22) |
 | Firebase Crashlytics | Mobil crash analytics |
 | Firebase Performance | API/kepernyo latencia meres |
 
@@ -344,16 +345,15 @@ VITE_GOOGLE_MAPS_API_KEY=...
 - **`user_progress` iras**: felhasznalo csak monoton novelhet pontot / allomast (csokkenetes tiltva)
 - **`public_leaderboard` iras**: pontszam csak akkor fogadott el, ha megegyezik a `user_progress.totalPoints`-al (Firestore cross-referencia)
 
-### Ismert biztonsagi korlatok
+### Szerveroldali QR-validacio (redeemQr Cloud Function)
 
-A pontjovairast a kliens szamolja es irja a Firestore-ba. A szabalyok a
-pontcsokkentest es a hamis kezdoertekkel valo letrehozast tiltjak, de egy
-modositott kliens az update-agon tetszoleges mertekben novelhetne a sajat
-pontszamat, es a `stations`/`events` kollekciok publikus olvashatosaga miatt
-a QR-ertekek beolvasas nelkul is lekerdezhetok. Teljes vedelemhez a beolvasast
-szerveroldalon kellene validalni (Cloud Function: a kliens csak a nyers kodot
-kuldi be, a pontjovairast a fuggveny vegzi Admin SDK-val). Ez a projekt
-kereteben tudatosan vallalt korlat; a szakdolgozat reszletesen targyalja.
+A pontjovairas szerveroldalon tortenik: a mobil kliens csak a nyers QR-kodot
+kuldi a `redeemQr` hivhato fuggvenynek (`functions/`), amely a privat
+`qr_codes` lekepezo kollekcion keresztul validal, tranzakcioban ir jova,
+jutalmat old fel es szinkronizalja a ranglistat — Admin SDK-val. A mobil
+kliens fuggveny-eloszor mukodik, legacy fallback-kel amig a fuggveny nincs
+deployolva (Blaze-csomag szukseges). Reszletek, uzembe helyezesi sorrend es
+a vegso rules-lockdown: [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md).
 
 ### Storage szabalyok (`storage.rules`)
 
@@ -380,6 +380,7 @@ kereteben tudatosan vallalt korlat; a szakdolgozat reszletesen targyalja.
 | Flutter pont szamlas | Kész |
 | Esemény-QR beolvasas (mobil) | Kész |
 | Tranzakcios pontjovairas (dupla jóváírás ellen) | Kész |
+| Szerveroldali QR-validacio (Cloud Function) | Kész (deploy: Blaze-csomag) |
 | Flutter offline mod | Kész |
 | Flutter terkep | Kész |
 | Admin UI teljes újratervezés (kék/slate téma, Inter betűtípus) | Kész |

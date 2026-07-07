@@ -166,6 +166,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // QR-kód -> cél (állomás/esemény) leképezés. Az admin felület tartja
+    // karban, a redeemQr Cloud Function Admin SDK-val olvassa (a rules
+    // megkerülésével). Kliens nem olvashatja, így a QR-értékek nem
+    // enumerálhatók a nyilvános kollekciókból való kigyűjtéssel.
+    match /qr_codes/{codeId} {
+      allow read, write: if isAdmin();
+    }
+
     match /bug_reports/{reportId} {
       allow create: if isSignedIn();
       // Admins read everything; a signed-in user may read their own reports

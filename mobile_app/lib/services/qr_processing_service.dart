@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'leaderboard_service.dart';
@@ -39,6 +40,17 @@ class QrCodeNotFoundException implements Exception {
   String toString() => 'Ismeretlen QR kod: $code';
 }
 
+/// A szerveroldali jóváírás (redeemQr Cloud Function) nem elérhető — pl.
+/// még nincs deployolva. Ilyenkor a legacy kliensoldali útra váltunk.
+/// Tranziens hálózati hiba NEM ez: az továbbdobódik, hogy az offline
+/// várólista újrapróbálja.
+class QrServerUnavailableException implements Exception {
+  const QrServerUnavailableException();
+}
+
+/// A szerveroldali jóváírás hívása — tesztekben lecserélhető.
+typedef ServerRedeem = Future<Map<String, dynamic>> Function(String code);
+
 class _ProgressOutcome {
   const _ProgressOutcome({
     required this.alreadyDone,
@@ -59,10 +71,33 @@ class QrProcessingService {
   /// Tesztekben lecserélhető (fake_cloud_firestore); élesben az alapértelmezett.
   static FirebaseFirestore firestore = FirebaseFirestore.instance;
 
+  /// Tesztekben lecserélhető; élesben a redeemQr Cloud Functiont hívja.
+  static ServerRedeem? serverRedeemOverride;
+
+  /// Ha a függvény nem elérhető (nincs deployolva), az első hiba után erre a
+  /// futásra kikapcsoljuk a szerver-utat, és a legacy kliensoldali jóváírás fut.
+  static bool serverRedeemEnabled = true;
+
   static Future<QrProcessResult> processByCode({
     required String uid,
     required String code,
   }) async {
+    // Szerver-először: a validáció és jóváírás a redeemQr Cloud Functionben
+    // fut (lásd functions/ és docs/SERVER_VALIDATION.md). A legacy út addig
+    // marad, amíg a függvény minden környezetben deployolva nincs.
+    if (serverRedeemEnabled) {
+      try {
+        final payload =
+            await (serverRedeemOverride ?? _callRedeemFunction)(code);
+        if (payload['found'] == false) {
+          throw QrCodeNotFoundException(code);
+        }
+        return _resultFromServerPayload(payload);
+      } on QrServerUnavailableException {
+        serverRedeemEnabled = false;
+      }
+    }
+
     final station = await _findByCode('stations', code);
     if (station != null) {
       return _applyProgress(
@@ -84,6 +119,59 @@ class QrProcessingService {
     }
 
     throw QrCodeNotFoundException(code);
+  }
+
+  static Future<Map<String, dynamic>> _callRedeemFunction(String code) async {
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+        .httpsCallable('redeemQr');
+    try {
+      final response = await callable.call<dynamic>({'code': code});
+      return _stringKeyedMap(response.data);
+    } on FirebaseFunctionsException catch (e) {
+      // 'not-found'/'unimplemented': maga a függvény nem létezik (a szerver
+      // ismeretlen kódra nem hibát, hanem found:false-t ad) -> legacy út.
+      if (e.code == 'not-found' || e.code == 'unimplemented') {
+        throw const QrServerUnavailableException();
+      }
+      // Minden más (unavailable, deadline-exceeded, internal, ...) tranziens:
+      // továbbdobjuk, a hívó/offline várólista kezeli.
+      rethrow;
+    }
+  }
+
+  /// A callable válaszában a beágyazott map-ek `Map<Object?, Object?>`-ként
+  /// érkeznek — rekurzívan String-kulcsos map-ekké alakítjuk.
+  static Map<String, dynamic> _stringKeyedMap(dynamic value) {
+    final map = value as Map;
+    return map.map((key, v) {
+      dynamic converted = v;
+      if (v is Map) {
+        converted = _stringKeyedMap(v);
+      } else if (v is List) {
+        converted = v.map((e) => e is Map ? _stringKeyedMap(e) : e).toList();
+      }
+      return MapEntry(key.toString(), converted);
+    });
+  }
+
+  static QrProcessResult _resultFromServerPayload(Map<String, dynamic> payload) {
+    final rawAchievements = (payload['newAchievements'] as List?) ?? const [];
+    return QrProcessResult(
+      target: _stringKeyedMap(payload['target'] ?? const <String, dynamic>{}),
+      kind: payload['kind'] == 'event'
+          ? QrTargetKind.event
+          : QrTargetKind.station,
+      alreadyDone: payload['alreadyDone'] == true,
+      newAchievements: rawAchievements
+          .whereType<Map>()
+          .map(_stringKeyedMap)
+          .toList(),
+      updatedPoints: (payload['updatedPoints'] as num?)?.toInt() ?? 0,
+      completedStationsCount:
+          (payload['completedStationsCount'] as num?)?.toInt() ?? 0,
+      completedEventsCount:
+          (payload['completedEventsCount'] as num?)?.toInt() ?? 0,
+    );
   }
 
   static Future<Map<String, dynamic>?> _findByCode(

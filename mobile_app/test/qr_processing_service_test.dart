@@ -11,6 +11,9 @@ void main() {
     firestore = FakeFirebaseFirestore();
     QrProcessingService.firestore = firestore;
     LeaderboardService.firestore = firestore;
+    // A legtöbb teszt a legacy (kliensoldali) utat gyakorolja.
+    QrProcessingService.serverRedeemEnabled = false;
+    QrProcessingService.serverRedeemOverride = null;
   });
 
   Future<void> seedProgress({
@@ -197,6 +200,113 @@ void main() {
         ),
         throwsA(isA<QrCodeNotFoundException>()),
       );
+    });
+  });
+
+  group('szerveroldali jóváírás (redeemQr)', () {
+    test('sikeres szerver-válaszból épül az eredmény, kliens-írás nélkül',
+        () async {
+      await seedProgress();
+      QrProcessingService.serverRedeemEnabled = true;
+      String? sentCode;
+      QrProcessingService.serverRedeemOverride = (code) async {
+        sentCode = code;
+        return {
+          'found': true,
+          'kind': 'event',
+          'targetId': 'ev1',
+          'target': {'name': 'Várjátékok', 'points': 15},
+          'alreadyDone': false,
+          'newAchievements': [
+            {'id': 'event_hunter', 'name': 'Eseményvadász'},
+          ],
+          'updatedPoints': 20,
+          'completedStationsCount': 1,
+          'completedEventsCount': 1,
+        };
+      };
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'EVENT-2026',
+      );
+
+      expect(sentCode, 'EVENT-2026');
+      expect(result.kind, QrTargetKind.event);
+      expect(result.updatedPoints, 20);
+      expect(result.target['name'], 'Várjátékok');
+      expect(result.newAchievements.single['id'], 'event_hunter');
+
+      // A pontot a szerver írta — a kliens nem nyúlt a Firestore-hoz.
+      final progress = await firestore
+          .collection('user_progress')
+          .doc(uid)
+          .get();
+      expect(progress.data()!['totalPoints'], 0);
+    });
+
+    test('found:false válaszra QrCodeNotFoundException, legacy út nem fut',
+        () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Kinizsi vár',
+        'qrCode': 'VAR-001',
+        'points': 25,
+      });
+      QrProcessingService.serverRedeemEnabled = true;
+      QrProcessingService.serverRedeemOverride = (_) async => {'found': false};
+
+      await expectLater(
+        QrProcessingService.processByCode(uid: uid, code: 'VAR-001'),
+        throwsA(isA<QrCodeNotFoundException>()),
+      );
+
+      // Nem esett vissza a legacy útra: nem íródott pont.
+      final progress = await firestore
+          .collection('user_progress')
+          .doc(uid)
+          .get();
+      expect(progress.data()!['totalPoints'], 0);
+    });
+
+    test('nem deployolt függvénynél legacy fallback fut és memoizálódik',
+        () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Kinizsi vár',
+        'qrCode': 'VAR-001',
+        'points': 25,
+      });
+      QrProcessingService.serverRedeemEnabled = true;
+      var calls = 0;
+      QrProcessingService.serverRedeemOverride = (_) async {
+        calls += 1;
+        throw const QrServerUnavailableException();
+      };
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'VAR-001',
+      );
+
+      expect(result.updatedPoints, 25);
+      expect(QrProcessingService.serverRedeemEnabled, isFalse);
+      expect(calls, 1);
+    });
+
+    test('tranziens szerver-hiba továbbdobódik (offline queue újrapróbálja)',
+        () async {
+      await seedProgress();
+      QrProcessingService.serverRedeemEnabled = true;
+      QrProcessingService.serverRedeemOverride =
+          (_) async => throw Exception('network down');
+
+      await expectLater(
+        QrProcessingService.processByCode(uid: uid, code: 'VAR-001'),
+        throwsA(isA<Exception>()),
+      );
+      // A szerver-út bekapcsolva marad: tranziens hiba nem memoizálódik.
+      expect(QrProcessingService.serverRedeemEnabled, isTrue);
     });
   });
 

@@ -14,6 +14,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import StateCard from '../components/StateCard';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
 import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
+import { assertQrCodeAvailable, syncQrMapping, removeQrMapping, QrCodeCollisionError } from '../utils/qrMapping';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: '220px', width: '100%' };
@@ -192,24 +193,62 @@ export default function Stations() {
         unlockContentImageUrl: formData.unlockContentImageUrl || '',
       };
 
+      await assertQrCodeAvailable(db, {
+        code: payload.qrCode,
+        kind: 'station',
+        targetId: editingId,
+      });
+
+      let savedId = editingId;
       if (editingId) {
         await updateDoc(doc(db, 'stations', editingId), payload);
       } else {
-        await addDoc(collection(db, 'stations'), payload);
+        const ref = await addDoc(collection(db, 'stations'), payload);
+        savedId = ref.id;
+      }
+
+      // A privát qr_codes leképezés frissítése — best effort: ha elhasal,
+      // a Cloud Function legacy fallbackje (qrCode mező) akkor is működik.
+      const previous = editingId
+        ? stations.find((station) => station.id === editingId)
+        : null;
+      try {
+        await syncQrMapping(db, {
+          kind: 'station',
+          targetId: savedId,
+          code: payload.qrCode,
+          previousCode: previous ? getQrValue(previous) : null,
+        });
+      } catch {
+        /* legacy fallback fedi */
       }
 
       setShowModal(false);
       showMsg('Állomás mentve!', 'success');
       queryClient.invalidateQueries({ queryKey: ['stations'] });
-    } catch {
-      showMsg('Hiba mentés közben');
+    } catch (err) {
+      if (err instanceof QrCodeCollisionError) {
+        setActiveSection(0);
+        showMsg('Ez a QR-kód már egy másik elemhez tartozik!', 'warning');
+      } else {
+        showMsg('Hiba mentés közben');
+      }
     }
   };
 
   const confirmDelete = async () => {
     if (!deleteDialog.id) return;
     try {
+      const deleted = stations.find((station) => station.id === deleteDialog.id);
       await deleteDoc(doc(db, 'stations', deleteDialog.id));
+      try {
+        await removeQrMapping(db, {
+          code: deleted?.qrCode,
+          targetId: deleteDialog.id,
+        });
+      } catch {
+        /* árva leképezést a redeemQr found:false-ként kezel */
+      }
       setDeleteDialog({ open: false, id: null });
       queryClient.invalidateQueries({ queryKey: ['stations'] });
     } catch {

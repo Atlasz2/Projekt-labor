@@ -3,6 +3,7 @@ import { db, storage } from '../firebaseConfig';
 import { updateDoc, doc } from 'firebase/firestore';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
 import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
+import { assertQrCodeAvailable, syncQrMapping, removeQrMapping, QrCodeCollisionError } from '../utils/qrMapping';
 import { safeString } from '../utils/safeString';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePhotoManager } from '../hooks/usePhotoManager';
@@ -112,25 +113,63 @@ function Events() {
       points:      Number(formData.points || 20),
     };
     try {
+      await assertQrCodeAvailable(db, {
+        code: cleanData.qrCode,
+        kind: 'event',
+        targetId: editingId,
+      });
+
+      let savedId = editingId;
       if (editingId) {
         await update.mutateAsync({
           id: editingId,
           data: { ...cleanData, qrCode: cleanData.qrCode || editingId },
         });
       } else {
-        await add.mutateAsync(cleanData);
+        const ref = await add.mutateAsync(cleanData);
+        savedId = ref.id;
       }
+
+      // A privát qr_codes leképezés frissítése — best effort: ha elhasal,
+      // a Cloud Function legacy fallbackje (qrCode mező) akkor is működik.
+      const previous = editingId
+        ? events.find((event) => event.id === editingId)
+        : null;
+      try {
+        await syncQrMapping(db, {
+          kind: 'event',
+          targetId: savedId,
+          code: cleanData.qrCode,
+          previousCode: previous ? getQrValue(previous) : null,
+        });
+      } catch {
+        /* legacy fallback fedi */
+      }
+
       await commitRemovals();
       closeEditor();
-    } catch {
-      setMutateError('Hiba a mentéskor');
+    } catch (err) {
+      if (err instanceof QrCodeCollisionError) {
+        setMutateError('Ez a QR-kód már egy másik elemhez tartozik!');
+      } else {
+        setMutateError('Hiba a mentéskor');
+      }
     }
   };
 
   const confirmDelete = async () => {
     if (!deleteDialog.id) return;
     try {
+      const deleted = events.find((event) => event.id === deleteDialog.id);
       await remove.mutateAsync(deleteDialog.id);
+      try {
+        await removeQrMapping(db, {
+          code: deleted?.qrCode,
+          targetId: deleteDialog.id,
+        });
+      } catch {
+        /* árva leképezést a redeemQr found:false-ként kezel */
+      }
       setDeleteDialog({ open: false, id: null });
     } catch {
       setMutateError('Hiba a törléskor');

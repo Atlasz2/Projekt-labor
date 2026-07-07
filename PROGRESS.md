@@ -25,6 +25,11 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
 - Natív splash screen (flutter_native_splash) és launcher ikonok
 
 ### Backend / biztonság
+- **Szerveroldali QR-validáció**: redeemQr Cloud Function (Node 22) — a
+  kliens csak a nyers kódot küldi, a jóváírás Admin SDK-val fut; privát
+  `qr_codes` leképező kollekció ütközésvédelemmel, admin oldali automatikus
+  karbantartással és backfill szkripttel (deploy: Blaze-csomag szükséges,
+  részletek: docs/SERVER_VALIDATION.md)
 - Firestore security rules: szerepkör-alapú admin-ellenőrzés (UID-elsődleges),
   felhasználó csak saját progress-dokumentumát írhatja, monoton pontszabály,
   leaderboard-pontszám kereszt-ellenőrzése a `user_progress` ellen
@@ -34,17 +39,17 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
 
 | Ellenőrzés | Állapot |
 |---|---|
-| Admin: Vitest (103 teszt, 13 fájl) | Zöld |
-| Mobil: flutter test (31 teszt, fake_cloud_firestore-ral) | Zöld |
+| Admin: Vitest (116 teszt, 14 fájl) | Zöld |
+| Mobil: flutter test (35 teszt, fake_cloud_firestore-ral) | Zöld |
 | Mobil: flutter analyze | Hibamentes |
-| CI: GitHub Actions (admin lint/test/build + Flutter release build) | Bekötve |
+| Cloud Functions: node --test (12 teszt, in-memory Firestore-stub) | Zöld |
+| CI: GitHub Actions (admin + functions + Flutter) | Bekötve |
 
 ## Ismert hiányosságok, korlátok
 
-- **Kliensoldali pontszámítás**: a pontjóváírást a kliens írja a Firestore-ba;
-  a szabályok a csökkentést és a hamis kezdőértéket tiltják, de a felfújást
-  nem — teljes védelemhez Cloud Function-alapú szerveroldali validáció
-  kellene *(a dolgozatban korlátként dokumentálva, részletek a README
-  "Ismert biztonsagi korlatok" szakaszában)*.
+- **Szerveroldali validáció deploy**: a redeemQr Cloud Function kódja és
+  tesztjei készek, de a deploy Blaze-csomagot igényel; addig az app a
+  legacy kliensoldali úton működik. A végső rules-lockdown lépései:
+  docs/SERVER_VALIDATION.md.
 - Push értesítések: nem implementált.
 - Admin email-értesítők: nem implementált.
