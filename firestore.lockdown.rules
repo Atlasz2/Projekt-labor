@@ -1,0 +1,184 @@
+rules_version = '2';
+
+// VÉGSŐ (lockdown) szabálykészlet — akkor élesíthető, ha a redeemQr Cloud
+// Function deployolva van ÉS a szerver-utas mobil verzió már kint van.
+// Élesítés: másold e fájl tartalmát a firestore.rules-ba, majd
+// `firebase deploy --only firestore:rules`. Részletek: docs/SERVER_VALIDATION.md.
+//
+// A user_progress kliens-írása itt már teljesen zárt: a pontjóváírást
+// kizárólag a redeemQr függvény végzi (Admin SDK, a rules megkerülésével).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Primary admin check: UID-based only (cannot be spoofed by creating a doc)
+    function adminByUid() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Email-doc fallback: also requires a uid field in the doc matching the caller
+    function adminByEmailDoc() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.email == request.auth.token.email
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.uid == request.auth.uid;
+    }
+
+    function isAdmin() {
+      return adminByUid() || adminByEmailDoc();
+    }
+
+    match /user_progress/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Admin: unrestricted write
+      allow write: if isAdmin();
+
+      // Regisztráció: nullázott create továbbra is kliensről történik.
+      allow create: if isSignedIn() && request.auth.uid == userId
+        && (!request.resource.data.keys().hasAny(['totalPoints'])
+            || request.resource.data.totalPoints == 0)
+        && (!request.resource.data.keys().hasAny(['completedStations'])
+            || request.resource.data.completedStations.size() == 0)
+        && (!request.resource.data.keys().hasAny(['completedEvents'])
+            || request.resource.data.completedEvents.size() == 0)
+        && (!request.resource.data.keys().hasAny(['completedTripIds'])
+            || request.resource.data.completedTripIds.size() == 0);
+
+      // Az egyetlen megengedett kliens-update: a jutalom-banner nyugtázása.
+      // Minden más mezőt (pont, teljesített listák) csak a redeemQr függvény
+      // vagy admin írhat.
+      allow update: if isSignedIn() && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['pendingAchievementBanner']);
+
+      match /completed_stations/{stationId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAdmin();
+      }
+
+      match /completed_events/{eventId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAdmin();
+      }
+
+      match /unlocked_achievements/{achievementId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAdmin();
+      }
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId
+        || (request.auth.token.email != null && request.auth.token.email == userId)
+        || isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.auth.uid == userId
+        || (request.auth.token.email != null && request.auth.token.email == userId)
+      ) && (
+        !request.resource.data.keys().hasAny(['role'])
+        || request.resource.data.role == 'user'
+      );
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId
+        || (request.auth.token.email != null && request.auth.token.email == userId)
+      ) && (
+        !request.resource.data.keys().hasAny(['role'])
+        || !resource.data.keys().hasAny(['role'])
+        || request.resource.data.role == resource.data.role
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /usernames/{normalizedName} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+    // Leaderboard: a kereszt-ellenőrzés (points == user_progress.totalPoints)
+    // a zárt user_progress mellett önmagában is hamisíthatatlan, ezért a
+    // felhasználói ág maradhat.
+    match /public_leaderboard/{userId} {
+      allow read: if true;
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Admin: full write access
+      allow create, update: if isAdmin();
+
+      allow create, update: if isSignedIn()
+        && request.auth.uid == userId
+        && exists(/databases/$(database)/documents/user_progress/$(userId))
+        && request.resource.data.points ==
+             get(/databases/$(database)/documents/user_progress/$(userId)).data.totalPoints;
+    }
+
+    match /trips/{tripId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /stations/{stationId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /accommodations/{accommodationId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /about/{aboutId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /contact/{contactId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /achievements/{achievementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // QR-kód -> cél leképezés: kliens számára láthatatlan.
+    match /qr_codes/{codeId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /bug_reports/{reportId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.reported_by.user_id == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /stats_daily/{day} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

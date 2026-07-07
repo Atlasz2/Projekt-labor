@@ -70,6 +70,34 @@ jobs:
       - name: Unit tests
         run: npm test
 
+  # ── Firestore security rules (emulátor ellen) ─────────────────────────────
+  rules:
+    name: Firestore rules — emulator tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java (emulator runtime)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install functions deps (redeem-core alá)
+        run: npm --prefix functions ci
+
+      - name: Install rules-test deps
+        run: npm --prefix firestore-tests install
+
+      - name: Rules + redeem-core emulator tests
+        run: npx firebase-tools emulators:exec --only firestore --project demo-nagyvazsony "npm --prefix firestore-tests test"
+
   # ── Flutter (mobile app) ───────────────────────────────────────────────────
   flutter:
     name: Flutter — analyze / test

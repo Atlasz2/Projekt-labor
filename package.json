@@ -8,6 +8,7 @@
     "build": "npm run admin:build",
     "test": "npm run admin:test && npm run functions:test && npm run mobile:test",
     "functions:test": "npm --prefix functions test",
+    "rules:test": "firebase emulators:exec --only firestore --project demo-nagyvazsony \"npm --prefix firestore-tests test\"",
     "admin:dev": "npm --prefix admin run dev",
     "admin:build": "npm --prefix admin run build",
     "admin:preview": "npm --prefix admin run preview",
