@@ -11,6 +11,7 @@ import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import ConfirmDialog from "../components/ConfirmDialog";
 import StateCard from "../components/StateCard";
+import { buildCsv, downloadCsv } from "../utils/exportCsv";
 
 const SEVERITY_LABEL = { low: "Alacsony", medium: "Közepes", high: "Magas" };
 const SEVERITY_COLOR = { low: "success", medium: "warning", high: "error" };
@@ -108,6 +109,22 @@ function BugReports() {
 
   const filtered = filter === "all" ? reports : reports.filter((r) => normalizeStatus(r.status) === filter);
 
+  const handleExportCsv = () => {
+    const columns = [
+      { key: "title", label: "Cím", format: (v) => v || "(Cím nélkül)" },
+      { key: "severity", label: "Súlyosság", format: (v) => SEVERITY_LABEL[v] ?? v ?? "" },
+      { key: "status", label: "Státusz", format: (v) => STATUS_LABEL[normalizeStatus(v)] },
+      { key: "description", label: "Leírás" },
+      { key: "reported_by", label: "Bejelentő neve", format: (v) => v?.name || "" },
+      { key: "reported_by", label: "Bejelentő email", format: (v) => v?.email || "" },
+      { key: "admin_response", label: "Admin válasz" },
+      { key: "created_at", label: "Beküldve", format: (v, row) => fmtDate(v ?? row.created_at_text) },
+    ];
+    const today = new Date().toISOString().slice(0, 10);
+    downloadCsv(`hibajelentesek_${today}.csv`, buildCsv(filtered, columns));
+    showSnack(`${filtered.length} hibajelentés exportálva CSV-be.`, "success");
+  };
+
   return (
     <Box sx={{ p: 3, maxWidth: 960, mx: "auto" }}>
       <Box sx={{ mb: 4, pb: 3, borderBottom: "1px solid", borderColor: "divider" }}>
@@ -122,13 +139,13 @@ function BugReports() {
         </Typography>
         <Stack direction="row" gap={1.5} flexWrap="wrap">
           {[
-            { label: "Összes", value: reports.length, bg: "#eff6ff", color: "#2563eb", border: "rgba(37,99,235,0.2)" },
-            { label: "Nyitott", value: reports.filter(r => normalizeStatus(r.status) === "open").length, bg: "#fef2f2", color: "#dc2626", border: "rgba(220,38,38,0.2)" },
-            { label: "Lezárt", value: reports.filter(r => normalizeStatus(r.status) === "closed").length, bg: "#f0fdf4", color: "#059669", border: "rgba(5,150,105,0.2)" },
-          ].map(({ label, value, bg, color, border }) => (
-            <Box key={label} sx={{ px: 2.5, py: 1.25, borderRadius: 2, background: bg, border: `1px solid ${border}` }}>
-              <Typography variant="h5" fontWeight={800} sx={{ color, lineHeight: 1.1 }}>{value}</Typography>
-              <Typography variant="caption" sx={{ color, fontWeight: 600, opacity: 0.85 }}>{label}</Typography>
+            { label: "Összes", value: reports.length, bg: "#eff6ff", darkBg: "rgba(37,99,235,0.15)", color: "#2563eb", darkColor: "#60a5fa", border: "rgba(37,99,235,0.2)", darkBorder: "rgba(96,165,250,0.35)" },
+            { label: "Nyitott", value: reports.filter(r => normalizeStatus(r.status) === "open").length, bg: "#fef2f2", darkBg: "rgba(220,38,38,0.15)", color: "#dc2626", darkColor: "#fca5a5", border: "rgba(220,38,38,0.2)", darkBorder: "rgba(248,113,113,0.35)" },
+            { label: "Lezárt", value: reports.filter(r => normalizeStatus(r.status) === "closed").length, bg: "#f0fdf4", darkBg: "rgba(5,150,105,0.15)", color: "#059669", darkColor: "#6ee7b7", border: "rgba(5,150,105,0.2)", darkBorder: "rgba(110,231,183,0.3)" },
+          ].map(({ label, value, bg, darkBg, color, darkColor, border, darkBorder }) => (
+            <Box key={label} sx={{ px: 2.5, py: 1.25, borderRadius: 2, bgcolor: (t) => t.palette.mode === "dark" ? darkBg : bg, border: (t) => `1px solid ${t.palette.mode === "dark" ? darkBorder : border}` }}>
+              <Typography variant="h5" fontWeight={800} sx={{ color: (t) => t.palette.mode === "dark" ? darkColor : color, lineHeight: 1.1 }}>{value}</Typography>
+              <Typography variant="caption" sx={{ color: (t) => t.palette.mode === "dark" ? darkColor : color, fontWeight: 600, opacity: 0.85 }}>{label}</Typography>
             </Box>
           ))}
         </Stack>
@@ -148,6 +165,7 @@ function BugReports() {
               </Select>
             </FormControl>
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchReports} size="small">Frissítés</Button>
+            <Button variant="outlined" onClick={handleExportCsv} size="small" disabled={filtered.length === 0}>⬇ CSV</Button>
           </Stack>
 
           {filtered.length === 0 ? (
@@ -159,15 +177,17 @@ function BugReports() {
             />
           ) : (
             <Stack gap={2}>
-              {filtered.map((r) => (
-                <Card key={r.id} variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: normalizeStatus(r.status) === "closed" ? "grey.400" : SEVERITY_COLOR[r.severity] === "error" ? "error.main" : SEVERITY_COLOR[r.severity] === "warning" ? "warning.main" : "success.main" }}>
+              {filtered.map((r) => {
+                const status = normalizeStatus(r.status);
+                return (
+                <Card key={r.id} variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: status === "closed" ? "grey.400" : SEVERITY_COLOR[r.severity] === "error" ? "error.main" : SEVERITY_COLOR[r.severity] === "warning" ? "warning.main" : "success.main" }}>
                   <CardContent>
                     <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={2} flexWrap="wrap">
                       <Box flex={1}>
                         <Typography variant="subtitle1" fontWeight={700}>{r.title || "(Cím nélkül)"}</Typography>
                         <Stack direction="row" gap={1} mt={0.5} flexWrap="wrap">
                           <Chip label={SEVERITY_LABEL[r.severity] ?? r.severity ?? "?"} color={SEVERITY_COLOR[r.severity] ?? "default"} size="small" />
-                          <Chip label={STATUS_LABEL[normalizeStatus(r.status)]} size="small" variant={normalizeStatus(r.status) === "closed" ? "outlined" : "filled"} />
+                          <Chip label={STATUS_LABEL[status]} size="small" variant={status === "closed" ? "outlined" : "filled"} />
                           <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
                             {fmtDate(r.created_at ?? r.created_at_text)}
                           </Typography>
@@ -183,7 +203,7 @@ function BugReports() {
                     <Typography variant="body2" mt={1.5} sx={{ whiteSpace: "pre-wrap" }}>{r.description}</Typography>
 
                     {r.admin_response && responseInputs[r.id] === undefined && (
-                      <Box mt={1.5} p={1.5} sx={{ background: "#f0f7ff", borderRadius: 2, borderLeft: "3px solid #2563eb" }}>
+                      <Box mt={1.5} p={1.5} sx={{ bgcolor: (t) => t.palette.mode === "dark" ? "rgba(37,99,235,0.12)" : "#f0f7ff", borderRadius: 2, borderLeft: "3px solid #2563eb" }}>
                         <Typography variant="caption" color="text.secondary" fontWeight={600}>Admin válasz:</Typography>
                         <Typography variant="body2">{r.admin_response}</Typography>
                       </Box>
@@ -205,8 +225,8 @@ function BugReports() {
 
                   <Divider />
                   <CardActions sx={{ px: 2 }}>
-                    <Button size="small" startIcon={normalizeStatus(r.status) === "closed" ? <RadioButtonUncheckedIcon /> : <CheckCircleIcon />} onClick={() => handleToggleStatus(r)}>
-                      {normalizeStatus(r.status) === "closed" ? "Újranyitás" : "Lezárás"}
+                    <Button size="small" startIcon={status === "closed" ? <RadioButtonUncheckedIcon /> : <CheckCircleIcon />} onClick={() => handleToggleStatus(r)}>
+                      {status === "closed" ? "Újranyitás" : "Lezárás"}
                     </Button>
                     {(responseInputs[r.id] !== undefined && responseInputs[r.id] !== (r.admin_response ?? "")) && (
                       <Button
@@ -223,7 +243,8 @@ function BugReports() {
                     <Button size="small" color="error" startIcon={<DeleteIcon />} onClick={() => setDeleteId(r.id)}>Törlés</Button>
                   </CardActions>
                 </Card>
-              ))}
+                );
+              })}
             </Stack>
           )}
         </>
