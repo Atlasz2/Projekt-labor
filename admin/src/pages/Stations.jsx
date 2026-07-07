@@ -1,5 +1,5 @@
 import PropTypes from "prop-types";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db, storage } from '../firebaseConfig';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
@@ -96,10 +96,13 @@ export default function Stations() {
   const showMsg = (msg, severity = 'error') => setSnack({ open: true, msg, severity });
   const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY });
 
-  const getTripName = (tripId) => {
-    if (!tripId) return null;
-    return trips.find((trip) => trip.id === tripId)?.name || 'Ismeretlen túra';
-  };
+  // Build the id→name lookup once per trips change instead of a linear find()
+  // on every station, on every render / search keystroke.
+  const tripNameById = useMemo(
+    () => new Map(trips.map((trip) => [trip.id, trip.name || 'Ismeretlen túra'])),
+    [trips],
+  );
+  const getTripName = (tripId) => (tripId ? tripNameById.get(tripId) || 'Ismeretlen túra' : null);
 
   const handleEdit = (station) => {
     setEditingId(station.id);
@@ -304,7 +307,6 @@ export default function Stations() {
     <div className="stations-shell">
       <div className="stations-hero">
         <div className="hero-copy">
-          <p className="hero-kicker">Állomás studio</p>
           <h1>Állomások</h1>
           <p className="hero-subtitle">Helyszínek, leírások és QR kódok egy helyen.</p>
         </div>

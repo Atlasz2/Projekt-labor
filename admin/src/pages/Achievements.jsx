@@ -10,23 +10,23 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 
 const CONDITION_TYPES = [
-  { value: "station_count",    label: "Allomast latogasson meg (>= N db)" },
-  { value: "event_count",      label: "Esemeryen vegyen reszt (>= N db)" },
-  { value: "qr_count",         label: "QR-kodot olvasson be ossz. (>= N db)" },
-  { value: "points_threshold", label: "Pontot gyujtson ossze (>= N pont)" },
-  { value: "trip_complete",    label: "Teljes turat teljesitsen (>= N tura)" },
+  { value: "station_count",    label: "Állomást látogasson meg (>= N db)" },
+  { value: "event_count",      label: "Eseményen vegyen részt (>= N db)" },
+  { value: "qr_count",         label: "QR-kódot olvasson be össz. (>= N db)" },
+  { value: "points_threshold", label: "Pontot gyűjtsön össze (>= N pont)" },
+  { value: "trip_complete",    label: "Teljes túrát teljesítsen (>= N túra)" },
   { value: "top_n",            label: "Legyen top N a ranglistán" },
-  { value: "manual",           label: "Manualis (admin adja at)" },
+  { value: "manual",           label: "Manuális (admin adja át)" },
 ];
 
 const CONDITION_LABELS = Object.fromEntries(CONDITION_TYPES.map((c) => [c.value, c.label]));
 
 const DEFAULTS = [
-  { id: "first_steps",  name: "Elso lepesek",  description: "Olvass be 1 QR-kodot",         icon: "👣", color: "#22c55e", conditionType: "qr_count",        conditionValue: 1   },
-  { id: "explorer",     name: "Felfedezo",      description: "Latogass meg 3 allomast",       icon: "🧭", color: "#3b82f6", conditionType: "station_count",    conditionValue: 3   },
-  { id: "trail_hero",   name: "Turahos",        description: "Gyujts ossze 140 pontot",       icon: "🏃", color: "#f97316", conditionType: "points_threshold", conditionValue: 140 },
-  { id: "event_hunter", name: "Esemenyivadasz", description: "Vegyel reszt 1 esemeryen",      icon: "🎉", color: "#ec4899", conditionType: "event_count",      conditionValue: 1   },
-  { id: "local_legend", name: "Helyi legenda",  description: "Teljesits egy teljes turat",    icon: "👑", color: "#a855f7", conditionType: "trip_complete",    conditionValue: 1   },
+  { id: "first_steps",  name: "Első lépések",   description: "Olvass be 1 QR-kódot",         icon: "👣", color: "#22c55e", conditionType: "qr_count",        conditionValue: 1   },
+  { id: "explorer",     name: "Felfedező",      description: "Látogass meg 3 állomást",       icon: "🧭", color: "#3b82f6", conditionType: "station_count",    conditionValue: 3   },
+  { id: "trail_hero",   name: "Túrahős",        description: "Gyűjts össze 140 pontot",       icon: "🏃", color: "#f97316", conditionType: "points_threshold", conditionValue: 140 },
+  { id: "event_hunter", name: "Eseményvadász",  description: "Vegyél részt 1 eseményen",      icon: "🎉", color: "#ec4899", conditionType: "event_count",      conditionValue: 1   },
+  { id: "local_legend", name: "Helyi legenda",  description: "Teljesíts egy teljes túrát",    icon: "👑", color: "#a855f7", conditionType: "trip_complete",    conditionValue: 1   },
 ];
 
 const EMPTY = { name: "", description: "", icon: "🏆", color: "#667EEA", conditionType: "station_count", conditionValue: 1 };
@@ -119,30 +119,30 @@ export default function Achievements() {
       setConfirmDeleteId(null);
       await loadAll();
     } catch {
-      showMsg("Hiba a torleskor");
+      showMsg("Hiba a törléskor");
       setConfirmDeleteId(null);
     }
   };
 
   const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
-  if (loading) return <div className="ach-wrap"><div className="ach-loading">Betoltes...</div></div>;
+  if (loading) return <div className="ach-wrap"><div className="ach-loading">Betöltés...</div></div>;
 
   return (
     <div className="ach-wrap">
       <div className="ach-header">
         <div>
           <h1>🏆 Jutalmak</h1>
-          <p className="ach-header-sub">A latogatoknak automatikusan jelenik meg, ha teljesitik a feltetelt.</p>
+          <p className="ach-header-sub">A látogatóknak automatikusan jelenik meg, ha teljesítik a feltételt.</p>
         </div>
-        <button className="ach-add-btn" onClick={openCreate}>+ Uj jutalom</button>
+        <button className="ach-add-btn" onClick={openCreate}>+ Új jutalom</button>
       </div>
 
       <div className="ach-list">
         {achievements.length === 0 && (
           <div className="ach-empty-state">
             <div className="ach-empty-icon">🏆</div>
-            <p>Meg nincsenek jutalmak. Adj hozza az elsoket!</p>
+            <p>Még nincsenek jutalmak. Adj hozzá az elsőket!</p>
           </div>
         )}
         {achievements.map((a) => (
@@ -157,12 +157,12 @@ export default function Achievements() {
                 </span>
               )}
               {a.conditionType === "manual" && (
-                <span className="ach-row-cond">Manualis (admin adja at)</span>
+                <span className="ach-row-cond">Manuális (admin adja át)</span>
               )}
             </div>
             <div className="ach-row-actions">
-              <button className="ach-row-btn edit" onClick={() => openEdit(a)} title="Szerkesztes">✏️ Szerkesztes</button>
-              <button className="ach-row-btn del" onClick={() => handleDelete(a.id)} title="Torles">🗑️</button>
+              <button className="ach-row-btn edit" onClick={() => openEdit(a)} title="Szerkesztés">✏️ Szerkesztés</button>
+              <button className="ach-row-btn del" onClick={() => handleDelete(a.id)} title="Törlés">🗑️</button>
             </div>
           </div>
         ))}
@@ -172,28 +172,28 @@ export default function Achievements() {
         <div className="ach-overlay" onClick={(e) => e.target === e.currentTarget && setShowForm(false)}>
           <div className="ach-modal">
             <div className="ach-modal-header">
-              <h2>{editing ? "Jutalom szerkesztese" : "Uj jutalom hozzaadasa"}</h2>
+              <h2>{editing ? "Jutalom szerkesztése" : "Új jutalom hozzáadása"}</h2>
               <button className="ach-modal-x" onClick={() => setShowForm(false)}>✕</button>
             </div>
 
             <div className="ach-modal-body">
-              <label className="ach-label">Megnevezes *</label>
+              <label className="ach-label">Megnevezés *</label>
               <input
                 className="ach-input"
                 value={form.name}
                 onChange={(e) => setField("name", e.target.value)}
-                placeholder="pl. Felfedezo"
+                placeholder="pl. Felfedező"
               />
 
-              <label className="ach-label">Mire kap a latogato ezt a jutalmot?</label>
+              <label className="ach-label">Mire kap a látogató ezt a jutalmot?</label>
               <input
                 className="ach-input"
                 value={form.description}
                 onChange={(e) => setField("description", e.target.value)}
-                placeholder="pl. Beolvasott 3 QR-kodot"
+                placeholder="pl. Beolvasott 3 QR-kódot"
               />
 
-              <label className="ach-label">Feltetel tipusa</label>
+              <label className="ach-label">Feltétel típusa</label>
               <select
                 className="ach-input ach-select"
                 value={form.conditionType}
@@ -207,7 +207,7 @@ export default function Achievements() {
               {form.conditionType !== "manual" && (
                 <>
                   <label className="ach-label">
-                    Feltetel erteke (N){form.conditionType === "top_n" ? " - top hanyadik" : " - minimum darab/pont"}
+                    Feltétel értéke (N){form.conditionType === "top_n" ? " – top hányadik" : " – minimum darab/pont"}
                   </label>
                   <input
                     className="ach-input"
@@ -231,7 +231,7 @@ export default function Achievements() {
                 ))}
               </div>
 
-              <label className="ach-label">Szin</label>
+              <label className="ach-label">Szín</label>
               <div className="ach-color-row">
                 {COLOR_PRESETS.map((c) => (
                   <button
@@ -247,7 +247,7 @@ export default function Achievements() {
                   className="ach-color-picker"
                   value={form.color}
                   onChange={(e) => setField("color", e.target.value)}
-                  title="Egyedi szin"
+                  title="Egyedi szín"
                 />
               </div>
 
@@ -259,9 +259,9 @@ export default function Achievements() {
 
             <div className="ach-modal-footer">
               {saveError && <div style={{color:"#dc2626",fontSize:"0.82rem",flex:1,padding:"0 8px"}}>{saveError}</div>}
-              <button className="ach-cancel-btn" onClick={() => setShowForm(false)}>Megse</button>
+              <button className="ach-cancel-btn" onClick={() => setShowForm(false)}>Mégse</button>
               <button className="ach-save-btn" onClick={handleSave} disabled={saving || !form.name.trim()}>
-                {saving ? "Mentes..." : editing ? "Mentes" : "Hozzaadas"}
+                {saving ? "Mentés..." : editing ? "Mentés" : "Hozzáadás"}
               </button>
             </div>
           </div>
@@ -269,9 +269,9 @@ export default function Achievements() {
       )}
       <ConfirmDialog
         open={confirmDeleteId !== null}
-        title="Torles megerositese"
-        message="Biztosan torolni szeretned ezt a jutalmat? Ez a muvelet nem vonhato vissza."
-        confirmText="Torles"
+        title="Törlés megerősítése"
+        message="Biztosan törölni szeretnéd ezt a jutalmat? Ez a művelet nem vonható vissza."
+        confirmText="Törlés"
         onConfirm={doDelete}
         onClose={() => setConfirmDeleteId(null)}
       />

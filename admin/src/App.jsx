@@ -1,19 +1,25 @@
-﻿import React, { Suspense, lazy, useEffect } from 'react';
+﻿import React, { Suspense, lazy, useEffect, useState, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
-const muiTheme = createTheme({
+const buildMuiTheme = (isDark) => createTheme({
   palette: {
+    mode: isDark ? 'dark' : 'light',
     primary:    { main: '#2563eb', dark: '#1d4ed8', light: '#60a5fa' },
     secondary:  { main: '#0ea5e9' },
     error:      { main: '#dc2626' },
     warning:    { main: '#d97706' },
     success:    { main: '#059669' },
-    background: { default: '#f1f5f9', paper: '#ffffff' },
-    text:       { primary: '#0f172a', secondary: '#64748b' },
+    background: isDark
+      ? { default: '#0c1526', paper: '#182234' }
+      : { default: '#f1f5f9', paper: '#ffffff' },
+    text: isDark
+      ? { primary: '#e2e8f0', secondary: '#94a3b8' }
+      : { primary: '#0f172a', secondary: '#64748b' },
+    divider: isDark ? '#2d3f55' : 'rgba(15,23,42,0.12)',
   },
   typography: {
     fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
@@ -28,7 +34,11 @@ const muiTheme = createTheme({
     },
     MuiPaper: {
       styleOverrides: {
-        root: { boxShadow: '0 1px 4px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.05)' },
+        root: {
+          boxShadow: isDark
+            ? '0 1px 4px rgba(0,0,0,0.4)'
+            : '0 1px 4px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.05)',
+        },
       },
     },
     MuiTableHead: {
@@ -62,7 +72,7 @@ const BugReports     = lazy(() => import('./pages/BugReports'));
 function FullPageLoader() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontSize: '16px', color: '#64748b' }}>
-      <p>Betoltes...</p>
+      <p>Betöltés...</p>
     </div>
   );
 }
@@ -108,11 +118,28 @@ function AppRoutes() {
 }
 
 function App() {
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.classList.contains('dark')
+      || localStorage.getItem('adminDarkMode') === 'true'
+  );
+
   useEffect(() => {
     if (localStorage.getItem('adminDarkMode') === 'true') {
       document.documentElement.classList.add('dark');
     }
+    // Keep the MUI theme in sync with the html.dark class toggled from the sidebar
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    return () => observer.disconnect();
   }, []);
+
+  const muiTheme = useMemo(() => buildMuiTheme(isDark), [isDark]);
+
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />

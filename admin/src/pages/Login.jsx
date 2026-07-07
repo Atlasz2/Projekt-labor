@@ -11,10 +11,10 @@ import { resolveUserRole } from "../utils/resolveUserRole";
 import "../styles/Login.css";
 
 const AUTH_ERROR_MESSAGES = {
-  "auth/invalid-email": "Ervenytelen email cim.",
-  "auth/user-not-found": "Ez az email nincs regisztralva.",
-  "auth/wrong-password": "Hibas email vagy jelszo.",
-  "auth/invalid-credential": "Hibas email vagy jelszo.",
+  "auth/invalid-email": "Érvénytelen email cím.",
+  "auth/user-not-found": "Ez az email nincs regisztrálva.",
+  "auth/wrong-password": "Hibás email vagy jelszó.",
+  "auth/invalid-credential": "Hibás email vagy jelszó.",
 };
 
 function consumePersistedAccessError() {
@@ -101,7 +101,7 @@ function Login() {
       const role = await resolveUserRole(credential.user);
       if (role !== "admin") {
         await signOut(auth);
-        setError("Ehhez a fiokhhoz nincs admin jogosultsag.");
+        setError("Ehhez a fiókhoz nincs admin jogosultság.");
         setLoading(false);
         return;
       }
@@ -109,7 +109,7 @@ function Login() {
       localStorage.setItem("last_admin_email", normalizedEmail);
       // AdminAuthContext onAuthStateChanged picks up the new session automatically.
     } catch (err) {
-      setError(AUTH_ERROR_MESSAGES[err.code] || `Bejelentkezesi hiba: ${err.message}`);
+      setError(AUTH_ERROR_MESSAGES[err.code] || `Bejelentkezési hiba: ${err.message}`);
       setLoading(false);
     }
   };
@@ -124,7 +124,7 @@ function Login() {
 
       <div className="login-layout">
         <section className="login-story-panel">
-          <h1>Nagyvazsony</h1>
+          <h1>Nagyvázsony</h1>
           <div className="castle-frame">
             <CastleSvg />
           </div>
@@ -133,7 +133,7 @@ function Login() {
         <section className="login-card-panel">
           <div className="login-card-surface">
             <div className="login-header">
-              <h2>Admin belepes</h2>
+              <h2>Admin belépés</h2>
             </div>
 
             {error && (
@@ -145,7 +145,7 @@ function Login() {
 
             <form onSubmit={handleLogin} className="login-form">
               <div className="form-group">
-                <label htmlFor="email">Email cim</label>
+                <label htmlFor="email">Email cím</label>
                 <input
                   type="email"
                   id="email"
@@ -159,7 +159,7 @@ function Login() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="password">Jelszo</label>
+                <label htmlFor="password">Jelszó</label>
                 <div className="password-wrap">
                   <input
                     type={showPassword ? "text" : "password"}
@@ -175,7 +175,7 @@ function Login() {
                     className="password-toggle"
                     onClick={() => setShowPassword((visible) => !visible)}
                     tabIndex={-1}
-                    aria-label={showPassword ? "Jelszo elrejtese" : "Jelszo megjelenites"}
+                    aria-label={showPassword ? "Jelszó elrejtése" : "Jelszó megjelenítése"}
                   >
                     <EyeIcon visible={showPassword} />
                   </button>
@@ -186,10 +186,10 @@ function Login() {
                 {loading ? (
                   <span className="button-loading">
                     <span className="spinner" />
-                    Belepes folyamatban...
+                    Belépés folyamatban...
                   </span>
                 ) : (
-                  "Belepes a vezerlokozpontba"
+                  "Belépés a vezérlőközpontba"
                 )}
               </button>
             </form>

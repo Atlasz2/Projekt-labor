@@ -1,14 +1,35 @@
 /* ---- Shell ---- */
-.stations-shell { max-width: 1240px; margin: 0 auto; padding: 28px; font-family: inherit; background: #f8fafc; border-radius: 24px; }
+.stations-shell { max-width: 1240px; margin: 0 auto; padding: 0; font-family: inherit; background: transparent; }
 
-/* ---- Hero ---- */
-.stations-hero { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; padding: 0; background: none; color: #2b2720; gap: 16px; }
-.hero-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #5b6f4c; font-weight: 700; margin: 0 0 6px; }
-.stations-hero h1 { font-size: 1.75rem; font-weight: 800; margin: 0 0 4px; color: #2b2720; letter-spacing: -0.02em; }
-.hero-subtitle { margin: 0; color: #64748b; font-size: 0.9rem; }
+/* ---- Hero / page header (unified accent-bar style) ---- */
+.stations-hero {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  padding: 4px 0 18px 16px;
+  border-bottom: 1px solid var(--admin-border);
+  background: none;
+  color: var(--admin-text);
+  gap: 16px;
+}
+.stations-hero::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 22px;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--admin-accent), var(--admin-accent-deep));
+}
+.stations-hero h1 { font-size: 1.9rem; font-weight: 700; margin: 0 0 6px; color: var(--admin-text); letter-spacing: -0.02em; }
+.hero-subtitle { margin: 0; color: var(--admin-text-muted); font-size: 1rem; }
 .hero-actions { display: flex; gap: 10px; flex-shrink: 0; }
-.btn-primary { background: #5b6f4c; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 14px; transition: background 0.15s, transform 0.15s; }
-.btn-primary:hover { background: #46583b; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+.stations-hero .btn-primary { background: var(--admin-accent); color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 14px; transition: background 0.15s, transform 0.15s; }
+.stations-hero .btn-primary:hover { background: var(--admin-accent-deep); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(74,88,59,0.3); }
 
 /* ---- Grid of cards ---- */
 .stations-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
@@ -88,8 +109,6 @@
 .btn-cancel { background: #eef2e6; color: #5c5142; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; }
 .btn-save { background: #5b6f4c; color: white; border: none; padding: 8px 20px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 700; }
 .upload-note { font-size: 12px; color: #94a3b8; margin: 0; }
-
-.stations-hero { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; padding: 0; background: none; color: #2b2720; gap: 16px; }
 
 
 /* ---- Form Validation Feedback ---- */

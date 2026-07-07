@@ -550,11 +550,11 @@ function Trips() {
 
         docPdf.setFont("helvetica", "bold");
         docPdf.setFontSize(16);
-        docPdf.text(`${i + 1}. ${station.name || "Allomas"}`, 20, 24);
+        docPdf.text(`${i + 1}. ${station.name || "Állomás"}`, 20, 24);
 
         docPdf.setFont("helvetica", "normal");
         docPdf.setFontSize(11);
-        if (trip.name) docPdf.text(`Tura: ${trip.name}`, 20, 34);
+        if (trip.name) docPdf.text(`Túra: ${trip.name}`, 20, 34);
         docPdf.setFontSize(9);
         docPdf.text(`QR: ${qrValue}`, 20, 42);
 
@@ -583,12 +583,12 @@ function Trips() {
 
       docPdf.setFont("helvetica", "bold");
       docPdf.setFontSize(18);
-      docPdf.text(station.name || "Allomas", 20, 20);
+      docPdf.text(station.name || "Állomás", 20, 20);
 
       docPdf.setFont("helvetica", "normal");
       docPdf.setFontSize(12);
       if (tripName) {
-        docPdf.text(`Tura: ${tripName}`, 20, 30);
+        docPdf.text(`Túra: ${tripName}`, 20, 30);
       }
 
       docPdf.setFontSize(10);
@@ -597,7 +597,7 @@ function Trips() {
 
       const fileName = `${(station.name || "allomas").replace(/\s+/g, "_")}_QR.pdf`;
       docPdf.save(fileName);
-    } catch {      showMsg("Hiba a PDF letoltese kozben");
+    } catch {      showMsg("Hiba a PDF letöltése közben");
     }
   };
 
@@ -620,7 +620,6 @@ function Trips() {
       <div className="trips-hero">
         <div className="hero-content">
           <div className="hero-copy">
-            <p className="hero-kicker">Túra Stúdió</p>
             <h1>Túrák kezelése</h1>
             <p className="hero-subtitle">
               Útvonalak, állomások és tervezés egy helyen. Hozz létre, szerkessz és kezelj túraként könnyedén.

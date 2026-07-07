@@ -2,7 +2,10 @@ import PropTypes from 'prop-types';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../firebaseConfig';
-import { collection, getDocs, query, where, doc, setDoc, orderBy, limit } from 'firebase/firestore';
+import {
+  collection, getDocs, query, doc, setDoc, orderBy, limit,
+  getCountFromServer, getAggregateFromServer, sum, count,
+} from 'firebase/firestore';
 import StateCard from '../components/StateCard';
 import '../styles/Dashboard.css';
 
@@ -73,28 +76,40 @@ function Dashboard() {
     try {
       setLoading(true);
       setError(null);
+      const progressCol = collection(db, 'user_progress');
+
+      // Counts and the points sum are computed server-side, so the dashboard does
+      // not download every user / progress document — this scales to thousands of
+      // users. Only the top 5 progress docs are fetched (for the leaderboard).
       const [
-        tripsSnapshot, activeTripsSnapshot, stationsSnapshot,
-        usersSnapshot, userProgressSnapshot, achievementsSnapshot,
+        tripsSnapshot,
+        stationsSnapshot,
+        achievementsSnapshot,
+        usersCount,
+        progressAgg,
+        topPlayersSnapshot,
       ] = await Promise.all([
         getDocs(collection(db, 'trips')),
-        getDocs(query(collection(db, 'trips'), where('isActive', '==', true))),
         getDocs(collection(db, 'stations')),
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'user_progress')),
         getDocs(collection(db, 'achievements')),
+        getCountFromServer(collection(db, 'users')),
+        getAggregateFromServer(progressCol, { total: sum('totalPoints'), n: count() }),
+        getDocs(query(progressCol, orderBy('totalPoints', 'desc'), limit(5))),
       ]);
 
-      const totalPts = userProgressSnapshot.docs.reduce((sum, doc) => sum + (doc.data().totalPoints || 0), 0);
-      const avgPts = userProgressSnapshot.size > 0 ? Math.round(totalPts / userProgressSnapshot.size) : 0;
+      const activeTrips = tripsSnapshot.docs.filter((d) => d.data().isActive === true).length;
+      const totalPts = progressAgg.data().total || 0;
+      const trackedUsers = progressAgg.data().n || 0;
+      const usersTotal = usersCount.data().count;
+      const avgPts = trackedUsers > 0 ? Math.round(totalPts / trackedUsers) : 0;
       const assignedStations = stationsSnapshot.docs.filter((d) => d.data().tripId).length;
 
       setStats({
         trips: tripsSnapshot.size,
         stations: stationsSnapshot.size,
-        users: usersSnapshot.size,
-        trackedUsers: userProgressSnapshot.size,
-        activeTrips: activeTripsSnapshot.size,
+        users: usersTotal,
+        trackedUsers,
+        activeTrips,
         achievements: achievementsSnapshot.size,
         totalPoints: totalPts,
         averagePoints: avgPts,
@@ -107,18 +122,15 @@ function Dashboard() {
         .slice(0, 3);
       setTopAchievements(achData);
 
-      const playerData = userProgressSnapshot.docs
-        .map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            name: data.userName || data.email || 'Ismeretlen játékos',
-            email: data.email || '',
-            points: Number(data.totalPoints ?? data.points ?? 0),
-          };
-        })
-        .sort((a, b) => b.points - a.points)
-        .slice(0, 5);
+      const playerData = topPlayersSnapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.userName || data.email || 'Ismeretlen játékos',
+          email: data.email || '',
+          points: Number(data.totalPoints ?? data.points ?? 0),
+        };
+      });
       setTopPlayers(playerData);
 
       // Persist a once-per-day snapshot so the dashboard can show real trends over time.
@@ -131,8 +143,8 @@ function Dashboard() {
             date: today,
             trips: tripsSnapshot.size,
             stations: stationsSnapshot.size,
-            users: usersSnapshot.size,
-            trackedUsers: userProgressSnapshot.size,
+            users: usersTotal,
+            trackedUsers,
             totalPoints: totalPts,
             achievements: achievementsSnapshot.size,
             updatedAt: Date.now(),

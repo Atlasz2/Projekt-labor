@@ -66,9 +66,9 @@ const setData = (stationItems, tripItems = []) =>
 const mkClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-const renderStations = (client = mkClient()) =>
+const renderStations = (client = mkClient(), initialEntries = ["/"]) =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={client}>
         <Stations />
       </QueryClientProvider>
@@ -151,6 +151,24 @@ describe("Stations", () => {
     await waitFor(() => expect(screen.getByText("Keresés törlése")).toBeInTheDocument());
     await userEvent.click(screen.getByText("Keresés törlése"));
     expect(screen.getByText("Vár")).toBeInTheDocument();
+  });
+
+  it("?addForTrip deep-link opens the add modal preselected to that trip", async () => {
+    setData([], [{ id: "t1", name: "Túra 1" }]);
+    renderStations(mkClient(), ["/stations?addForTrip=t1"]);
+
+    expect(await screen.findByText("➕ Új állomás")).toBeInTheDocument();
+    const modalSelect = document.querySelector(".station-modal select");
+    expect(modalSelect.value).toBe("t1");
+  });
+
+  it("?edit deep-link opens the editor prefilled for that station", async () => {
+    setData([makeStation({ id: "s1", name: "Vár állomás" })]);
+    renderStations(mkClient(), ["/stations?edit=s1"]);
+
+    expect(await screen.findByText("✏️ Állomás szerkesztése")).toBeInTheDocument();
+    const nameInput = document.querySelector('.station-modal input[type="text"]');
+    expect(nameInput.value).toBe("Vár állomás");
   });
 });
 
