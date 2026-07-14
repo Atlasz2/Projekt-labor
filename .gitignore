@@ -25,3 +25,10 @@ mobile_app/windows/flutter/ephemeral/
 
 # Flutter futtatási naplók
 flutter_*.log
+
+# Firebase emulátor naplók
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
