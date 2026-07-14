@@ -44,7 +44,9 @@ Admin oldali clean-code es stabilitasi refaktor keszult:
 | mobile_scanner | 7 | QR kod beolvaso |
 | flutter_map | 7 | Terkep megjelenites |
 | google_maps_flutter | 2.13 | Google Maps |
-| geolocator | 14 | GPS helymeghatározas |
+| geolocator | 14 | GPS helymeghatarozas (QR helyszin-ellenorzes) |
+| cloud_functions | 5 | redeemQr hivas (szerveroldali jovairas) |
+| firebase_messaging | 15 | Push ertesitesek (esemeny-topic) |
 | connectivity_plus | 6 | Halozati allapot figyelése |
 | firebase_crashlytics | 5 | Crash reporting |
 | firebase_performance | 0.11 | Teljesitmeny monitorozas |
@@ -355,6 +357,16 @@ kliens fuggveny-eloszor mukodik, legacy fallback-kel amig a fuggveny nincs
 deployolva (Blaze-csomag szukseges). Reszletek, uzembe helyezesi sorrend es
 a vegso rules-lockdown: [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md).
 
+### Helyszin-ellenorzes (GPS)
+
+A QR beolvasasakor a kliens rogziti az eszkoz pozíciojat, es beku ldi a
+`redeemQr`-nek. A szerver az allomas koordinataihoz meri (Haversine); ha a
+tavolsag meghaladja a kuszobot (allomasonkenti `radius` mezo, vagy alap
+150 m), a jovairas elmarad. Igy a lefenykepezett/megosztott QR-kod nem
+hasznalhato a helyszintol tavol. A pozicio opcionalis: hianyaban a szerver
+atengedi (regi kliensek, GPS nelkuli eszkozok) — ez tudatosan vallalt korlat,
+lasd [docs/SZAKDOLGOZAT_BIZTONSAG.md](docs/SZAKDOLGOZAT_BIZTONSAG.md).
+
 ### Storage szabalyok (`storage.rules`)
 
 - **Olvasas**: nyilvanos
@@ -381,6 +393,7 @@ a vegso rules-lockdown: [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md).
 | Esemény-QR beolvasas (mobil) | Kész |
 | Tranzakcios pontjovairas (dupla jóváírás ellen) | Kész |
 | Szerveroldali QR-validacio (Cloud Function) | Kész (deploy: Blaze-csomag) |
+| GPS helyszin-ellenorzes (QR csak az allomas kozeleben) | Kész |
 | Flutter offline mod | Kész |
 | Flutter terkep | Kész |
 | Admin UI teljes újratervezés (kék/slate téma, Inter betűtípus) | Kész |

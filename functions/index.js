@@ -26,8 +26,22 @@ export const redeemQr = onCall({ region: 'europe-west1' }, async (request) => {
     throw new HttpsError('invalid-argument', 'Hiányzó QR-kód.');
   }
 
+  // Opcionális beolvasáskori eszközpozíció a helyszín-ellenőrzéshez.
+  let location = null;
+  const rawLat = Number(request.data?.lat);
+  const rawLng = Number(request.data?.lng);
+  if (Number.isFinite(rawLat) && Number.isFinite(rawLng)) {
+    location = { lat: rawLat, lng: rawLng };
+  }
+
   try {
-    return await redeemQrCore({ db: getFirestore(), FieldValue, uid, code });
+    return await redeemQrCore({
+      db: getFirestore(),
+      FieldValue,
+      uid,
+      code,
+      location,
+    });
   } catch (err) {
     console.error('redeemQr failed', { uid, code, err });
     throw new HttpsError('internal', 'A jóváírás nem sikerült, próbáld újra.');

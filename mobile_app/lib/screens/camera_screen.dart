@@ -8,6 +8,7 @@ import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../services/local_cache.dart';
+import '../services/location_service.dart';
 import '../services/offline_sync_service.dart';
 import '../services/pending_qr_sync_service.dart';
 import '../services/qr_processing_service.dart';
@@ -90,9 +91,40 @@ class _CameraScreenState extends State<CameraScreen> {
     if (!_scanning || _loading) return;
 
     await _offlineSyncService.init();
+
+    // A beolvasás pillanatában rögzített pozíció a helyszín-ellenőrzéshez.
+    // Ha nem elérhető (megtagadott engedély / kikapcsolt GPS), null — a
+    // szerver a pozíció hiányát átengedi (graceful).
+    final location = await LocationService.currentLatLng();
+
     if (!_offlineSyncService.isOnline) {
-      final queuedNow = await LocalCache.enqueuePendingQr(code);
       final cachedStation = _findStationFromLocalCache(code);
+
+      // Offline helyszín-kapu: ha a cache-elt állomás helyhez kötött és a
+      // pozíció túl messze, azonnal elutasítjuk (nem tesszük sorba).
+      if (cachedStation != null) {
+        final rejection =
+            QrProcessingService.locationRejection(cachedStation, location);
+        if (rejection != null) {
+          if (!mounted) return;
+          setState(() {
+            _scanning = false;
+            _loading = false;
+            _station = null;
+            _errorMsg =
+                'Túl messze vagy az állomástól (${rejection.distance} m). '
+                'Menj közelebb, és próbáld újra!';
+          });
+          _controller.stop();
+          return;
+        }
+      }
+
+      final queuedNow = await LocalCache.enqueuePendingQr(
+        code,
+        lat: location?.lat,
+        lng: location?.lng,
+      );
       if (!mounted) return;
       setState(() {
         _scanning = false;
@@ -129,7 +161,11 @@ class _CameraScreenState extends State<CameraScreen> {
       final uid = _auth.currentUser?.uid;
       if (uid == null) throw Exception('Nincs bejelentkezett felhasználó');
 
-      final result = await QrProcessingService.processByCode(uid: uid, code: code);
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: code,
+        location: location,
+      );
       if (!mounted) return;
 
       setState(() {
@@ -146,6 +182,14 @@ class _CameraScreenState extends State<CameraScreen> {
         unawaited(_loadHistory());
       }
       unawaited(PendingQrSyncService.start());
+    } on QrOutOfRangeException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _station = null;
+        _errorMsg = 'Túl messze vagy az állomástól (${e.distance} m). '
+            'Menj közelebb az állomáshoz, és próbáld újra!';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {

@@ -41,8 +41,9 @@ hozzáférést vagy ellopott admin-hitelesítést.
 | T6 | Ranglista-hamisítás | Magas pont a ranglistán valódi teljesítmény nélkül | Zárva (kereszt-ellenőrzés) |
 | T7 | QR-kód enumeráció | Az összes QR-érték kigyűjtése beolvasás (helyszín) nélkül | **Nyitva** |
 | T8 | Tartalmi kollekció írása | Hamis állomás/jutalom létrehozása | Zárva |
+| T9 | Távoli beolvasás | Pont szerzése a helyszíntől távol (lefényképezett QR) | **Nyitva** |
 
-A három **nyitott** vektor (T1, T2, T7) adta a munka fókuszát.
+A négy **nyitott** vektor (T1, T2, T7, T9) adta a munka fókuszát.
 
 ## 3. A védekezés rétegei
 
@@ -115,6 +116,30 @@ végső lépésben a `qrCode` mező kivezethető a publikus dokumentumokból is,
 miközben a kinyomtatott QR-matricák érvényben maradnak (értékük a
 leképezésben él tovább).
 
+### 3.4 Réteg: helyszín-ellenőrzés (T9)
+
+A QR-kód enumeráció lezárása után is marad egy fizikai vektor: a matrica
+**lefényképezhető és megosztható**, így a kód önmagában megszerezhető a
+helyszínen járás nélkül (T9). Az ellenszer a beolvasáskori pozíció
+ellenőrzése: a kliens rögzíti az eszköz GPS-koordinátáját, és beküldi a
+`redeemQr`-nek, amely az állomás koordinátáihoz méri (Haversine-távolság). Ha
+a távolság meghaladja a küszöböt — állomásonként a `radius` mező, vagy
+alapból 150 m —, a jóváírás elmarad (`rejected: 'out_of_range'`).
+
+A védelem a szerveren dől el (a kliens megkerülhető), de a mobil a beolvasás
+pillanatában is ad UX-visszajelzést („Menj közelebb az állomáshoz"), és az
+offline sorba tett beolvasásokhoz elmenti a pozíciót, hogy a szinkronkor a
+szerver azt is ellenőrizhesse. A `latitude/longitude` mező nélküli célok
+(pl. helyhez nem kötött események) mentesülnek az ellenőrzés alól.
+
+Fontos, hogy ez **defense in depth réteg, nem tökéletes zár**: a pozíció
+opcionális (a GPS-mentes vagy engedélyt megtagadó eszközök is használhassák az
+appot), ezért a szerver a *hiányzó* pozíciót átengedi — egy elszánt támadó
+tehát pozíció nélkül küld, vagy hamis GPS-t szimulál. A réteg értéke, hogy a
+triviális távoli lekérdezést megszünteti, és a legitim felhasználót a
+helyszínre irányítja; a maradék kockázat tudatosan vállalt és dokumentált
+(lásd 5. szakasz).
+
 ## 4. A védekezés bizonyítása: tesztelés
 
 A biztonság állítás, amíg nincs bizonyítva — ezért minden réteg automatizált
@@ -124,8 +149,9 @@ teszttel van alátámasztva, több szinten:
 |---|---|---|
 | Rules-tesztek (emulátor) | Minden támadási vektor elutasítva; a nyitott T2 dokumentált külön teszttel | `@firebase/rules-unit-testing` |
 | Lockdown rules-tesztek | Élesítés után T2 is zárul, a legitim banner-nyugtázás viszont megy | ua. |
-| Cloud Function (stub) | A jóváírási logika minden ága (állomás, esemény, túra, top-N) | `node:test` + in-memory stub |
-| Cloud Function (emulátor) | Valós tranzakció-szemantika, konkurrencia-védelem | valós Firestore-emulátor |
+| Cloud Function (stub) | A jóváírási logika minden ága (állomás, esemény, túra, top-N) + a helyszín-ellenőrzés (Haversine, radius, out_of_range) | `node:test` + in-memory stub |
+| Cloud Function (emulátor) | Valós tranzakció-szemantika, konkurrencia-védelem, helyszín-elutasítás valós adaton | valós Firestore-emulátor |
+| Mobil (Flutter) | A legacy úti helyszín-kapu és a Haversine-számítás | `flutter test` + fake Firestore |
 
 A rules-tesztek külön futtatják a **jelenlegi** és az **előkészített
 lockdown** szabálykészletet, így egyszerre látszik a mostani állapot és a
@@ -143,25 +169,27 @@ kockázatok kimondását is jelenti.
   nyitva marad, és a rendszer a kliensoldali úton működik. A kód, a tesztek és
   a lockdown szabályok készen állnak; a váltás egyetlen deploy + a szigorított
   szabályok élesítése.
-- **A QR-kódok fizikai másolhatósága**: a QR-matrica lefényképezhető és
-  megosztható. A rendszer a *helyszínt* nem hitelesíti (nincs GPS-ellenőrzés a
-  jóváíráskor) — ez a geocaching-jellegű alkalmazások általános korlátja. Ha a
-  helyszínhez kötöttség kritikus lenne, a `redeemQr` bővíthető a beküldött
-  GPS-pozíció és az állomás koordinátái közti távolság ellenőrzésével.
+- **GPS-hamisítás és a pozíció opcionalitása**: a helyszín-ellenőrzés (3.4)
+  a lefényképezett QR-kód triviális távoli beolvasását megszünteti, de nem
+  tökéletes zár. Egyrészt a pozíció opcionális (GPS-mentes eszközök miatt), így
+  egy támadó pozíció nélkül is küldhet; másrészt a GPS-koordináta szoftveresen
+  szimulálható (mock location). Szigorúbb módban a `redeemQr` elutasíthatná a
+  pozíció nélküli beolvasást, és integritás-ellenőrzést (pl. Play Integrity)
+  köthetne be — ez a jelen projekt keretein túlmutat.
 - **Ismételt beolvasás elleni védelem**: a jóváírás idempotens (egy állomás
   egyszer ér pontot), de ez játékmenetbeli, nem biztonsági korlát.
 
 ## 6. Összegzés
 
 A rendszer a „bízz a kliensben" modellből a rétegzett, szerveroldali
-validációval megtámogatott „bízz a szerverben" modellbe került. A nyolc
+validációval megtámogatott „bízz a szerverben" modellbe került. A kilenc
 azonosított támadási vektorból ötöt már a deklaratív szabályréteg zár; a
-maradék hármat (pont-felfújás létrehozáskor és módosításkor, QR-enumeráció) a
-nullázott létrehozás, a szerveroldali jóváírás és a privát leképező kollekció
-zárja. Minden réteget automatizált teszt bizonyít, valós Firestore-emulátor
-ellen is. A megoldás fokozatosan vezethető be, és a maradék kockázatok
-dokumentáltak — ez a felelős biztonsági tervezés mintája egy hallgatói
-projekt keretei között.
+maradék négyet a nullázott létrehozás (T1), a szerveroldali jóváírás (T2), a
+privát leképező kollekció (T7) és a GPS-alapú helyszín-ellenőrzés (T9) zárja
+vagy szorítja vissza. Minden réteget automatizált teszt bizonyít, valós
+Firestore-emulátor ellen is. A megoldás fokozatosan vezethető be, és a maradék
+kockázatok (deploy előtti állapot, GPS-hamisíthatóság) dokumentáltak — ez a
+felelős biztonsági tervezés mintája egy hallgatói projekt keretei között.
 
 ---
 

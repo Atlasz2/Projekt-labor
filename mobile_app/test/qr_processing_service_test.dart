@@ -333,7 +333,7 @@ void main() {
       await seedProgress();
       QrProcessingService.serverRedeemEnabled = true;
       String? sentCode;
-      QrProcessingService.serverRedeemOverride = (code) async {
+      QrProcessingService.serverRedeemOverride = (code, location) async {
         sentCode = code;
         return {
           'found': true,
@@ -378,7 +378,8 @@ void main() {
         'points': 25,
       });
       QrProcessingService.serverRedeemEnabled = true;
-      QrProcessingService.serverRedeemOverride = (_) async => {'found': false};
+      QrProcessingService.serverRedeemOverride =
+          (_, _) async => {'found': false};
 
       await expectLater(
         QrProcessingService.processByCode(uid: uid, code: 'VAR-001'),
@@ -403,7 +404,7 @@ void main() {
       });
       QrProcessingService.serverRedeemEnabled = true;
       var calls = 0;
-      QrProcessingService.serverRedeemOverride = (_) async {
+      QrProcessingService.serverRedeemOverride = (_, _) async {
         calls += 1;
         throw const QrServerUnavailableException();
       };
@@ -423,7 +424,7 @@ void main() {
       await seedProgress();
       QrProcessingService.serverRedeemEnabled = true;
       QrProcessingService.serverRedeemOverride =
-          (_) async => throw Exception('network down');
+          (_, _) async => throw Exception('network down');
 
       await expectLater(
         QrProcessingService.processByCode(uid: uid, code: 'VAR-001'),
@@ -431,6 +432,153 @@ void main() {
       );
       // A szerver-út bekapcsolva marad: tranziens hiba nem memoizálódik.
       expect(QrProcessingService.serverRedeemEnabled, isTrue);
+    });
+
+    test('szerver out_of_range válaszra QrOutOfRangeException, nincs jóváírás',
+        () async {
+      await seedProgress();
+      QrProcessingService.serverRedeemEnabled = true;
+      ScanLocation? sentLocation;
+      QrProcessingService.serverRedeemOverride = (code, location) async {
+        sentLocation = location;
+        return {
+          'found': true,
+          'rejected': 'out_of_range',
+          'kind': 'station',
+          'targetId': 'st1',
+          'target': {'name': 'Kinizsi vár'},
+          'distance': 4200,
+          'threshold': 150,
+        };
+      };
+
+      await expectLater(
+        QrProcessingService.processByCode(
+          uid: uid,
+          code: 'VAR-001',
+          location: (lat: 47.2, lng: 17.9),
+        ),
+        throwsA(
+          isA<QrOutOfRangeException>()
+              .having((e) => e.distance, 'distance', 4200)
+              .having((e) => e.threshold, 'threshold', 150),
+        ),
+      );
+      // A pozíció eljutott a szerverhez.
+      expect(sentLocation?.lat, 47.2);
+      final progress = await firestore
+          .collection('user_progress')
+          .doc(uid)
+          .get();
+      expect(progress.data()!['totalPoints'], 0);
+    });
+  });
+
+  group('legacy úti helyszín-ellenőrzés', () {
+    setUp(() {
+      QrProcessingService.serverRedeemEnabled = false;
+    });
+
+    test('távoli pozícióra QrOutOfRangeException, a pont nem íródik', () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Kinizsi vár',
+        'qrCode': 'VAR-001',
+        'points': 25,
+        'latitude': 47.06,
+        'longitude': 17.715,
+      });
+
+      await expectLater(
+        QrProcessingService.processByCode(
+          uid: uid,
+          code: 'VAR-001',
+          location: (lat: 47.2, lng: 17.9),
+        ),
+        throwsA(isA<QrOutOfRangeException>()),
+      );
+
+      final progress = await firestore
+          .collection('user_progress')
+          .doc(uid)
+          .get();
+      expect(progress.data()!['totalPoints'], 0);
+    });
+
+    test('helyszínen lévő pozícióval a jóváírás megtörténik', () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Kinizsi vár',
+        'qrCode': 'VAR-001',
+        'points': 25,
+        'latitude': 47.06,
+        'longitude': 17.715,
+      });
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'VAR-001',
+        location: (lat: 47.0601, lng: 17.7151),
+      );
+
+      expect(result.updatedPoints, 25);
+    });
+
+    test('pozíció nélkül a helyhez kötött állomás is jóváíródik (graceful)',
+        () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Kinizsi vár',
+        'qrCode': 'VAR-001',
+        'points': 25,
+        'latitude': 47.06,
+        'longitude': 17.715,
+      });
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'VAR-001',
+      );
+
+      expect(result.updatedPoints, 25);
+    });
+
+    test('koordináta nélküli állomásnál a pozíció irreleváns', () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Koordináta nélküli',
+        'qrCode': 'VAR-001',
+        'points': 25,
+      });
+
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'VAR-001',
+        location: (lat: 47.9, lng: 18.9),
+      );
+
+      expect(result.updatedPoints, 25);
+    });
+
+    test('az állomás radius mezője kitágítja a megengedett kört', () async {
+      await seedProgress();
+      await firestore.collection('stations').doc('st1').set({
+        'name': 'Nagy hatókörű',
+        'qrCode': 'VAR-001',
+        'points': 25,
+        'latitude': 47.06,
+        'longitude': 17.715,
+        'radius': 2000,
+      });
+
+      // ~758 m — az alap 150 m-en kívül, de a 2000 m-es radiuson belül.
+      final result = await QrProcessingService.processByCode(
+        uid: uid,
+        code: 'VAR-001',
+        location: (lat: 47.06, lng: 17.725),
+      );
+
+      expect(result.updatedPoints, 25);
     });
   });
 

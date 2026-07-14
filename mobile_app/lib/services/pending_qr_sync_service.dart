@@ -60,13 +60,23 @@ class PendingQrSyncService {
       final queueEntries = LocalCache.getPendingQrQueue();
       for (final entry in queueEntries) {
         try {
-          await QrProcessingService.processByCode(uid: uid, code: entry.key);
+          await QrProcessingService.processByCode(
+            uid: uid,
+            code: entry.key,
+            location: LocalCache.getPendingQrLocation(entry.key),
+          );
           await LocalCache.removePendingQr(entry.key);
         } on QrCodeNotFoundException {
           // Permanent: the code maps to no station or event — drop it so the
           // queue can drain instead of retrying this poison entry forever.
           await LocalCache.removePendingQr(entry.key);
           debugPrint('Pending QR eldobva (ismeretlen kód): ${entry.key}');
+        } on QrOutOfRangeException {
+          // Permanent for this scan: the recorded position was too far from the
+          // station. Drop it so the queue can drain (a valid re-scan on site
+          // will succeed).
+          await LocalCache.removePendingQr(entry.key);
+          debugPrint('Pending QR eldobva (helyszínen kívül): ${entry.key}');
         } catch (e) {
           // Transient (network/Firestore) — keep it queued for the next attempt.
           debugPrint('Pending QR sync failed for ${entry.key}: $e');

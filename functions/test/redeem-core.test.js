@@ -1,14 +1,20 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { redeemQrCore, qrMappingDocId } from '../lib/redeem-core.js';
+import {
+  redeemQrCore,
+  qrMappingDocId,
+  haversineMeters,
+  checkLocation,
+  DEFAULT_LOCATION_RADIUS_M,
+} from '../lib/redeem-core.js';
 import { FakeFirestore, FakeFieldValue } from './fake-firestore.js';
 
 const uid = 'user-1';
 let db;
 
-function redeem(code) {
-  return redeemQrCore({ db, FieldValue: FakeFieldValue, uid, code });
+function redeem(code, location) {
+  return redeemQrCore({ db, FieldValue: FakeFieldValue, uid, code, location });
 }
 
 beforeEach(() => {
@@ -260,4 +266,91 @@ test('árva qr_codes leképezés (törölt cél) found:false-ra fut', async () =
 
   const result = await redeem('ARVA');
   assert.deepEqual(result, { found: false });
+});
+
+// ── Helyszín-ellenőrzés (Haversine) ────────────────────────────────────────
+
+test('haversineMeters: ismert távolság kb. helyes (Nagyvázsony ~1 km)', () => {
+  // Két pont, ~0.01° hosszúságkülönbség ~47° szélességen ≈ 758 m.
+  const d = haversineMeters(47.06, 17.715, 47.06, 17.725);
+  assert.ok(d > 700 && d < 800, `váratlan táv: ${d}`);
+  assert.equal(haversineMeters(47.06, 17.715, 47.06, 17.715), 0);
+});
+
+test('checkLocation: koordináta nélküli célnál nincs ellenőrzés (null)', () => {
+  assert.equal(checkLocation({ name: 'Esemény' }, { lat: 0, lng: 0 }), null);
+  assert.equal(checkLocation({ latitude: 0, longitude: 0 }, { lat: 47, lng: 17 }), null);
+});
+
+test('checkLocation: pozíció nélkül átengedi (null)', () => {
+  const station = { latitude: 47.06, longitude: 17.715 };
+  assert.equal(checkLocation(station, null), null);
+  assert.equal(checkLocation(station, { lat: 'x', lng: 'y' }), null);
+});
+
+test('checkLocation: közel -> null, távol -> {distance, threshold}', () => {
+  const station = { latitude: 47.06, longitude: 17.715 };
+  assert.equal(checkLocation(station, { lat: 47.0601, lng: 17.7151 }), null);
+
+  const far = checkLocation(station, { lat: 47.08, lng: 17.75 });
+  assert.ok(far);
+  assert.equal(far.threshold, DEFAULT_LOCATION_RADIUS_M);
+  assert.ok(far.distance > DEFAULT_LOCATION_RADIUS_M);
+});
+
+test('checkLocation: az állomás saját radius mezője felülírja az alapértelmezettet', () => {
+  const station = { latitude: 47.06, longitude: 17.715, radius: 1000 };
+  // ~758 m — az alap 150 m-en kívül, de az 1000 m-es radiuson belül.
+  assert.equal(checkLocation(station, { lat: 47.06, lng: 17.725 }), null);
+});
+
+test('redeem: távoli pozíció -> out_of_range, a pont NEM íródik jóvá', async () => {
+  db.seed('stations/st1', {
+    name: 'Kinizsi vár',
+    qrCode: 'VAR-001',
+    points: 25,
+    latitude: 47.06,
+    longitude: 17.715,
+  });
+
+  const result = await redeem('VAR-001', { lat: 47.2, lng: 17.9 });
+
+  assert.equal(result.found, true);
+  assert.equal(result.rejected, 'out_of_range');
+  assert.ok(result.distance > result.threshold);
+  assert.equal(result.target.name, 'Kinizsi vár');
+
+  const progress = db.read(`user_progress/${uid}`);
+  assert.equal(progress.totalPoints, 0, 'távolról nem járhat pont');
+  assert.deepEqual(progress.completedStations, []);
+});
+
+test('redeem: helyszínen lévő pozícióval a jóváírás megtörténik', async () => {
+  db.seed('stations/st1', {
+    name: 'Kinizsi vár',
+    qrCode: 'VAR-001',
+    points: 25,
+    latitude: 47.06,
+    longitude: 17.715,
+  });
+
+  const result = await redeem('VAR-001', { lat: 47.0601, lng: 17.7151 });
+
+  assert.equal(result.found, true);
+  assert.equal(result.rejected, undefined);
+  assert.equal(result.updatedPoints, 25);
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 25);
+});
+
+test('redeem: pozíció nélkül a helyhez kötött állomás is jóváíródik (graceful)', async () => {
+  db.seed('stations/st1', {
+    name: 'Kinizsi vár',
+    qrCode: 'VAR-001',
+    points: 25,
+    latitude: 47.06,
+    longitude: 17.715,
+  });
+
+  const result = await redeem('VAR-001'); // nincs location
+  assert.equal(result.updatedPoints, 25);
 });

@@ -17,19 +17,23 @@ tiltották, de két támadási vektor nyitva maradt:
 ## Az új architektúra
 
 ```
-Mobil app ──(nyers kód)──► redeemQr Cloud Function (europe-west1)
+Mobil app ──(nyers kód + GPS)──► redeemQr Cloud Function (europe-west1)
                                │  1. qr_codes/{URI-kódolt kód} leképezés
                                │     (fallback: stations/events qrCode mező,
                                │      majd doc-id — a migráció idejére)
-                               │  2. tranzakció: user_progress jóváírás
-                               │  3. jutalom-feloldás + unlockedCount
-                               │  4. public_leaderboard szinkron
+                               │  2. helyszín-ellenőrzés (Haversine, radius)
+                               │  3. tranzakció: user_progress jóváírás
+                               │  4. jutalom-feloldás + unlockedCount
+                               │  5. public_leaderboard szinkron
                                ▼
                            Firestore (Admin SDK, a rules megkerülésével)
 ```
 
 - **`functions/lib/redeem-core.js`** — a teljes jóváírási logika, injektált
-  db-vel; 12 unit teszt fedi (in-memory Firestore-stub, `npm test`).
+  db-vel; a `redeemQr` opcionális `lat`/`lng`-t is fogad, és ha a cél helyhez
+  kötött (van koordinátája) és a pozíció túl messze (állomásonkénti `radius`
+  vagy alap 150 m), `rejected: 'out_of_range'`-et ad vissza a jóváírás helyett.
+  30 unit teszt fedi (in-memory Firestore-stub, `npm test`).
 - **`qr_codes` kollekció** — kód → cél (állomás/esemény) leképezés; csak admin
   írhatja/olvashatja, kliens egyáltalán nem. Az admin felület mentéskor/
   törléskor automatikusan karbantartja (`admin/src/utils/qrMapping.js`),
@@ -39,6 +43,15 @@ Mobil app ──(nyers kód)──► redeemQr Cloud Function (europe-west1)
   kliensoldali útra. Ismeretlen kódra a szerver `found:false`-t ad (nem
   hibát), így az offline várólista poison-kezelése változatlanul működik.
   Tranziens hálózati hiba továbbdobódik, a várólista újrapróbálja.
+- **Helyszín-ellenőrzés (GPS)** — a `LocationService` a beolvasáskor lekéri az
+  eszközpozíciót; a `processByCode` beküldi a szervernek (és a legacy úton maga
+  is ellenőrzi). Túl nagy távolságnál `QrOutOfRangeException` → a UI „menj
+  közelebb" üzenetet ad. Offline beolvasásnál a pozíció a várólistába kerül, és
+  a szinkronkor a szerver is ellenőrzi. Platform-engedélyek: Android
+  `ACCESS_FINE/COARSE_LOCATION` (manifest), iOS
+  `NSLocationWhenInUseUsageDescription` (Info.plist). A pozíció opcionális:
+  hiányában a szerver átengedi (részletek és korlátok:
+  `docs/SZAKDOLGOZAT_BIZTONSAG.md` 3.4/5. szakasz).
 
 ## Üzembe helyezés (sorrend számít!)
 
@@ -129,11 +142,11 @@ natív rétegben; ennek hiányában az FCM a default csatornát használja.
 
 | Réteg | Teszt | Darab |
 |---|---|---|
-| Cloud Function (mag + értesítés) | `functions/test/*.test.js` (node:test) | 22 |
-| Cloud Function (emulátor ellen) | `firestore-tests/tests/redeem-core-emulator.test.js` | 6 |
+| Cloud Function (mag + értesítés + helyszín) | `functions/test/*.test.js` (node:test) | 30 |
+| Cloud Function (emulátor ellen) | `firestore-tests/tests/redeem-core-emulator.test.js` | 7 |
 | Firestore rules (emulátor) | `firestore-tests/tests/rules-*.test.js` | 22 |
 | Admin util | `admin/src/utils/qrMapping.test.js` (Vitest) | 13 |
-| Flutter | `mobile_app/test/qr_processing_service_test.dart` | 20 |
+| Flutter (QR + helyszín) | `mobile_app/test/qr_processing_service_test.dart`, `location_service_test.dart` | 30 |
 
 A CI (`.github/workflows/ci.yml`) minden réteget futtat; a rules-job Temurin
 JDK 21 + `firebase emulators:exec` alatt fut.

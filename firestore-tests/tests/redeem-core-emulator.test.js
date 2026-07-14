@@ -29,8 +29,8 @@ beforeEach(async () => {
   );
 });
 
-function redeem(code) {
-  return redeemQrCore({ db, FieldValue, uid, code });
+function redeem(code, location) {
+  return redeemQrCore({ db, FieldValue, uid, code, location });
 }
 
 test('állomás-jóváírás valós tranzakcióval: pont, lista, leaderboard', async () => {
@@ -140,4 +140,27 @@ test('top_n valós orderBy-jal: a friss pontszám top 2-be kerül', async () => 
 
   assert.equal(result.newAchievements.length, 1);
   assert.equal(result.newAchievements[0].id, 'podium');
+});
+
+test('helyszín-ellenőrzés valós Firestore-on: távoli pozíció elutasítva, közeli jóváír', async () => {
+  await db.doc(`user_progress/${uid}`).set({
+    totalPoints: 0,
+    completedStations: [],
+    completedEvents: [],
+  });
+  await db.doc('stations/st1').set({
+    name: 'Kinizsi vár',
+    qrCode: 'VAR-001',
+    points: 25,
+    latitude: 47.06,
+    longitude: 17.715,
+  });
+
+  const rejected = await redeem('VAR-001', { lat: 47.2, lng: 17.9 });
+  assert.equal(rejected.rejected, 'out_of_range');
+  assert.equal((await db.doc(`user_progress/${uid}`).get()).data().totalPoints, 0);
+
+  const ok = await redeem('VAR-001', { lat: 47.0601, lng: 17.7151 });
+  assert.equal(ok.updatedPoints, 25);
+  assert.equal((await db.doc(`user_progress/${uid}`).get()).data().totalPoints, 25);
 });

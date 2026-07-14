@@ -59,6 +59,71 @@ function targetPoints(data) {
   return Number.isFinite(p) ? Math.trunc(p) : 10;
 }
 
+/** Alapértelmezett megengedett távolság az állomástól (méter), ha az
+ *  állomás nem ad meg saját `radius` mezőt. Bőven a GPS-pontatlanság fölött,
+ *  hogy a helyszínen lévő legitim felhasználót ne utasítsa el. */
+export const DEFAULT_LOCATION_RADIUS_M = 150;
+
+/** Két WGS84 koordináta közti távolság méterben (Haversine). */
+export function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000; // Föld sugara méterben
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** A cél koordinátája `{lat, lng}` vagy null, ha nincs érvényes helye.
+ *  A latitude/longitude közvetlen mezőkből VAGY egy beágyazott
+ *  location: {latitude, longitude} objektumból olvas. */
+function targetLatLng(data) {
+  const lat = Number(data?.latitude ?? data?.location?.latitude);
+  const lng = Number(data?.longitude ?? data?.location?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null; // hiányzó koordináta jelzője
+  return { lat, lng };
+}
+
+/**
+ * Helyszín-ellenőrzés a jóváírás előtt. `null`-t ad, ha a jóváírás mehet
+ * (a helyszín rendben, vagy nincs mit ellenőrizni); egyébként a
+ * kiutasítás részleteit adja vissza.
+ *
+ * A helyszínt csak akkor ellenőrizzük, ha a célnak van koordinátája ÉS a
+ * kliens beküldött pozíciót. Pozíció nélkül átengedjük (régi kliensek,
+ * GPS-mentes eszközök) — a védelem a beküldött pozíciót vizsgálja, nem a
+ * hiányát. Ezt a korlátot a szakdolgozat dokumentálja.
+ */
+export function checkLocation(targetData, location) {
+  const target = targetLatLng(targetData);
+  if (!target) return null;
+  if (
+    !location ||
+    !Number.isFinite(Number(location.lat)) ||
+    !Number.isFinite(Number(location.lng))
+  ) {
+    return null;
+  }
+
+  const distance = haversineMeters(
+    Number(location.lat),
+    Number(location.lng),
+    target.lat,
+    target.lng,
+  );
+  const radius = Number(targetData?.radius);
+  const threshold =
+    Number.isFinite(radius) && radius > 0 ? radius : DEFAULT_LOCATION_RADIUS_M;
+
+  if (distance > threshold) {
+    return { distance: Math.round(distance), threshold };
+  }
+  return null;
+}
+
 /** Túra-teljesítés detektálása állomás-jóváírás után: ha a beolvasott
  *  állomás túrájának minden állomása megvan, a túra bekerül a
  *  completedTripIds-be. A bővített listát adja vissza. */
@@ -190,11 +255,28 @@ async function syncLeaderboard({ db, FieldValue, uid, points, counts, progressDa
  * Ismeretlen kódra `{ found: false }`-t ad vissza (nem dob), hogy a kliens
  * megbízhatóan meg tudja különböztetni a "nincs ilyen kód" esetet a
  * "függvény nincs deployolva" hibától.
+ *
+ * A `location` opcionális `{lat, lng}` — a beolvasás pillanatában rögzített
+ * eszközpozíció. Ha a cél helyhez kötött és a pozíció túl messze van, a
+ * jóváírás elmarad: `{ found: true, rejected: 'out_of_range', ... }`.
  */
-export async function redeemQrCore({ db, FieldValue, uid, code }) {
+export async function redeemQrCore({ db, FieldValue, uid, code, location }) {
   const target = await resolveTarget(db, code);
   if (!target) {
     return { found: false };
+  }
+
+  const locationReject = checkLocation(target.data, location);
+  if (locationReject) {
+    return {
+      found: true,
+      rejected: 'out_of_range',
+      kind: target.kind,
+      targetId: target.id,
+      target: target.data,
+      distance: locationReject.distance,
+      threshold: locationReject.threshold,
+    };
   }
 
   const points = targetPoints(target.data);

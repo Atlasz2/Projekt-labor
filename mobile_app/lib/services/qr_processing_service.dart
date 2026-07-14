@@ -3,6 +3,15 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'leaderboard_service.dart';
+import 'location_service.dart';
+
+/// A beolvasás pillanatában rögzített eszközpozíció.
+typedef ScanLocation = ({double lat, double lng});
+
+/// Alapértelmezett megengedett távolság az állomástól (méter), ha az állomás
+/// nem ad meg saját `radius` mezőt. Egyeznie kell a szerveroldali
+/// DEFAULT_LOCATION_RADIUS_M értékkel (functions/lib/redeem-core.js).
+const double kDefaultLocationRadiusM = 150;
 
 /// Mit azonosított a beolvasott QR-kód: állomást vagy eseményt.
 enum QrTargetKind { station, event }
@@ -48,8 +57,28 @@ class QrServerUnavailableException implements Exception {
   const QrServerUnavailableException();
 }
 
+/// A beolvasott QR-kód a helyszínhez van kötve, de az eszköz túl messze van
+/// az állomástól — a jóváírás elmaradt. A UI a `distance`/`threshold` alapján
+/// kéri a felhasználót, hogy menjen közelebb.
+class QrOutOfRangeException implements Exception {
+  const QrOutOfRangeException({required this.distance, required this.threshold});
+
+  /// Mért távolság az állomástól, méterben.
+  final int distance;
+
+  /// A megengedett maximális távolság, méterben.
+  final int threshold;
+
+  @override
+  String toString() =>
+      'Túl messze vagy az állomástól ($distance m, max $threshold m).';
+}
+
 /// A szerveroldali jóváírás hívása — tesztekben lecserélhető.
-typedef ServerRedeem = Future<Map<String, dynamic>> Function(String code);
+typedef ServerRedeem = Future<Map<String, dynamic>> Function(
+  String code,
+  ScanLocation? location,
+);
 
 class _ProgressOutcome {
   const _ProgressOutcome({
@@ -81,6 +110,7 @@ class QrProcessingService {
   static Future<QrProcessResult> processByCode({
     required String uid,
     required String code,
+    ScanLocation? location,
   }) async {
     // Szerver-először: a validáció és jóváírás a redeemQr Cloud Functionben
     // fut (lásd functions/ és docs/SERVER_VALIDATION.md). A legacy út addig
@@ -88,9 +118,16 @@ class QrProcessingService {
     if (serverRedeemEnabled) {
       try {
         final payload =
-            await (serverRedeemOverride ?? _callRedeemFunction)(code);
+            await (serverRedeemOverride ?? _callRedeemFunction)(code, location);
         if (payload['found'] == false) {
           throw QrCodeNotFoundException(code);
+        }
+        if (payload['rejected'] == 'out_of_range') {
+          throw QrOutOfRangeException(
+            distance: (payload['distance'] as num?)?.round() ?? 0,
+            threshold: (payload['threshold'] as num?)?.round() ??
+                kDefaultLocationRadiusM.round(),
+          );
         }
         return _resultFromServerPayload(payload);
       } on QrServerUnavailableException {
@@ -100,6 +137,7 @@ class QrProcessingService {
 
     final station = await _findByCode('stations', code);
     if (station != null) {
+      _assertWithinRange(station, location);
       return _applyProgress(
         uid: uid,
         kind: QrTargetKind.station,
@@ -110,6 +148,7 @@ class QrProcessingService {
 
     final event = await _findByCode('events', code);
     if (event != null) {
+      _assertWithinRange(event, location);
       return _applyProgress(
         uid: uid,
         kind: QrTargetKind.event,
@@ -121,11 +160,73 @@ class QrProcessingService {
     throw QrCodeNotFoundException(code);
   }
 
-  static Future<Map<String, dynamic>> _callRedeemFunction(String code) async {
+  /// A cél koordinátája `(lat, lng)`, vagy null, ha nincs érvényes helye.
+  static ScanLocation? _targetLatLng(Map<String, dynamic> data) {
+    num? asNum(dynamic v) => v is num ? v : null;
+    final loc = data['location'];
+    final lat = asNum(data['latitude']) ??
+        (loc is Map ? asNum(loc['latitude']) : null);
+    final lng = asNum(data['longitude']) ??
+        (loc is Map ? asNum(loc['longitude']) : null);
+    if (lat == null || lng == null) return null;
+    if (lat == 0 && lng == 0) return null; // hiányzó koordináta jelzője
+    return (lat: lat.toDouble(), lng: lng.toDouble());
+  }
+
+  /// Kliensoldali helyszín-ellenőrzés — a szerveroldali checkLocation tükre.
+  /// Ha a cél helyhez kötött és a beküldött pozíció túl messze van, a
+  /// kiutasítás részleteit adja vissza; egyébként (rendben van, vagy nincs mit
+  /// ellenőrizni) null-t. A camera offline útja is ezt használja beolvasáskor.
+  static ({int distance, int threshold})? locationRejection(
+    Map<String, dynamic> targetData,
+    ScanLocation? location,
+  ) {
+    final target = _targetLatLng(targetData);
+    if (target == null || location == null) return null;
+
+    final distance = LocationService.distanceMeters(
+      location.lat,
+      location.lng,
+      target.lat,
+      target.lng,
+    );
+    final radius = targetData['radius'];
+    final threshold = (radius is num && radius > 0)
+        ? radius.toDouble()
+        : kDefaultLocationRadiusM;
+
+    if (distance > threshold) {
+      return (distance: distance.round(), threshold: threshold.round());
+    }
+    return null;
+  }
+
+  /// A legacy jóváírási út helyszín-kapuja: kiutasításnál dob.
+  static void _assertWithinRange(
+    Map<String, dynamic> targetData,
+    ScanLocation? location,
+  ) {
+    final rejection = locationRejection(targetData, location);
+    if (rejection != null) {
+      throw QrOutOfRangeException(
+        distance: rejection.distance,
+        threshold: rejection.threshold,
+      );
+    }
+  }
+
+  static Future<Map<String, dynamic>> _callRedeemFunction(
+    String code,
+    ScanLocation? location,
+  ) async {
     final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
         .httpsCallable('redeemQr');
     try {
-      final response = await callable.call<dynamic>({'code': code});
+      final response = await callable.call<dynamic>({
+        'code': code,
+        if (location != null) 'lat': location.lat,
+        if (location != null) 'lng': location.lng,
+      });
       return _stringKeyedMap(response.data);
     } on FirebaseFunctionsException catch (e) {
       // 'not-found'/'unimplemented': maga a függvény nem létezik (a szerver

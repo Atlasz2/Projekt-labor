@@ -91,7 +91,15 @@ class LocalCache {
     return null;
   }
 
-  static Future<bool> enqueuePendingQr(String qrCode) async {
+  /// Offline beolvasás sorba állítása. A beolvasáskori pozíciót (ha van)
+  /// együtt tároljuk, hogy a szinkronkor a szerver a helyszínt ellenőrizhesse.
+  /// Pozíció nélkül a régi (num-timestamp) formátumot használjuk, így a korábbi
+  /// bejegyzések visszafelé kompatibilisek maradnak.
+  static Future<bool> enqueuePendingQr(
+    String qrCode, {
+    double? lat,
+    double? lng,
+  }) async {
     final normalized = qrCode.trim();
     if (normalized.isEmpty) return false;
 
@@ -99,9 +107,26 @@ class LocalCache {
       return false;
     }
 
-    await _pendingQr.put(normalized, DateTime.now().microsecondsSinceEpoch);
+    final ts = DateTime.now().microsecondsSinceEpoch;
+    final value = (lat != null && lng != null)
+        ? <String, dynamic>{'ts': ts, 'lat': lat, 'lng': lng}
+        : ts;
+    await _pendingQr.put(normalized, value);
     pendingQrCountNotifier.value = _pendingQr.length;
     return true;
+  }
+
+  /// A sorba állított beolvasáshoz mentett pozíció, vagy null, ha nem volt.
+  static ({double lat, double lng})? getPendingQrLocation(String qrCode) {
+    final value = _pendingQr.get(qrCode.trim());
+    if (value is Map) {
+      final lat = value['lat'];
+      final lng = value['lng'];
+      if (lat is num && lng is num) {
+        return (lat: lat.toDouble(), lng: lng.toDouble());
+      }
+    }
+    return null;
   }
 
   static bool hasPendingQrCode(String qrCode) {
@@ -124,8 +149,12 @@ class LocalCache {
       final value = _pendingQr.get(key);
       final keyStr = key.toString();
       if (value is num) {
-        // New format: key = qrCode, value = enqueue timestamp.
+        // Format: key = qrCode, value = enqueue timestamp.
         entries.add(MapEntry(keyStr, value.toInt()));
+      } else if (value is Map) {
+        // Format (helyszínnel): key = qrCode, value = {ts, lat, lng}.
+        final ts = (value['ts'] as num?)?.toInt() ?? 0;
+        entries.add(MapEntry(keyStr, ts));
       } else {
         // Legacy format: key = timestamp, value = qrCode.
         final ts = int.tryParse(keyStr) ?? 0;
