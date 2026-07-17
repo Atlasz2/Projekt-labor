@@ -285,12 +285,17 @@ class _CameraScreenState extends State<CameraScreen> {
             ),
             child: Stack(
               children: [
-                MobileScanner(
-                  controller: _controller,
-                  onDetect: (capture) {
-                    final code = capture.barcodes.firstOrNull?.rawValue;
-                    if (code != null) _onQrDetected(code);
-                  },
+                Semantics(
+                  label:
+                      'QR-kód beolvasó kamera. Irányítsd a kamerát az állomás '
+                      'QR-kódjára a pontszerzéshez.',
+                  child: MobileScanner(
+                    controller: _controller,
+                    onDetect: (capture) {
+                      final code = capture.barcodes.firstOrNull?.rawValue;
+                      if (code != null) _onQrDetected(code);
+                    },
+                  ),
                 ),
                 Center(
                   child: Container(

@@ -556,6 +556,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.white),
+                      tooltip: 'Értesítés bezárása',
                       onPressed: () =>
                           setState(() => _showAchievementBanner = false),
                     ),

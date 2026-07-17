@@ -131,6 +131,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_outlined),
+            tooltip: 'Kijelentkezés',
             onPressed: () => _handleLogout(context),
           ),
         ],
@@ -332,6 +333,18 @@ class _MenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A képernyőolvasónak egyetlen, jól címkézett gombként jelenjen meg
+    // (a dekoratív ikont kizárjuk), ne három külön elemként.
+    return Semantics(
+      button: true,
+      label: '${item.title}. ${item.subtitle}',
+      child: ExcludeSemantics(
+        child: _buildCard(context),
+      ),
+    );
+  }
+
+  Widget _buildCard(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.page)),

@@ -29,8 +29,10 @@ class AchievementChip extends StatelessWidget {
     final bg = achievement.unlocked
         ? const Color(0xFFE7F5EA)
         : const Color(0xFFF3F4F6);
+    // WCAG AA (4.5:1) kontraszt a chip halvány hátterén; a korábbi #166534
+    // a "Feltétel" badge-en épphogy alálőtte a küszöböt (4.47).
     final fg = achievement.unlocked
-        ? const Color(0xFF166534)
+        ? const Color(0xFF14532D)
         : const Color(0xFF6B7280);
 
     return Container(
@@ -55,6 +57,7 @@ class AchievementChip extends StatelessWidget {
                 achievement.unlocked ? Icons.check_circle : Icons.lock_outline,
                 size: 18,
                 color: fg,
+                semanticLabel: achievement.unlocked ? 'Feloldva' : 'Zárolva',
               ),
             ],
           ),

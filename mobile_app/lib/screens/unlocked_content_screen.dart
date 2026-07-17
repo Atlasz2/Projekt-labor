@@ -143,7 +143,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       appBar: AppBar(
         title: const Text('Feloldott tartalmak'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Frissítés',
+            onPressed: _load,
+          ),
         ],
       ),
       body: Stack(

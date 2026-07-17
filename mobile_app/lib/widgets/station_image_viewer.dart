@@ -45,6 +45,7 @@ void showStationImageViewer(
               left: 16,
               child: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white),
+                tooltip: 'Bezárás',
                 onPressed: () => Navigator.pop(dialogContext),
               ),
             ),

@@ -71,6 +71,7 @@ class _EventsScreenState extends State<EventsScreen> {
               right: 18,
               child: IconButton(
                 onPressed: () => Navigator.of(context).pop(),
+                tooltip: 'Bezárás',
                 icon: const Icon(Icons.close, color: Colors.white, size: 30),
               ),
             ),
