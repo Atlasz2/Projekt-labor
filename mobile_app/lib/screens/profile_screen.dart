@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../services/account_service.dart';
 import '../services/leaderboard_service.dart';
 import '../theme/app_colors.dart';
+import '../utils/profile_stats.dart';
+import '../widgets/achievement_chip.dart';
+import '../widgets/data_rights_section.dart';
+import '../widgets/profile_skeleton.dart';
 import 'achievement_progress_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -29,8 +32,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _error;
   int _userRank = 0;
   Timer? _bannerDismissTimer;
-  bool _exportInProgress = false;
-  bool _deleteInProgress = false;
 
   @override
   void initState() {
@@ -42,18 +43,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _bannerDismissTimer?.cancel();
     super.dispose();
-  }
-
-  int _safeCount(dynamic value) {
-    if (value is List) return value.length;
-    if (value is num) return value.toInt();
-    return 0;
-  }
-
-  int _safeInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse('$value') ?? 0;
   }
 
   Future<void> _refreshAll() async {
@@ -105,15 +94,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Felhasználó',
         'email':
             userData['email']?.toString() ?? _auth.currentUser?.email ?? '',
-        'completedStations': _safeCount(progressData['completedStations']) > 0
-            ? _safeCount(progressData['completedStations'])
-            : _safeCount(userData['visitedStations']),
-        'completedEvents': _safeCount(progressData['completedEvents']) > 0
-            ? _safeCount(progressData['completedEvents'])
-            : _safeCount(userData['visitedEvents']),
-        'points': _safeInt(progressData['totalPoints']) > 0
-            ? _safeInt(progressData['totalPoints'])
-            : _safeInt(userData['points']),
+        'completedStations': safeCount(progressData['completedStations']) > 0
+            ? safeCount(progressData['completedStations'])
+            : safeCount(userData['visitedStations']),
+        'completedEvents': safeCount(progressData['completedEvents']) > 0
+            ? safeCount(progressData['completedEvents'])
+            : safeCount(userData['visitedEvents']),
+        'points': safeInt(progressData['totalPoints']) > 0
+            ? safeInt(progressData['totalPoints'])
+            : safeInt(userData['points']),
         'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs túra',
       };
 
@@ -123,9 +112,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         LeaderboardService.syncEntry(
           uid: currentUid,
           displayName: current['name']?.toString(),
-          points: _safeInt(current['points']),
-          completedStationsCount: _safeInt(current['completedStations']),
-          completedEventsCount: _safeInt(current['completedEvents']),
+          points: safeInt(current['points']),
+          completedStationsCount: safeInt(current['completedStations']),
+          completedEventsCount: safeInt(current['completedEvents']),
         ).catchError((Object e) => debugPrint('Leaderboard sync skipped: $e')),
       );
 
@@ -143,7 +132,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               .get(),
           _firestore
               .collection('public_leaderboard')
-              .where('points', isGreaterThan: _safeInt(current['points']))
+              .where('points', isGreaterThan: safeInt(current['points']))
               .count()
               .get(),
         ]).timeout(const Duration(seconds: 10));
@@ -159,9 +148,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return <String, dynamic>{
           'id': doc.id,
           'name': data['displayName']?.toString() ?? 'Felhasználó',
-          'completedStations': _safeInt(data['completedStationsCount']),
-          'completedEvents': _safeInt(data['completedEventsCount']),
-          'points': _safeInt(data['points']),
+          'completedStations': safeInt(data['completedStationsCount']),
+          'completedEvents': safeInt(data['completedEventsCount']),
+          'points': safeInt(data['points']),
           'currentTrip': doc.id == currentUid
               ? current['currentTrip']
               : 'Nincs túra',
@@ -173,7 +162,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       users.sort(
-        (a, b) => _safeInt(b['points']).compareTo(_safeInt(a['points'])),
+        (a, b) => safeInt(b['points']).compareTo(safeInt(a['points'])),
       );
       final userRank = higherCount == null ? 0 : higherCount + 1;
 
@@ -244,25 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  String _getRankMedal(int rank) {
-    if (rank == 1) return '🥇';
-    if (rank == 2) return '🥈';
-    if (rank == 3) return '🥉';
-    return '#$rank';
-  }
-
-  String _conditionText(String type, int value) {
-    if (type == 'station_count') return '$value állomás';
-    if (type == 'event_count') return '$value esemény';
-    if (type == 'qr_count') return '$value QR-kód';
-    if (type == 'points_threshold') return '$value pont';
-    if (type == 'trip_complete') return '$value teljesített túra';
-    if (type == 'top_n') return 'Top $value helyezés';
-    if (type == 'manual') return 'Manuális';
-    return '';
-  }
-
-  List<_Achievement> _buildAchievements() {
+  List<Achievement> _buildAchievements() {
     if (_achievementDefinitions.isEmpty) {
       return const [];
     }
@@ -273,263 +244,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final description = (a['description'] ?? '').toString();
       final icon = (a['icon'] ?? '🏆').toString();
       final conditionType = (a['conditionType'] ?? '').toString();
-      final conditionValue = _safeInt(a['conditionValue']);
-      final condition = _conditionText(conditionType, conditionValue);
+      final conditionValue = safeInt(a['conditionValue']);
+      final condition = conditionText(conditionType, conditionValue);
       final unlocked = _unlockedAchievementIds.contains(id);
-      return _Achievement(title: title, description: description, unlocked: unlocked, iconEmoji: icon, condition: condition);
+      return Achievement(
+        title: title,
+        description: description,
+        unlocked: unlocked,
+        iconEmoji: icon,
+        condition: condition,
+      );
     }).toList();
   }
-
-  int _nextPointTarget(int currentPoints) {
-    final thresholds = _achievementDefinitions
-        .where(
-          (a) => (a['conditionType']?.toString() ?? '') == 'points_threshold',
-        )
-        .map((a) => _safeInt(a['conditionValue']))
-        .where((t) => t > 0)
-        .toList();
-    final above = thresholds.where((t) => t > currentPoints).toList();
-    if (above.isNotEmpty) {
-      above.sort();
-      return above.first;
-    }
-    if (thresholds.isNotEmpty) {
-      thresholds.sort();
-      return thresholds.last;
-    }
-    return 140;
-  }
-
-
-  Widget _buildProfileSkeleton() {
-    final grey = Colors.grey.shade200;
-    final bRadius = BorderRadius.circular(8);
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        // Profile header skeleton
-        Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: grey,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        height: 18,
-                        width: 140,
-                        decoration: BoxDecoration(color: grey, borderRadius: bRadius),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        height: 13,
-                        width: 100,
-                        decoration: BoxDecoration(color: grey, borderRadius: bRadius),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        // Stat cards row 1
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 80,
-                decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                height: 80,
-                decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Stat cards row 2
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 80,
-                decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Container(
-                height: 80,
-                decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        // Progress card skeleton
-        Container(
-          height: 90,
-          decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(12)),
-        ),
-        const SizedBox(height: 12),
-        // Achievements card skeleton
-        Container(
-          height: 160,
-          decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(12)),
-        ),
-      ],
-    );
-  }
-  Widget _buildDataRightsSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.shield_outlined, color: Colors.blueGrey.shade400),
-                const SizedBox(width: 8),
-                const Text(
-                  'Adataim és adatvédelem',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'A GDPR szerint jogod van letölteni vagy véglegesen törölni a rólad tárolt adatokat.',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.download_outlined),
-              title: const Text('Adataim letöltése'),
-              subtitle: const Text('Exportál JSON-fájlba és megoszt'),
-              trailing: _exportInProgress
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.chevron_right),
-              onTap: _exportInProgress ? null : _handleExport,
-            ),
-            const Divider(height: 1),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.delete_forever_outlined, color: Colors.red.shade400),
-              title: Text('Fiók törlése', style: TextStyle(color: Colors.red.shade400)),
-              subtitle: const Text('Végleges, nem visszavonható'),
-              trailing: _deleteInProgress
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(Icons.chevron_right, color: Colors.red.shade400),
-              onTap: _deleteInProgress ? null : _handleDeleteAccount,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _handleExport() async {
-    setState(() => _exportInProgress = true);
-    try {
-      await AccountService.exportAndShare();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Az adatexport nem sikerült: ${_friendlyError(e)}'),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _exportInProgress = false);
-    }
-  }
-
-  Future<void> _handleDeleteAccount() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Fiók végleges törlése'),
-        content: const Text(
-          'Ez törli a profilodat, a pontjaidat, a haladásodat és a ranglista-'
-          'bejegyzésedet. A művelet NEM vonható vissza.\n\n'
-          'Biztosan törlöd a fiókodat?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Mégse'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade400),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Törlés'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _deleteInProgress = true);
-    try {
-      await AccountService.deleteAccount();
-      // Sikeres törlés után az AuthGate a kijelentkezésre reagálva a
-      // bejelentkező képernyőre vált — nincs több teendő itt.
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _deleteInProgress = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('A fiók törlése nem sikerült: ${_friendlyError(e)}'),
-        ),
-      );
-    }
-  }
-
-  String _friendlyError(Object e) {
-    final text = e.toString();
-    if (text.contains('unauthenticated')) return 'jelentkezz be újra';
-    if (text.contains('unavailable') || text.contains('network')) {
-      return 'nincs internetkapcsolat';
-    }
-    return 'próbáld újra később';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final currentPoints = _safeInt(_currentUserData?['points']);
-    final stationCount = _safeCount(_currentUserData?['completedStations']);
-    final eventCount = _safeCount(_currentUserData?['completedEvents']);
-    final rewardTarget = _nextPointTarget(currentPoints);
+    final currentPoints = safeInt(_currentUserData?['points']);
+    final stationCount = safeCount(_currentUserData?['completedStations']);
+    final eventCount = safeCount(_currentUserData?['completedEvents']);
+    final rewardTarget = nextPointTarget(currentPoints, _achievementDefinitions);
     final progressToReward = rewardTarget > 0
         ? (currentPoints / rewardTarget).clamp(0.0, 1.0)
         : 1.0;
@@ -547,7 +279,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       body: Stack(
         children: [
           _isLoading
-              ? _buildProfileSkeleton()
+              ? const ProfileSkeleton()
               : _error != null
               ? Center(
                   child: Padding(
@@ -607,7 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(width: 12),
                           _buildStatCard(
                             'Rang',
-                            _userRank == 0 ? '-' : _getRankMedal(_userRank),
+                            _userRank == 0 ? '-' : rankMedal(_userRank),
                             Icons.leaderboard,
                             Colors.teal,
                           ),
@@ -679,7 +411,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           spacing: 10,
                           runSpacing: 10,
                           children: achievements
-                              .map((a) => _AchievementChip(achievement: a))
+                              .map((a) => AchievementChip(achievement: a))
                               .toList(),
                         ),
                       const SizedBox(height: 10),
@@ -726,7 +458,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Row(
                                 children: [
                                   Text(
-                                    _getRankMedal(index + 1),
+                                    rankMedal(index + 1),
                                     style: const TextStyle(fontSize: 20),
                                   ),
                                   const SizedBox(width: 12),
@@ -742,7 +474,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           ),
                                         ),
                                         Text(
-                                          '${_safeCount(user['completedStations'])} állomás · ${_safeCount(user['completedEvents'])} esemény',
+                                          '${safeCount(user['completedStations'])} állomás · ${safeCount(user['completedEvents'])} esemény',
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: Colors.grey.shade600,
@@ -761,7 +493,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
-                                      '${_safeInt(user['points'])} pont',
+                                      '${safeInt(user['points'])} pont',
                                       style: TextStyle(
                                         color: Colors.amber.shade900,
                                         fontWeight: FontWeight.bold,
@@ -776,7 +508,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildDataRightsSection(),
+                      const DataRightsSection(),
                       const SizedBox(height: 8),
                     ],
                   ),
@@ -871,7 +603,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Rang: ${_getRankMedal(_userRank)}',
+            'Rang: ${rankMedal(_userRank)}',
             style: const TextStyle(color: Colors.white),
           ),
         ],
@@ -908,91 +640,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Achievement {
-  final String title;
-  final String description;
-  final bool unlocked;
-  final String iconEmoji;
-  final String condition;
-
-  _Achievement({
-    required this.title,
-    required this.description,
-    required this.unlocked,
-    required this.iconEmoji,
-    required this.condition,
-  });
-}
-
-class _AchievementChip extends StatelessWidget {
-  final _Achievement achievement;
-
-  const _AchievementChip({required this.achievement});
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = achievement.unlocked
-        ? const Color(0xFFE7F5EA)
-        : const Color(0xFFF3F4F6);
-    final fg = achievement.unlocked
-        ? const Color(0xFF166534)
-        : const Color(0xFF6B7280);
-
-    return Container(
-      width: 178,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: fg.withValues(alpha: 0.16)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                achievement.iconEmoji,
-                style: TextStyle(fontSize: 18, color: fg),
-              ),
-              const Spacer(),
-              Icon(
-                achievement.unlocked ? Icons.check_circle : Icons.lock_outline,
-                size: 18,
-                color: fg,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            achievement.title,
-            style: TextStyle(fontWeight: FontWeight.w700, color: fg),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            achievement.description,
-            style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.84)),
-          ),
-          if (achievement.condition.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.68),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                'Feltétel: ${achievement.condition}',
-                style: TextStyle(fontSize: 11, color: fg),
-              ),
-            ),
-          ],
-        ],
       ),
     );
   }
