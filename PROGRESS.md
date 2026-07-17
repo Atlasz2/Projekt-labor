@@ -36,6 +36,11 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
   a szerver az állomás koordinátáihoz méri (Haversine, állomásonkénti `radius`
   vagy alap 150 m); túl messziről nincs pont. Offline sorban a pozíció is
   tárolódik. A lefényképezett QR távoli beolvasása ellen véd.
+- **GDPR adatjogok**: exportUserData (a felhasználó összes adata JSON-ban) és
+  deleteMyAccount (fiók + minden kapcsolódó dokumentum törlése, hibabejelentések
+  anonimizálásával, Auth-fiókkal együtt) Cloud Functionök; a mobil profil
+  „Adataim és adatvédelem" szekciója hívja (export+megosztás, törlés
+  megerősítéssel)
 - Firestore security rules: szerepkör-alapú admin-ellenőrzés (UID-elsődleges),
   felhasználó csak saját progress-dokumentumát írhatja, monoton pontszabály,
   leaderboard-pontszám kereszt-ellenőrzése a `user_progress` ellen
@@ -48,8 +53,8 @@ A technológiai stack, az adatmodell és az architektúra részletes leírása a
 | Admin: Vitest (116 teszt, 14 fájl) | Zöld |
 | Mobil: flutter test (59 teszt, fake_cloud_firestore-ral) | Zöld |
 | Mobil: flutter analyze | Hibamentes |
-| Cloud Functions: node --test (30 teszt, in-memory Firestore-stub) | Zöld |
-| Firestore rules + redeem-core emulátor ellen (29 teszt, támadási forgatókönyvek) | Zöld |
+| Cloud Functions: node --test (37 teszt, in-memory Firestore-stub) | Zöld |
+| Firestore rules + redeem-core + GDPR emulátor ellen (31 teszt, támadási forgatókönyvek) | Zöld |
 | CI: GitHub Actions (admin + functions + rules-emulátor + Flutter) | Bekötve |
 
 A biztonsági architektúra szakdolgozatba emelhető leírása:

@@ -57,7 +57,7 @@ Admin oldali clean-code es stabilitasi refaktor keszult:
 | Firebase Firestore | Realtime adatbazis (NoSQL) |
 | Firebase Authentication | Google / email bejelentkezes |
 | Firebase Storage | Kep / media tarolas |
-| Firebase Cloud Functions | Szerveroldali QR-validacio (redeemQr, Node 22) |
+| Firebase Cloud Functions | Szerveroldali QR-validacio, push, GDPR adatjogok (Node 22) |
 | Firebase Crashlytics | Mobil crash analytics |
 | Firebase Performance | API/kepernyo latencia meres |
 
@@ -400,6 +400,7 @@ lasd [docs/SZAKDOLGOZAT_BIZTONSAG.md](docs/SZAKDOLGOZAT_BIZTONSAG.md).
 | Dark mode (Admin panel, localStorage-perzisztált) | Kész |
 | Nagyvázsony Történet képfeltöltés | Kész |
 | Flutter Push notifications (FCM, esemény-topic) | Kész (deploy: Blaze-csomag) |
+| GDPR adatexport + fiók törlés (mobil + Cloud Function) | Kész (deploy: Blaze-csomag) |
 | Admin email ertesitok | Nem implementalt |
 
 ---

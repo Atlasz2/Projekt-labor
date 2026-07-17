@@ -2,11 +2,13 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { logger } from 'firebase-functions/v2';
 import { initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 
 import { redeemQrCore } from './lib/redeem-core.js';
 import { buildEventNotification } from './lib/notification-builder.js';
+import { collectUserData, deleteUserData } from './lib/gdpr-core.js';
 
 initializeApp();
 
@@ -45,6 +47,49 @@ export const redeemQr = onCall({ region: 'europe-west1' }, async (request) => {
   } catch (err) {
     console.error('redeemQr failed', { uid, code, err });
     throw new HttpsError('internal', 'A jóváírás nem sikerült, próbáld újra.');
+  }
+});
+
+// GDPR 20. cikk — adathordozhatóság: a hívó SAJÁT adatainak teljes exportja.
+// A kliens JSON-fájlként menti/megosztja a választ.
+export const exportUserData = onCall({ region: 'europe-west1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
+  }
+
+  try {
+    return await collectUserData({ db: getFirestore(), uid });
+  } catch (err) {
+    logger.error('exportUserData failed', { uid, err });
+    throw new HttpsError('internal', 'Az adatexport nem sikerült, próbáld újra.');
+  }
+});
+
+// GDPR 17. cikk — törléshez való jog: a hívó SAJÁT fiókjának és minden
+// kapcsolódó dokumentumának törlése (a hibabejelentések anonimizálásával),
+// legvégül az Auth-fiókkal együtt. A kliens ezután kijelentkezik.
+export const deleteMyAccount = onCall({ region: 'europe-west1' }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
+  }
+
+  try {
+    const result = await deleteUserData({
+      db: getFirestore(),
+      uid,
+      deleteAuthUser: (u) => getAuth().deleteUser(u),
+    });
+    logger.info('Fiók törölve (GDPR)', {
+      uid,
+      deletedDocs: result.deleted.length,
+      anonymizedBugReports: result.anonymizedBugReports,
+    });
+    return { ok: true };
+  } catch (err) {
+    logger.error('deleteMyAccount failed', { uid, err });
+    throw new HttpsError('internal', 'A fiók törlése nem sikerült, próbáld újra.');
   }
 });
 

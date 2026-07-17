@@ -138,12 +138,33 @@ Ez is a `firebase deploy --only functions` paranccsal élesedik (Blaze-csomag).
 Androidon opcionálisan létrehozható egy `events` nevű notification-csatorna a
 natív rétegben; ennek hiányában az FCM a default csatornát használja.
 
+## GDPR adatjogok (exportUserData / deleteMyAccount)
+
+A `functions/` két callable-t is kínál a felhasználó adatjogaihoz
+(`functions/lib/gdpr-core.js`, injektált db-vel, teljesen tesztelt):
+
+- **`exportUserData`** (GDPR 20. cikk — adathordozhatóság): a hívó saját
+  adatainak teljes összegyűjtése (profil, haladás + alkollekciók, ranglista-
+  bejegyzés, foglalt felhasználónevek, hibabejelentések). A mobil kliens
+  (`AccountService.exportAndShare`) JSON-fájlba írja és megnyitja a rendszer
+  megosztó lapját.
+- **`deleteMyAccount`** (GDPR 17. cikk — törléshez való jog): a hívó összes
+  dokumentumának törlése (`user_progress` + alkollekciók, `users`,
+  `public_leaderboard`, foglalt `usernames`), a hibabejelentések
+  **anonimizálásával** (nem törlés — a hiba üzemeltetési értéke megmarad, a
+  személyes azonosítók lenullázódnak), végül az Auth-fiók törlése. A mobil
+  ezután helyben kijelentkezik, és az AuthGate a bejelentkező képernyőre vált.
+
+Mindkettő `firebase deploy --only functions` paranccsal élesedik (Blaze).
+A művelet kizárólag a hitelesített hívó saját adatain dolgozik (a callable az
+`request.auth.uid`-ből dolgozik, nem kliens-paraméterből).
+
 ## Tesztek
 
 | Réteg | Teszt | Darab |
 |---|---|---|
-| Cloud Function (mag + értesítés + helyszín) | `functions/test/*.test.js` (node:test) | 30 |
-| Cloud Function (emulátor ellen) | `firestore-tests/tests/redeem-core-emulator.test.js` | 7 |
+| Cloud Function (mag + értesítés + helyszín + GDPR) | `functions/test/*.test.js` (node:test) | 37 |
+| Cloud Function (emulátor ellen: redeem + GDPR) | `firestore-tests/tests/*-emulator.test.js` | 9 |
 | Firestore rules (emulátor) | `firestore-tests/tests/rules-*.test.js` | 22 |
 | Admin util | `admin/src/utils/qrMapping.test.js` (Vitest) | 13 |
 | Flutter (QR + helyszín) | `mobile_app/test/qr_processing_service_test.dart`, `location_service_test.dart` | 30 |

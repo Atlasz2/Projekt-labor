@@ -89,6 +89,20 @@ class FakeDocRef {
     }
     this.store.data.set(this.path, applyTransforms(existing, data));
   }
+
+  async delete() {
+    this.store.data.delete(this.path);
+  }
+}
+
+/** Beágyazott mezőútvonal ('reported_by.user_id') feloldása. */
+function resolveFieldPath(data, fieldPath) {
+  let value = data;
+  for (const part of String(fieldPath).split('.')) {
+    if (value == null || typeof value !== 'object') return undefined;
+    value = value[part];
+  }
+  return value;
 }
 
 class FakeQuery {
@@ -129,7 +143,7 @@ class FakeQuery {
       if (!path.startsWith(prefix)) continue;
       // Csak közvetlen gyerek dokumentumok (alkollekciók kizárva).
       if (path.slice(prefix.length).includes('/')) continue;
-      if (this.filters.every((f) => data[f.field] === f.value)) {
+      if (this.filters.every((f) => resolveFieldPath(data, f.field) === f.value)) {
         docs.push(new FakeDocSnapshot(path.slice(prefix.length), data));
       }
     }
@@ -188,6 +202,10 @@ class FakeBatch {
 
   update(ref, data) {
     this.ops.push(() => ref.update(data));
+  }
+
+  delete(ref) {
+    this.ops.push(() => ref.delete());
   }
 
   async commit() {
