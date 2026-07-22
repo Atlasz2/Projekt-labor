@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../firebaseConfig";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import "../styles/Users.css";
 import StateCard from "../components/StateCard";
-import ConfirmDialog from "../components/ConfirmDialog";
-import { useAdminAuth } from "../context/AdminAuthContext";
 import { buildCsv, downloadCsv } from "../utils/exportCsv";
 
 const formatDate = (value) => {
@@ -21,12 +19,9 @@ const formatDate = (value) => {
 };
 
 function Users() {
-  const { userEmail: currentAdminEmail } = useAdminAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [roleDialog, setRoleDialog] = useState({ open: false, user: null });
-  const [savingRoleId, setSavingRoleId] = useState(null);
   const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -161,11 +156,6 @@ function Users() {
     return () => clearTimeout(timer);
   }, []);
 
-  const isCurrentAdmin = (user) =>
-    currentAdminEmail &&
-    user.email &&
-    user.email.toLowerCase() === currentAdminEmail.toLowerCase();
-
   const handleExportCsv = () => {
     const columns = [
       { key: "rank", label: "Rang" },
@@ -182,33 +172,6 @@ function Users() {
     const today = new Date().toISOString().slice(0, 10);
     downloadCsv(`felhasznalok_${today}.csv`, buildCsv(rows, columns));
     setSnack({ open: true, severity: "success", message: `${users.length} felhasználó exportálva CSV-be.` });
-  };
-
-  const confirmRoleChange = async () => {
-    const user = roleDialog.user;
-    setRoleDialog({ open: false, user: null });
-    if (!user?.id) return;
-
-    const newRole = user.role === "admin" ? "user" : "admin";
-    setSavingRoleId(user.id);
-    try {
-      await updateDoc(doc(db, "users", user.id), { role: newRole });
-      setUsers((prev) =>
-        prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u))
-      );
-      setSnack({
-        open: true,
-        severity: "success",
-        message:
-          newRole === "admin"
-            ? `${user.userName} mostantól admin.`
-            : `${user.userName} admin jogát visszavontuk.`,
-      });
-    } catch (err) {
-      setSnack({ open: true, severity: "error", message: "Hiba a szerepkör mentésekor: " + err.message });
-    } finally {
-      setSavingRoleId(null);
-    }
   };
 
   if (loading) {
@@ -365,21 +328,6 @@ function Users() {
                         <span className={`role-badge ${user.role === "admin" ? "admin" : "user"}`}>
                           {user.role === "admin" ? "Admin" : "Felhasználó"}
                         </span>
-                        {user.hasAccount && (
-                          <button
-                            type="button"
-                            className="role-toggle-btn"
-                            disabled={isCurrentAdmin(user) || savingRoleId === user.id}
-                            title={isCurrentAdmin(user) ? "A saját szerepköröd nem módosíthatod" : ""}
-                            onClick={() => setRoleDialog({ open: true, user })}
-                          >
-                            {savingRoleId === user.id
-                              ? "Mentés…"
-                              : user.role === "admin"
-                                ? "Admin jog elvétele"
-                                : "Adminná tesz"}
-                          </button>
-                        )}
                       </div>
 
                       <div className="points-col">
@@ -433,27 +381,6 @@ function Users() {
           )}
         </>
       )}
-
-      <ConfirmDialog
-        open={roleDialog.open}
-        title={
-          roleDialog.user?.role === "admin"
-            ? "Admin jog visszavonása"
-            : "Admin jog adása"
-        }
-        message={
-          roleDialog.user
-            ? roleDialog.user.role === "admin"
-              ? `Biztosan visszavonod ${roleDialog.user.userName} admin jogát? Ezután már nem fér hozzá az adminfelülethez.`
-              : `Biztosan admin jogot adsz ${roleDialog.user.userName} felhasználónak? Teljes hozzáférést kap az adminfelülethez.`
-            : ""
-        }
-        confirmText={
-          roleDialog.user?.role === "admin" ? "Visszavonás" : "Admin jog adása"
-        }
-        onClose={() => setRoleDialog({ open: false, user: null })}
-        onConfirm={confirmRoleChange}
-      />
 
       <Snackbar
         open={snack.open}

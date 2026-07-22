@@ -13,11 +13,9 @@ vi.mock("../context/AdminAuthContext", () => ({
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn((_db, name) => name),
   getDocs: vi.fn(),
-  doc: vi.fn((_db, col, id) => ({ col, id })),
-  updateDoc: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { getDocs, updateDoc } from "firebase/firestore";
+import { getDocs } from "firebase/firestore";
 
 const snap = (rows) => ({
   docs: rows.map((r) => ({ id: r.id, data: () => r.data })),
@@ -55,43 +53,22 @@ describe("Users", () => {
     expect(screen.getByText("50 pont")).toBeInTheDocument();
   });
 
-  it("shows a role toggle for real accounts but not for progress-only users", async () => {
-    setData(
-      [userDoc("anna", { uid: "anna", name: "Anna" })],
-      [progressDoc("bela", { userId: "bela", userName: "Bela", totalPoints: 80 })]
-    );
-    renderUsers();
-    await waitFor(() => expect(screen.getByText("Bela")).toBeInTheDocument());
-
-    // Anna has a users doc → exactly one toggle button; Bela (progress-only) has none.
-    const toggles = screen.getAllByRole("button", { name: /Adminná tesz|Admin jog elvétele/ });
-    expect(toggles).toHaveLength(1);
-    expect(toggles[0]).toHaveTextContent("Adminná tesz");
-  });
-
-  it("disables the toggle on the currently logged-in admin's own row", async () => {
+  it("shows the role badge but offers no way to change roles from the UI", async () => {
     setData([
+      userDoc("anna", { uid: "anna", name: "Anna", role: "user" }),
       userDoc("admin", { uid: "admin", email: "admin@test.hu", name: "AdminUser", role: "admin" }),
     ]);
     renderUsers();
-    await waitFor(() => expect(screen.getByText("AdminUser")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Admin jog elvétele" })).toBeDisabled();
-  });
-
-  it("promotes a user to admin after confirmation", async () => {
-    setData([userDoc("anna", { uid: "anna", name: "Anna", role: "user" })]);
-    renderUsers();
     await waitFor(() => expect(screen.getByText("Anna")).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole("button", { name: "Adminná tesz" }));
+    // The role is shown for information (as badges)...
+    expect(document.querySelector(".role-badge.user")).toBeInTheDocument();
+    expect(document.querySelector(".role-badge.admin")).toBeInTheDocument();
 
-    // Confirmation dialog opens with the promote action
-    const confirmBtn = await screen.findByRole("button", { name: "Admin jog adása" });
-    await userEvent.click(confirmBtn);
-
-    await waitFor(() => expect(updateDoc).toHaveBeenCalledTimes(1));
-    expect(updateDoc.mock.calls[0][0]).toEqual({ col: "users", id: "anna" });
-    expect(updateDoc.mock.calls[0][1]).toEqual({ role: "admin" });
+    // ...but the promote/demote control is gone (roles are set in Firestore only).
+    expect(
+      screen.queryByRole("button", { name: /Adminná tesz|Admin jog/ })
+    ).not.toBeInTheDocument();
   });
 
   it("renders the ranking sorted by points (highest first)", async () => {
