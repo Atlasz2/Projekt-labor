@@ -256,6 +256,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }).toList();
   }
+
+  /// A rangsorban csak a dobogó (top 3) és — ha a felhasználó azon kívül van —
+  /// a saját sora jelenik meg, a valós helyezésével. Így a profil nem a teljes
+  /// (akár 50 fős) listát görgeti.
+  List<({Map<String, dynamic> user, int rank, bool afterGap})>
+  _leaderboardRows() {
+    final rows = <({Map<String, dynamic> user, int rank, bool afterGap})>[];
+    final top = _allUsers.take(3).toList();
+    for (var i = 0; i < top.length; i++) {
+      rows.add((user: top[i], rank: i + 1, afterGap: false));
+    }
+
+    final myId = _currentUserData?['id'];
+    final myIndex = _allUsers.indexWhere((u) => u['id'] == myId);
+    if (myIndex >= 3) {
+      rows.add((user: _allUsers[myIndex], rank: myIndex + 1, afterGap: true));
+    }
+    return rows;
+  }
+
+  Widget _buildLeaderboardCard() {
+    final rows = _leaderboardRows();
+    if (rows.isEmpty) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('A rangsor még nem érhető el.'),
+        ),
+      );
+    }
+
+    return Card(
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            if (rows[i].afterGap)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 2),
+                child: Text('⋮', style: TextStyle(color: Colors.grey)),
+              ),
+            _buildLeaderboardRow(rows[i].user, rows[i].rank),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeaderboardRow(Map<String, dynamic> user, int rank) {
+    final isCurrentUser = user['id'] == _currentUserData?['id'];
+    return Container(
+      color: isCurrentUser ? Colors.blue.shade50 : Colors.transparent,
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Text(rankMedal(rank), style: const TextStyle(fontSize: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user['name'].toString(),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${safeCount(user['completedStations'])} állomás · ${safeCount(user['completedEvents'])} esemény',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '${safeInt(user['points'])} pont',
+              style: TextStyle(
+                color: Colors.amber.shade900,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentPoints = safeInt(_currentUserData?['points']);
@@ -439,74 +531,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Card(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _allUsers.length,
-                          separatorBuilder: (_, _) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final user = _allUsers[index];
-                            final isCurrentUser =
-                                user['id'] == _currentUserData?['id'];
-
-                            return Container(
-                              color: isCurrentUser
-                                  ? Colors.blue.shade50
-                                  : Colors.transparent,
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    rankMedal(index + 1),
-                                    style: const TextStyle(fontSize: 20),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          user['name'].toString(),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        Text(
-                                          '${safeCount(user['completedStations'])} állomás · ${safeCount(user['completedEvents'])} esemény',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.amber.shade100,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '${safeInt(user['points'])} pont',
-                                      style: TextStyle(
-                                        color: Colors.amber.shade900,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                      _buildLeaderboardCard(),
                       const SizedBox(height: 16),
                       const DataRightsSection(),
                       const SizedBox(height: 8),

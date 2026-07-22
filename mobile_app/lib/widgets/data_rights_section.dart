@@ -85,23 +85,22 @@ class _DataRightsSectionState extends State<DataRightsSection> {
 
   @override
   Widget build(BuildContext context) {
+    // Összecsukható, alapból zárt szekció — ritkán használt, ezért ne
+    // uralja a profil képernyőt.
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        // A ThemeData az ExpansionTile alap szürke elválasztóit rejti el.
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          leading: Icon(Icons.shield_outlined, color: Colors.blueGrey.shade400),
+          title: const Text(
+            'Adataim és adatvédelem',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(Icons.shield_outlined, color: Colors.blueGrey.shade400),
-                const SizedBox(width: 8),
-                const Text(
-                  'Adataim és adatvédelem',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
             Text(
               'A GDPR szerint jogod van letölteni vagy véglegesen törölni a rólad tárolt adatokat.',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
