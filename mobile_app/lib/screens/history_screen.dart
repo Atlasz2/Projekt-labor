@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/app_background.dart';
 import '../widgets/offline_image.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -109,9 +110,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       backgroundColor: const Color(0xFFF5EFE4),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset('assets/var.jpg', fit: BoxFit.cover),
-          ),
+          const Positioned.fill(child: AppBackground()),
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
@@ -155,7 +154,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.asset('assets/var.jpg', fit: BoxFit.cover),
+                      const AppBackground(),
                       DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(

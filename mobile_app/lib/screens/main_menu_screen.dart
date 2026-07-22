@@ -12,6 +12,7 @@ import 'camera_screen.dart';
 import 'contact_screen.dart';
 import 'events_screen.dart';
 import 'history_screen.dart';
+import '../widgets/app_background.dart';
 import 'map_trips_screen.dart';
 import 'profile_screen.dart';
 import 'unlocked_content_screen.dart';
@@ -138,12 +139,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
       ),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/var.jpg',
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
+          const Positioned.fill(
+            child: AppBackground(alignment: Alignment.topCenter),
           ),
           Positioned.fill(
             child: Container(

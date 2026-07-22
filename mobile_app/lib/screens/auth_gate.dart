@@ -111,7 +111,14 @@ class _LoadingSplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/logo.png', width: 120, height: 120),
+            // Nagy felbontású, átlátszó hátterű címer; cacheWidth a retina-éles
+            // dekódolásért (a régi logo.png 211 px volt, ezért pixelesedett).
+            Image.asset(
+              'assets/logo_splash.png',
+              width: 132,
+              height: 132,
+              cacheWidth: 396,
+            ),
             const SizedBox(height: 28),
             const Text(
               'Nagyvázsony',

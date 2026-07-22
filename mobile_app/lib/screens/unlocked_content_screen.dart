@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/image_normalizer.dart';
+import '../widgets/app_background.dart';
 import '../widgets/station_image_viewer.dart';
 import '../widgets/unlocked_card.dart';
 
@@ -152,9 +153,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       ),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset('assets/var.jpg', fit: BoxFit.cover),
-          ),
+          const Positioned.fill(child: AppBackground()),
           Positioned.fill(
             child: Container(
               color: const Color(0xFFF2EBDD).withValues(alpha: 0.97),

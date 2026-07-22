@@ -39,9 +39,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/logo.png
+    - assets/logo_splash.png
     - assets/var.jpg
-    - assets/loading_screen.jpg
 
 flutter_launcher_icons:
   android: true
@@ -55,13 +54,13 @@ flutter_launcher_icons:
 flutter_native_splash:
   color: "#F2EBDD"
   color_dark: "#F2EBDD"
-  image: assets/logo.png
-  image_dark: assets/logo.png
+  image: assets/logo_splash.png
+  image_dark: assets/logo_splash.png
   android_12:
     color: "#F2EBDD"
     color_dark: "#F2EBDD"
-    image: assets/logo.png
-    image_dark: assets/logo.png
+    image: assets/logo_splash.png
+    image_dark: assets/logo_splash.png
   android: true
   ios: true
   web: false
