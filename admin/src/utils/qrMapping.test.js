@@ -81,6 +81,14 @@ describe("assertQrCodeAvailable", () => {
       assertQrCodeAvailable(db, { code: "EVENT-1", kind: "event" }),
     ).rejects.toBeInstanceOf(QrCodeCollisionError);
   });
+
+  it("a qr_codes olvasás hibáján NEM dob (nem blokkolja a mentést)", async () => {
+    // pl. a firestore.rules még nincs deployolva -> permission-denied
+    mockGetDoc.mockRejectedValueOnce(new Error("permission-denied"));
+    await expect(
+      assertQrCodeAvailable(db, { code: "VAR-001", kind: "station", targetId: "st1" }),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("syncQrMapping", () => {

@@ -30,7 +30,16 @@ export async function assertQrCodeAvailable(db, { code, kind, targetId = null })
   const trimmed = (code || '').trim();
   if (!trimmed) return;
 
-  const snap = await getDoc(doc(db, 'qr_codes', qrMappingDocId(trimmed)));
+  let snap;
+  try {
+    snap = await getDoc(doc(db, 'qr_codes', qrMappingDocId(trimmed)));
+  } catch {
+    // A qr_codes leképezés nem olvasható (pl. a firestore.rules még nincs
+    // deployolva). A collision-ellenőrzés best effort: ilyenkor engedjük a
+    // mentést — a szerveroldali redeemQr a qrCode mezőt is nézi, és a
+    // syncQrMapping később úgyis megpróbálja karbantartani a leképezést.
+    return;
+  }
   if (!snap.exists()) return;
 
   const data = snap.data();
