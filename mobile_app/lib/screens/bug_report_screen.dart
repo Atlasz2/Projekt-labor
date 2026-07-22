@@ -17,7 +17,6 @@ class _BugReportScreenState extends State<BugReportScreen> {
   final _descriptionController = TextEditingController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  String _severity = 'medium';
   bool _submitting = false;
 
   @override
@@ -38,10 +37,14 @@ class _BugReportScreenState extends State<BugReportScreen> {
   }
 
   bool _isClosed(Map<String, dynamic> item) {
-    final resolved = item['resolved'];
-    if (resolved is bool) return resolved;
+    // A státusz az elsődleges: az admin lezáráskor status:"closed"-ot ír.
+    // (A régi `resolved: false` mező korábban felülírta ezt, ezért a lezárás
+    // nem látszott a telefonon.)
     final status = (item['status'] ?? '').toString().toLowerCase();
-    return status == 'closed' || status == 'fixed' || status == 'resolved';
+    if (status == 'closed' || status == 'fixed' || status == 'resolved') {
+      return true;
+    }
+    return item['resolved'] == true;
   }
 
   String _formatCreatedAt(Map<String, dynamic> item) {
@@ -65,7 +68,6 @@ class _BugReportScreenState extends State<BugReportScreen> {
     final payload = <String, dynamic>{
       'title': _titleController.text.trim(),
       'description': _descriptionController.text.trim(),
-      'severity': _severity,
       'status': 'open',
       'reported_by': {
         'name': _nameController.text.trim(),
@@ -184,19 +186,6 @@ class _BugReportScreenState extends State<BugReportScreen> {
                         (value == null || value.trim().length < 4)
                         ? 'Írj legalább 4 karaktert.'
                         : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: _severity,
-                    items: const [
-                      DropdownMenuItem(value: 'low', child: Text('Alacsony')),
-                      DropdownMenuItem(value: 'medium', child: Text('Közepes')),
-                      DropdownMenuItem(value: 'high', child: Text('Magas')),
-                      DropdownMenuItem(value: 'critical', child: Text('Kritikus')),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => _severity = value ?? 'medium'),
-                    decoration: const InputDecoration(labelText: 'Súlyosság'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(

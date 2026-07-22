@@ -13,8 +13,6 @@ import ConfirmDialog from "../components/ConfirmDialog";
 import StateCard from "../components/StateCard";
 import { buildCsv, downloadCsv } from "../utils/exportCsv";
 
-const SEVERITY_LABEL = { low: "Alacsony", medium: "Közepes", high: "Magas" };
-const SEVERITY_COLOR = { low: "success", medium: "warning", high: "error" };
 const STATUS_LABEL = { open: "Nyitott", closed: "Lezárt" };
 
 const normalizeStatus = (raw) => {
@@ -112,7 +110,6 @@ function BugReports() {
   const handleExportCsv = () => {
     const columns = [
       { key: "title", label: "Cím", format: (v) => v || "(Cím nélkül)" },
-      { key: "severity", label: "Súlyosság", format: (v) => SEVERITY_LABEL[v] ?? v ?? "" },
       { key: "status", label: "Státusz", format: (v) => STATUS_LABEL[normalizeStatus(v)] },
       { key: "description", label: "Leírás" },
       { key: "reported_by", label: "Bejelentő neve", format: (v) => v?.name || "" },
@@ -180,13 +177,12 @@ function BugReports() {
               {filtered.map((r) => {
                 const status = normalizeStatus(r.status);
                 return (
-                <Card key={r.id} variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: status === "closed" ? "grey.400" : SEVERITY_COLOR[r.severity] === "error" ? "error.main" : SEVERITY_COLOR[r.severity] === "warning" ? "warning.main" : "success.main" }}>
+                <Card key={r.id} variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: status === "closed" ? "grey.400" : "primary.main" }}>
                   <CardContent>
                     <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={2} flexWrap="wrap">
                       <Box flex={1}>
                         <Typography variant="subtitle1" fontWeight={700}>{r.title || "(Cím nélkül)"}</Typography>
                         <Stack direction="row" gap={1} mt={0.5} flexWrap="wrap">
-                          <Chip label={SEVERITY_LABEL[r.severity] ?? r.severity ?? "?"} color={SEVERITY_COLOR[r.severity] ?? "default"} size="small" />
                           <Chip label={STATUS_LABEL[status]} size="small" variant={status === "closed" ? "outlined" : "filled"} />
                           <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
                             {fmtDate(r.created_at ?? r.created_at_text)}

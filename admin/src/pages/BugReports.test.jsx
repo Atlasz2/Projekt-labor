@@ -19,7 +19,6 @@ const makeReport = (overrides = {}) => ({
   id: "r1",
   title: "Teszt hiba",
   status: "open",
-  severity: "medium",
   description: "Leírás",
   created_at: null,
   admin_response: "",
