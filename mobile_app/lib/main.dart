@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -43,7 +44,11 @@ Future<void> main() async {
         FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
         return true;
       };
-      await FirebasePerformance.instance.setPerformanceCollectionEnabled(true);
+      // Nem await-eljük: a performance-gyűjtés bekapcsolása ne késleltesse
+      // az első képkockát (korábban ez nyújtotta a splash-időt).
+      unawaited(
+        FirebasePerformance.instance.setPerformanceCollectionEnabled(true),
+      );
     } catch (e) {
       debugPrint('Optional Firebase service init error: $e');
     }

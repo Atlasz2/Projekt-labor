@@ -14,6 +14,13 @@ class EventsScreen extends StatefulWidget {
 class _EventsScreenState extends State<EventsScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // A stream-et egyszer hozzuk létre (nem a build-ben), különben minden
+  // újraépítéskor új Firestore-előfizetés és teljes lista-újrafeldolgozás
+  // történne — ez okozta a képernyő akadozását.
+  late final Stream<QuerySnapshot> _eventsStream = _firestore
+      .collection('events')
+      .snapshots();
+
   static const List<Color> _accentColors = [
     Color(0xFF667EEA),
     Color(0xFF764BA2),
@@ -318,7 +325,7 @@ class _EventsScreenState extends State<EventsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('events').snapshots(),
+        stream: _eventsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return _buildEventsSkeleton(context);

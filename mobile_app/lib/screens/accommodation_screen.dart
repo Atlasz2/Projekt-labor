@@ -16,6 +16,14 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
   late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Kollekciónként egyszer létrehozott stream — a build-ben létrehozott
+  // snapshots() minden újraépítéskor (pl. tab-váltáskor) újra-előfizetett
+  // volna, ami akadozást okoz.
+  late final Map<String, Stream<QuerySnapshot>> _streams = {
+    'accommodations': _firestore.collection('accommodations').snapshots(),
+    'restaurants': _firestore.collection('restaurants').snapshots(),
+  };
+
   @override
   void initState() {
     super.initState();
@@ -251,7 +259,7 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
 
   Widget _buildList({required String collection, required bool isRestaurant}) {
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore.collection(collection).snapshots(),
+      stream: _streams[collection],
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
