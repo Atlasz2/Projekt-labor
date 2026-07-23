@@ -55,6 +55,13 @@ jobs:
             echo "suffix=-dev" >> $GITHUB_OUTPUT
           fi
 
+      # A google-services.json titkos (gitignore-olt), de a build igényli.
+      # Base64-kódolt tartalmát a GOOGLE_SERVICES_JSON_BASE64 Secretből állítjuk
+      # vissza. Lásd docs/APP_DISTRIBUTION.md a Secret előállításához.
+      - name: Restore google-services.json
+        working-directory: mobile_app/android/app
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > google-services.json
+
       - name: Build APK (${{ steps.env.outputs.env }})
         working-directory: mobile_app
         run: flutter build apk --release
@@ -70,3 +77,16 @@ jobs:
           name: nagyvazsony-${{ steps.env.outputs.env }}-${{ github.run_number }}
           path: mobile_app/build/app/outputs/flutter-apk/nagyvazsony*.apk
           retention-days: 30
+
+      # Csak main-re pusholáskor: feltöltés a tesztelőknek (Firebase App
+      # Distribution). A telefonra push-értesítés érkezik az új verzióról.
+      # Az appId nem titok (a firebase.json-ban is szerepel).
+      - name: Distribute to testers
+        if: github.ref == 'refs/heads/main'
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: 1:1062295539229:android:5fa7cddbe97519437840f4
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          groups: testers
+          file: mobile_app/build/app/outputs/flutter-apk/nagyvazsony.apk
+          releaseNotes: ${{ github.event.head_commit.message }}
