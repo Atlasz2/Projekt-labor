@@ -42,6 +42,18 @@ class _EventsScreenState extends State<EventsScreen> {
     return DateTime.tryParse(s) ?? DateTime(9999);
   }
 
+  /// Múltbeli-e az esemény (a napja korábbi, mint a mai nap). Ismeretlen/üres
+  /// dátumot NEM tekintünk múltbelinek, hogy ne rejtsünk el dátum nélküli
+  /// eseményt. A mai napon zajló esemény még látszik.
+  bool _isPast(dynamic raw) {
+    final parsed = DateTime.tryParse(_safeString(raw));
+    if (parsed == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final eventDay = DateTime(parsed.year, parsed.month, parsed.day);
+    return eventDay.isBefore(today);
+  }
+
   void _openImageViewer(
     BuildContext context,
     List<String> photos,
@@ -335,20 +347,26 @@ class _EventsScreenState extends State<EventsScreen> {
           }
 
           final docs = snapshot.data?.docs ?? [];
-          final events = docs.asMap().entries.map((entry) {
-            final data = entry.value.data() as Map<String, dynamic>;
-            return {
-              'id': entry.value.id,
-              'index': entry.key,
-              'title': _safeString(data['name'], fallback: 'Esemény'),
-              'description': _safeString(data['description']),
-              'date': data['date'],
-              'location': _safeString(data['location']),
-              'photos': data['photos'],
-              'photoUrls': data['photoUrls'],
-              'imageUrl': _safeString(data['imageUrl']),
-            };
-          }).toList();
+          final events = docs
+              .asMap()
+              .entries
+              .map((entry) {
+                final data = entry.value.data() as Map<String, dynamic>;
+                return {
+                  'id': entry.value.id,
+                  'index': entry.key,
+                  'title': _safeString(data['name'], fallback: 'Esemény'),
+                  'description': _safeString(data['description']),
+                  'date': data['date'],
+                  'location': _safeString(data['location']),
+                  'photos': data['photos'],
+                  'photoUrls': data['photoUrls'],
+                  'imageUrl': _safeString(data['imageUrl']),
+                };
+              })
+              // Csak a mai és jövőbeli események — a múltbelieket elrejtjük.
+              .where((event) => !_isPast(event['date']))
+              .toList();
 
           events.sort(
             (a, b) =>

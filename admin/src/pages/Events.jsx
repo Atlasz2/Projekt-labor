@@ -37,6 +37,19 @@ const mapEvent = (docSnap) => {
   };
 };
 
+// Múltbeli-e az esemény (a napja korábbi, mint ma). Üres/érvénytelen dátumot
+// nem tekintünk múltbelinek. A mai napon zajló esemény még aktuális.
+export const isPastEvent = (event) => {
+  const raw = (event.date || '').trim();
+  if (!raw) return false;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const eventDay = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return eventDay < today;
+};
+
 function Events() {
   const { query, add, update, remove } = useFirestoreCollection(
     'events',
@@ -56,6 +69,7 @@ function Events() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [formData,     setFormData]     = useState(EMPTY_FORM);
   const [search,       setSearch]       = useState('');
+  const [showPast,     setShowPast]     = useState(false);
 
   const { photos, uploading, uploadFeedback, upload, remove: removePhoto,
           reset: resetPhotos, commitRemovals } =
@@ -200,7 +214,10 @@ function Events() {
 
   const isBusy = uploading || add.isPending || update.isPending;
 
+  const pastCount = events.filter(isPastEvent).length;
+
   const visibleEvents = events.filter((event) => {
+    if (!showPast && isPastEvent(event)) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return [event.name, event.location, event.description]
@@ -231,6 +248,16 @@ function Events() {
             />
             <span className="content-search-count">{visibleEvents.length} / {events.length}</span>
           </>
+        )}
+        {pastCount > 0 && (
+          <label className="past-toggle">
+            <input
+              type="checkbox"
+              checked={showPast}
+              onChange={(e) => setShowPast(e.target.checked)}
+            />
+            Múltbeli rendezvények megjelenítése ({pastCount})
+          </label>
         )}
       </div>
 
@@ -326,8 +353,11 @@ function Events() {
         {visibleEvents.map((event) => {
           const qrValue = getQrValue(event);
           return (
-            <div key={event.id} className="card">
-              <h3>{event.name || 'Nincs név'}</h3>
+            <div key={event.id} className={`card${isPastEvent(event) ? ' card-past' : ''}`}>
+              <h3>
+                {event.name || 'Nincs név'}
+                {isPastEvent(event) && <span className="past-badge">Múltbeli</span>}
+              </h3>
               {event.date     && <p><strong>Dátum:</strong> {event.date}</p>}
               {event.location && <p><strong>Helyszín:</strong> {event.location}</p>}
               <p><strong>Pont:</strong> {event.points}</p>
