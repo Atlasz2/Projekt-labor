@@ -60,7 +60,15 @@ jobs:
       # vissza. Lásd docs/APP_DISTRIBUTION.md a Secret előállításához.
       - name: Restore google-services.json
         working-directory: mobile_app/android/app
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > google-services.json
+        run: |
+          printf '%s' "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > google-services.json 2>/dev/null || true
+          if ! grep -q '"project_info"' google-services.json 2>/dev/null; then
+            echo "::error::A GOOGLE_SERVICES_JSON_BASE64 Secret hibás vagy hiányos."
+            echo "A visszaállított fájl mérete: $(wc -c < google-services.json) byte (érvényesnél ~1171 byte)."
+            echo "Ellenőrizd, hogy a Secretbe a google-services.json BASE64-e került (nem a nyers JSON, nem a service account)."
+            exit 1
+          fi
+          echo "google-services.json rendben ($(wc -c < google-services.json) byte)."
 
       - name: Build APK (${{ steps.env.outputs.env }})
         working-directory: mobile_app
