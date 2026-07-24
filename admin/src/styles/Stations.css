@@ -192,3 +192,36 @@ html.dark .trip-filter-select:focus { border-color: #5b6f4c; box-shadow: 0 0 0 3
 html.dark .trip-badge.unassigned { background: rgba(176,118,15,0.18); color: #e0b873; }
 
 
+
+/* ── Állomás szerkesztő (About-editor stílusra építve, egy lapon) ────────── */
+.station-editor-shell {
+  max-width: 760px;
+}
+
+.station-editor-body {
+  padding: 24px 32px 32px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+}
+
+/* A térkép és a fotó-rács kényelmesen elférjen a szekció-kártyákban */
+.station-editor-body .about-editor-section .map-picker,
+.station-editor-body .about-editor-section [class*="gm-"] {
+  border-radius: 14px;
+}
+
+.station-editor-body .coords-display {
+  margin-top: 10px;
+  font-weight: 600;
+}
+
+.station-editor-body .field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .station-editor-body { padding: 18px; }
+  .station-editor-body .field-row { grid-template-columns: 1fr; }
+}

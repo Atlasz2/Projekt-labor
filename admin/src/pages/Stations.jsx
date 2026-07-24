@@ -10,6 +10,7 @@ import { jsPDF } from 'jspdf';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import '../styles/Stations.css';
+import '../styles/About.css';
 import ConfirmDialog from '../components/ConfirmDialog';
 import StateCard from '../components/StateCard';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
@@ -90,7 +91,6 @@ export default function Stations() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
   const [snack, setSnack] = useState({ open: false, msg: '', severity: 'error' });
   const [formData, setFormData] = useState(EMPTY_FORM);
-  const [activeSection, setActiveSection] = useState(0);
   const [search, setSearch] = useState('');
   const [tripFilter, setTripFilter] = useState('all');
 
@@ -121,14 +121,12 @@ export default function Stations() {
       extraInfo: station.extraInfo || '',
       unlockContentImageUrl: station.unlockContentImageUrl || '',
     });
-    setActiveSection(0);
     setShowModal(true);
   };
 
   const handleAdd = (prefillTripId = '') => {
     setEditingId(null);
     setFormData({ ...EMPTY_FORM, tripId: prefillTripId || '' });
-    setActiveSection(0);
     setShowModal(true);
   };
 
@@ -153,12 +151,10 @@ export default function Stations() {
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
-      setActiveSection(0);
       showMsg('Add meg az állomás nevét!', 'warning');
       return;
     }
     if (formData.latitude == null || formData.longitude == null) {
-      setActiveSection(1);
       showMsg('Jelöld ki a helyszínt a térképen!', 'warning');
       return;
     }
@@ -172,7 +168,6 @@ export default function Stations() {
     );
 
     if (duplicate) {
-      setActiveSection(0);
       showMsg('Már létezik ilyen nevű állomás ebben a túrában!', 'warning');
       return;
     }
@@ -228,7 +223,6 @@ export default function Stations() {
       queryClient.invalidateQueries({ queryKey: ['stations'] });
     } catch (err) {
       if (err instanceof QrCodeCollisionError) {
-        setActiveSection(0);
         showMsg('Ez a QR-kód már egy másik elemhez tartozik!', 'warning');
       } else {
         showMsg('Hiba mentés közben');
@@ -323,7 +317,6 @@ export default function Stations() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, stations, searchParams, paramsHandled]);
 
-  const sections = ['🏷️ Alap adatok', '📍 Helyszín', '📖 Tartalom', '🔓 Feloldható info'];
 
   const unassignedCount = stations.filter((station) => !station.tripId).length;
 
@@ -436,34 +429,36 @@ export default function Stations() {
             )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal station-modal">
-            <div className="modal-header">
-              <h2>{editingId ? '✏️ Állomás szerkesztése' : '➕ Új állomás'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+        <div className="about-editor-backdrop" onClick={(e) => e.target === e.currentTarget && setShowModal(false)} role="presentation">
+          <div className="about-editor-shell station-editor-shell" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="about-editor-header">
+              <div>
+                <p className="about-editor-kicker">Állomás szerkesztő</p>
+                <h2>{editingId ? 'Állomás szerkesztése' : 'Új állomás'}</h2>
+                <p>Minden adat egy lapon — görgess végig a szekciókon. A csillaggal jelölt mezők kötelezők.</p>
+              </div>
+              <button className="about-editor-close" onClick={() => setShowModal(false)} type="button">Bezárás</button>
             </div>
 
-            <div className="section-tabs">
-              {sections.map((section, index) => (
-                <button key={section} className={`section-tab${activeSection === index ? ' active' : ''}`} onClick={() => setActiveSection(index)}>{section}</button>
-              ))}
-            </div>
-
-            <div className="modal-body">
-              {activeSection === 0 && (
-                <div className="form-section">
+            <div className="station-editor-body">
+              <div className="about-editor-form">
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>1</span>
+                    <div><h3>Alapadatok</h3><p>Az állomás neve, pontértéke, túrája és QR-kódja.</p></div>
+                  </div>
                   <div className="field-group">
-                    <label>📌 Állomás neve <span className="required">*</span></label>
+                    <label>Állomás neve <span className="required">*</span></label>
                     <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="pl. Kinizsi vár kapuja" />
                   </div>
                   <div className="field-row">
                     <div className="field-group">
-                      <label>⭐ Pont érték</label>
+                      <label>Pont érték</label>
                       <input type="number" min="1" max="100" value={formData.points} onChange={(e) => setFormData({ ...formData, points: e.target.value })} />
                       <span className="field-hint">Az állomás beolvasásával szerzett pontok</span>
                     </div>
                     <div className="field-group">
-                      <label>🗺️ Túrához rendelés</label>
+                      <label>Túrához rendelés</label>
                       <select value={formData.tripId || ''} onChange={(e) => setFormData({ ...formData, tripId: e.target.value })}>
                         <option value="">— Nincs túrához rendelve —</option>
                         {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.name || trip.id}</option>)}
@@ -471,12 +466,18 @@ export default function Stations() {
                     </div>
                   </div>
                   <div className="field-group">
-                    <label>🔑 QR kód (egyedi azonosító)</label>
+                    <label>QR kód (egyedi azonosító)</label>
                     <input type="text" value={formData.qrCode} onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })} placeholder="Ha üres, az állomás ID lesz használva" />
                     <span className="field-hint">Az állomásnál kihelyezett QR kódon lévő szöveg</span>
                   </div>
+                </section>
+
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>2</span>
+                    <div><h3>Borítókép</h3><p>Az első kép lesz a borítókép a listákban és a térképen.</p></div>
+                  </div>
                   <div className="field-group">
-                    <label>🖼️ Borítókép</label>
                     <div className="photo-grid station-photo-grid">
                       {formData.photos.map((url, i) => (
                         <div key={i} className="photo-thumb">
@@ -494,14 +495,15 @@ export default function Stations() {
                     </div>
                     <span className="field-hint">{formData.photos.length}/6 kép • az első lesz a borítókép</span>
                   </div>
-                </div>
-              )}
+                </section>
 
-              {activeSection === 1 && (
-                <div className="form-section">
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>3</span>
+                    <div><h3>Helyszín</h3><p>Kattints a térképen az állomás pontos helyére.</p></div>
+                  </div>
                   <div className="field-group">
-                    <label>🗺️ Helyszín kijelölése <span className="required">*</span></label>
-                    <p className="field-hint map-hint-top">Kattints a térképen az állomás pontos helyére</p>
+                    <label>Helyszín kijelölése <span className="required">*</span></label>
                     {loadError ? <div className="map-error">Google Maps hiba – ellenőrizd az API kulcsot.</div>
                       : !isLoaded ? <div className="map-loading">Térkép betöltése...</div>
                       : <MapPicker value={{ lat: formData.latitude, lon: formData.longitude }} onChange={(coords) => setFormData({ ...formData, latitude: coords.lat, longitude: coords.lon })} />}
@@ -509,73 +511,45 @@ export default function Stations() {
                       ? <p className="coords-display">✅ Kiválasztva: {formData.latitude.toFixed(5)}, {formData.longitude.toFixed(5)}</p>
                       : <p className="coords-display warn">⚠️ Még nincs koordináta kiválasztva</p>}
                   </div>
-                </div>
-              )}
+                </section>
 
-              {activeSection === 2 && (
-                <div className="form-section">
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>4</span>
+                    <div><h3>Leírás és érdekesség</h3><p>Rövid bemutatás a listákhoz, és egy érdekesség.</p></div>
+                  </div>
                   <div className="field-group">
-                    <label>📝 Rövid leírás</label>
+                    <label>Rövid leírás</label>
                     <textarea rows="3" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Rövid bemutatás az állomásról..." />
                     <span className="field-hint">Ez jelenik meg az állomást listázó nézetekben</span>
                   </div>
                   <div className="field-group">
-                    <label>💡 Érdekesség</label>
+                    <label>Érdekesség</label>
                     <textarea rows="2" value={formData.funFact} onChange={(e) => setFormData({ ...formData, funFact: e.target.value })} placeholder="Egy érdekes ténye az állomásról..." />
-                    <span className="field-hint">Egy soros did you know jellegű mondat</span>
+                    <span className="field-hint">Egy soros „tudtad-e?” jellegű mondat</span>
                   </div>
-                </div>
-              )}
+                </section>
 
-              {activeSection === 3 && (
-                <div className="form-section">
-                  <div className="unlock-info-box">
-                    <span className="unlock-icon">🔓</span>
-                    <div>
-                      <strong>Feloldható tartalom</strong>
-                      <p>Ezt az információt a látogató csak akkor látja, ha beolvassa az állomás QR kódját!</p>
-                    </div>
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>5</span>
+                    <div><h3>Feloldható tartalom</h3><p>Ezt a látogató csak a QR-kód beolvasása után látja a telefonján.</p></div>
                   </div>
                   <div className="field-group">
-                    <label>📖 Feloldott szöveg / történet</label>
+                    <label>Feloldott szöveg / történet</label>
                     <textarea rows="5" value={formData.unlockContent} onChange={(e) => setFormData({ ...formData, unlockContent: e.target.value })} placeholder="Az állomás részletes leírása, helytörténet, érdekességek – ami beolvasáskor jelenik meg..." />
-                    <span className="field-hint">Hosszabb szöveg, ami a QR beolvasása után jelenik meg a telefonon</span>
+                    <span className="field-hint">Hosszabb szöveg, ami a QR beolvasása után jelenik meg</span>
                   </div>
                   <div className="field-group">
-                    <label>🖼️ Feloldott tartalom képe</label>
-                    <div className="photo-grid station-photo-grid">
-                      {formData.photos.map((url, i) => (
-                        <div key={i} className="photo-thumb">
-                          {url ? <img src={url} alt="" /> : null}
-                          <button type="button" className="photo-remove" onClick={() => handleRemovePhoto(i)}>✕</button>
-                          {i === 0 && <span className="thumb-badge">Borítókép</span>}
-                        </div>
-                      ))}
-                      {formData.photos.length < 6 && (
-                        <label className="photo-add-btn">
-                          <input type="file" accept="image/*" disabled={uploading} onChange={(e) => { if (e.target.files?.[0]) handleImageUpload(e.target.files[0]); e.target.value = ""; }} />
-                          {uploading ? "Feltöltés..." : "+ Kép"}
-                        </label>
-                      )}
-                    </div>
-                    <span className="field-hint">{formData.photos.length}/6 kép • az első lesz a borítókép</span>
-                  </div>
-                  <div className="field-group">
-                    <label>ℹ️ Extra információ</label>
+                    <label>Extra információ</label>
                     <textarea rows="2" value={formData.extraInfo} onChange={(e) => setFormData({ ...formData, extraInfo: e.target.value })} placeholder="Nyitvatartás, belépési díj, megközelítés..." />
                   </div>
-                </div>
-              )}
-            </div>
+                </section>
 
-            <div className="modal-footer">
-              <div className="section-nav">
-                {activeSection > 0 && <button className="btn-nav" onClick={() => setActiveSection(activeSection - 1)}>← Előző</button>}
-                {activeSection < sections.length - 1 && <button className="btn-nav primary" onClick={() => setActiveSection(activeSection + 1)}>Következő →</button>}
-              </div>
-              <div className="footer-actions">
-                <button onClick={() => setShowModal(false)} className="btn-cancel">Mégse</button>
-                <button onClick={handleSave} className="btn-save">💾 Mentés</button>
+                <div className="form-actions about-editor-actions">
+                  <button onClick={handleSave} className="btn-primary">💾 Mentés</button>
+                  <button onClick={() => setShowModal(false)} className="btn-secondary" type="button">Mégse</button>
+                </div>
               </div>
             </div>
           </div>

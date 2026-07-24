@@ -157,8 +157,8 @@ describe("Stations", () => {
     setData([], [{ id: "t1", name: "Túra 1" }]);
     renderStations(mkClient(), ["/stations?addForTrip=t1"]);
 
-    expect(await screen.findByText("➕ Új állomás")).toBeInTheDocument();
-    const modalSelect = document.querySelector(".station-modal select");
+    expect(await screen.findByText("Új állomás")).toBeInTheDocument();
+    const modalSelect = document.querySelector(".station-editor-shell select");
     expect(modalSelect.value).toBe("t1");
   });
 
@@ -166,8 +166,8 @@ describe("Stations", () => {
     setData([makeStation({ id: "s1", name: "Vár állomás" })]);
     renderStations(mkClient(), ["/stations?edit=s1"]);
 
-    expect(await screen.findByText("✏️ Állomás szerkesztése")).toBeInTheDocument();
-    const nameInput = document.querySelector('.station-modal input[type="text"]');
+    expect(await screen.findByText("Állomás szerkesztése")).toBeInTheDocument();
+    const nameInput = document.querySelector('.station-editor-shell input[type="text"]');
     expect(nameInput.value).toBe("Vár állomás");
   });
 });
