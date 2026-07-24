@@ -98,7 +98,10 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
-          appId: 1:1062295539229:android:5fa7cddbe97519437840f4
+          # A com.nagyvazsony.mobile_app csomaghoz tartozó appId (a build ezt
+          # használja). A firebase.json a régi com.example.projekt_labor2
+          # apphoz tartozó ID-t tartalmazta, ami package-név eltérést okozott.
+          appId: 1:1062295539229:android:a0d9133c55d5f9137840f4
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           groups: testers
           file: mobile_app/build/app/outputs/flutter-apk/nagyvazsony.apk
