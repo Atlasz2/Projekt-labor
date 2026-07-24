@@ -31,10 +31,15 @@ function Users() {
       setLoading(true);
       setError(null);
 
-      const [usersSnapshot, progressSnapshot] = await Promise.all([
+      const [usersSnapshot, progressSnapshot, stationsSnapshot] = await Promise.all([
         getDocs(collection(db, "users")),
         getDocs(collection(db, "user_progress")),
+        getDocs(collection(db, "stations")),
       ]);
+
+      // Az összes állomás száma globális (a user_progress nem tárolja),
+      // ebből számoljuk a valós haladást minden felhasználónál.
+      const totalStationsCount = stationsSnapshot.size;
 
       const progressRows = await Promise.all(
         progressSnapshot.docs.map(async (progressDoc) => {
@@ -48,10 +53,10 @@ function Users() {
             completedStations = Number(progressData.completedStationsCount || 0);
           }
 
-          const totalStations = Number(progressData.totalStations || 0);
+          const totalStations = totalStationsCount;
           const progress =
             totalStations > 0
-              ? Math.round((completedStations / totalStations) * 100)
+              ? Math.min(100, Math.round((completedStations / totalStations) * 100))
               : 0;
 
           return {
@@ -59,14 +64,15 @@ function Users() {
             userId: progressData.userId || progressDoc.id,
             uid: progressData.userId || progressDoc.id,
             email: progressData.email || "",
-            userName: progressData.userName || "Ismeretlen",
+            userName: progressData.name || progressData.userName || "Ismeretlen",
             role: "user",
             tripId: progressData.tripId || "N/A",
             completedStations,
             totalStations,
             progress,
             points: Number(progressData.totalPoints ?? progressData.points ?? 0),
-            lastUpdated: progressData.lastUpdated || null,
+            lastUpdated:
+              progressData.updatedAt || progressData.lastUpdated || null,
             createdAt: progressData.createdAt || null,
             hasAccount: false,
           };
@@ -91,7 +97,7 @@ function Users() {
           role: userData.role || "user",
           tripId: "N/A",
           completedStations: 0,
-          totalStations: 0,
+          totalStations: totalStationsCount,
           progress: 0,
           points: 0,
           lastUpdated: userData.lastUpdated || null,
