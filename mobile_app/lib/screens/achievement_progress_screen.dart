@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../services/achievement_service.dart';
 import '../services/leaderboard_service.dart';
 
 class AchievementProgressScreen extends StatefulWidget {
@@ -107,6 +108,24 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
       final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
       final rank = leaderboardSnap.docs.indexWhere((doc) => doc.id == uid) + 1;
 
+      // Feloldja a teljesített, de még fel nem oldott jutalmakat (pl. utólag
+      // létrehozott jutalom, vagy top-N rangváltozás más felhasználó miatt),
+      // majd bővíti a feloldott listát az újakkal.
+      final newlyUnlocked = await AchievementService.reconcileFromStats(
+        uid: uid,
+        achievements: achievements,
+        alreadyUnlocked: unlockedIds,
+        stations: stations,
+        events: events,
+        points: points,
+        trips: completedTrips,
+        rank: rank > 0 ? rank : 0,
+      );
+      final allUnlocked = {
+        ...unlockedIds,
+        ...newlyUnlocked.map((a) => a['id'].toString()),
+      };
+
       if (!mounted) return;
       setState(() {
         _stations = stations;
@@ -114,7 +133,7 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
         _points = points;
         _completedTrips = completedTrips;
         _achievements = achievements;
-        _unlockedIds = unlockedIds;
+        _unlockedIds = allUnlocked;
         _rank = rank > 0 ? rank : 0;
         _loading = false;
       });
