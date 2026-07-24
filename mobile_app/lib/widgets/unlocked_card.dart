@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'offline_image.dart';
 
-/// A feloldott tartalmak listájának egy kártyája. Meleg, „pergamen"-hangulatú
-/// megjelenés az app témájához illesztve (krém háttér, olvasható sötét szöveg),
-/// típus szerint megkülönböztető akcentszínnel:
-///   • érdekesség (funFact) → borostyán/arany
-///   • feloldott tartalom (unlock) → olívazöld (a téma seed-színe)
+/// A feloldott tartalmak listájának egy összecsukható kártyája. Alapból zárt,
+/// hogy sok teljesített állomásnál is átlátható maradjon a lista — a fejlécen
+/// az állomásnév látszik, kinyitva a feloldott kép és szöveg.
 class UnlockedCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTapImage;
@@ -21,87 +19,67 @@ class UnlockedCard extends StatelessWidget {
   static const _cardBorder = Color(0xFFE3D5BC);
   static const _titleColor = Color(0xFF4A3F2E);
   static const _bodyColor = Color(0xFF3A3226);
-  static const _amber = Color(0xFFA16207); // érdekesség akcent
-  static const _olive = Color(0xFF5B6F4C); // feloldott tartalom akcent
+  static const _olive = Color(0xFF5B6F4C);
 
   @override
   Widget build(BuildContext context) {
     final images = (item['images'] as List<String>? ?? const []);
     final imageUrl = images.isNotEmpty ? images.first : '';
-    final isFunFact = (item['type']?.toString() ?? 'unlock') == 'funFact';
-
-    final accent = isFunFact ? _amber : _olive;
-    final icon = isFunFact
-        ? Icons.auto_awesome_rounded
-        : Icons.auto_stories_rounded;
-    final badge = isFunFact ? 'Érdekesség' : 'Feloldott tartalom';
+    final content = item['content']?.toString() ?? '';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: _cardBg,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _cardBorder, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3A3226).withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: const Color(0xFF3A3226).withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Fejléc: akcentszínű ikon + állomásnév + típuscímke
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(icon, color: accent, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        badge.toUpperCase(),
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item['stationName']?.toString() ?? 'Ismeretlen állomás',
-                        style: const TextStyle(
-                          color: _titleColor,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        // Az ExpansionTile alap szürke elválasztóit elrejti.
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          iconColor: _olive,
+          collapsedIconColor: _olive,
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _olive.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.auto_stories_rounded, color: _olive, size: 22),
+          ),
+          title: Text(
+            item['stationName']?.toString() ?? 'Ismeretlen állomás',
+            style: const TextStyle(
+              color: _titleColor,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
             ),
           ),
-
-          // Kép (ha van) — a fejléc és a szöveg között
-          if (imageUrl.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: GestureDetector(
+          subtitle: const Text(
+            'FELOLDOTT TARTALOM',
+            style: TextStyle(
+              color: _olive,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+            ),
+          ),
+          children: [
+            if (imageUrl.isNotEmpty) ...[
+              GestureDetector(
                 onTap: onTapImage,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
@@ -160,21 +138,18 @@ class UnlockedCard extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-
-          // Szöveg
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            child: Text(
-              item['content']?.toString() ?? '',
+              const SizedBox(height: 12),
+            ],
+            Text(
+              content,
               style: const TextStyle(
                 color: _bodyColor,
                 fontSize: 15,
                 height: 1.55,
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

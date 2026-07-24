@@ -5,7 +5,7 @@ import 'offline_image.dart';
 import 'station_image_viewer.dart';
 
 /// Az állomás részleteit mutató alsó lap (fotógaléria, leírás, és teljesített
-/// állomásnál a feloldott fun fact).
+/// állomásnál a feloldott tartalom).
 void showStationDetailSheet(
   BuildContext context, {
   required Map<String, dynamic> station,
@@ -165,14 +165,14 @@ void showStationDetailSheet(
               ),
             ],
             if (isCompleted &&
-                (station['funFact']?.toString() ?? '').isNotEmpty) ...[
+                (station['unlockContent']?.toString() ?? '').isNotEmpty) ...[
               const SizedBox(height: 18),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFBF3E3),
+                  color: const Color(0xFFF0F3EC),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE8D5A8)),
+                  border: Border.all(color: const Color(0xFFC9D4BC)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -181,12 +181,12 @@ void showStationDetailSheet(
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFA16207).withValues(alpha: 0.12),
+                        color: const Color(0xFF5B6F4C).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
-                        Icons.auto_awesome_rounded,
-                        color: Color(0xFFA16207),
+                        Icons.auto_stories_rounded,
+                        color: Color(0xFF5B6F4C),
                         size: 20,
                       ),
                     ),
@@ -196,9 +196,9 @@ void showStationDetailSheet(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'ÉRDEKESSÉG',
+                            'FELOLDOTT TARTALOM',
                             style: TextStyle(
-                              color: Color(0xFFA16207),
+                              color: Color(0xFF5B6F4C),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.6,
@@ -206,7 +206,7 @@ void showStationDetailSheet(
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            station['funFact'].toString(),
+                            station['unlockContent'].toString(),
                             style: const TextStyle(
                               color: Color(0xFF3A3226),
                               fontWeight: FontWeight.w500,

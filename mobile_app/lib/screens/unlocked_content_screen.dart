@@ -88,21 +88,6 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
         final data = doc.data();
         final stationName = (data['name'] ?? 'Ismeretlen állomás').toString();
 
-        final funFact = (data['funFact'] ?? '').toString().trim();
-        if (funFact.isNotEmpty) {
-          unlocked.add({
-            'id': '${doc.id}_funfact',
-            'stationName': stationName,
-            'title': 'Fun fact',
-            'content': funFact,
-            'type': 'funFact',
-            'images': photoListFromDoc(
-              data,
-              preferred: data['funFactImageUrl']?.toString(),
-            ),
-          });
-        }
-
         final extra = (data['unlockContent'] ?? '').toString().trim();
         final unlockImage = (data['unlockContentImageUrl'] ?? '').toString().trim();
         if (extra.isNotEmpty) {

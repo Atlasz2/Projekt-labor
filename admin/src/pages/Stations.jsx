@@ -61,7 +61,6 @@ const EMPTY_FORM = {
   photos: [],
   qrCode: '',
   tripId: '',
-  funFact: '',
   unlockContent: '',
   extraInfo: '',
   unlockContentImageUrl: '',
@@ -116,7 +115,6 @@ export default function Stations() {
       photos: normalizePhotosFromDoc(station),
       qrCode: station.qrCode || '',
       tripId: station.tripId || '',
-      funFact: station.funFact || '',
       unlockContent: station.unlockContent || '',
       extraInfo: station.extraInfo || '',
       unlockContentImageUrl: station.unlockContentImageUrl || '',
@@ -147,6 +145,20 @@ export default function Stations() {
 
   const handleRemovePhoto = (index) => {
     setFormData((current) => ({ ...current, photos: current.photos.filter((_, i) => i !== index) }));
+  };
+
+  const handleUnlockImageUpload = async (file) => {
+    if (!file) return;
+    try {
+      setUploading(true);
+      const result = await uploadImageWithFallback({ file, storage, folder: 'stations' });
+      setFormData((current) => ({ ...current, unlockContentImageUrl: result.url }));
+      showMsg(result.mode === 'inline' ? result.message : 'Kép sikeresen feltöltve! ✅', result.mode === 'inline' ? 'warning' : 'success');
+    } catch (err) {
+      showMsg(`Hiba a kép feltöltésekor: ${err?.message || 'ismeretlen hiba'}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -182,7 +194,6 @@ export default function Stations() {
         ...buildPhotoFields(formData.photos),
         qrCode: formData.qrCode.trim() || '',
         tripId: formData.tripId || '',
-        funFact: formData.funFact.trim(),
         unlockContent: formData.unlockContent.trim(),
         extraInfo: formData.extraInfo.trim(),
         unlockContentImageUrl: formData.unlockContentImageUrl || '',
@@ -409,7 +420,6 @@ export default function Stations() {
                             : <span className="trip-badge unassigned">🚩 Nincs túrához rendelve</span>}
                         </div>
                         <p className="station-desc">{station.description || 'Nincs leírás megadva.'}</p>
-                        {station.funFact && <p className="station-fun-fact">💡 {station.funFact}</p>}
                         <div className="station-qr">
                           <div className="qr-meta">
                             <span className="qr-label">QR: {qrValue.substring(0, 16)}{qrValue.length > 16 ? '…' : ''}</span>
@@ -516,17 +526,12 @@ export default function Stations() {
                 <section className="about-editor-section">
                   <div className="about-editor-section-head">
                     <span>4</span>
-                    <div><h3>Leírás és érdekesség</h3><p>Rövid bemutatás a listákhoz, és egy érdekesség.</p></div>
+                    <div><h3>Leírás</h3><p>Rövid bemutatás, ami a listázó nézetekben jelenik meg.</p></div>
                   </div>
                   <div className="field-group">
                     <label>Rövid leírás</label>
                     <textarea rows="3" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Rövid bemutatás az állomásról..." />
                     <span className="field-hint">Ez jelenik meg az állomást listázó nézetekben</span>
-                  </div>
-                  <div className="field-group">
-                    <label>Érdekesség</label>
-                    <textarea rows="2" value={formData.funFact} onChange={(e) => setFormData({ ...formData, funFact: e.target.value })} placeholder="Egy érdekes ténye az állomásról..." />
-                    <span className="field-hint">Egy soros „tudtad-e?” jellegű mondat</span>
                   </div>
                 </section>
 
@@ -539,6 +544,25 @@ export default function Stations() {
                     <label>Feloldott szöveg / történet</label>
                     <textarea rows="5" value={formData.unlockContent} onChange={(e) => setFormData({ ...formData, unlockContent: e.target.value })} placeholder="Az állomás részletes leírása, helytörténet, érdekességek – ami beolvasáskor jelenik meg..." />
                     <span className="field-hint">Hosszabb szöveg, ami a QR beolvasása után jelenik meg</span>
+                  </div>
+                  <div className="field-group">
+                    <label>Feloldott tartalom képe</label>
+                    {formData.unlockContentImageUrl ? (
+                      <div className="photo-grid station-photo-grid">
+                        <div className="photo-thumb">
+                          <img src={formData.unlockContentImageUrl} alt="Feloldott tartalom" />
+                          <button type="button" className="photo-remove" onClick={() => setFormData({ ...formData, unlockContentImageUrl: '' })}>✕</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="photo-grid station-photo-grid">
+                        <label className="photo-add-btn">
+                          <input type="file" accept="image/*" disabled={uploading} onChange={(e) => { if (e.target.files?.[0]) handleUnlockImageUpload(e.target.files[0]); e.target.value = ""; }} />
+                          {uploading ? "Feltöltés..." : "+ Kép"}
+                        </label>
+                      </div>
+                    )}
+                    <span className="field-hint">A beolvasás után a feloldott szöveggel együtt jelenik meg</span>
                   </div>
                   <div className="field-group">
                     <label>Extra információ</label>
