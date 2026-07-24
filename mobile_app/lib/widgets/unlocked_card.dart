@@ -2,224 +2,179 @@ import 'package:flutter/material.dart';
 
 import 'offline_image.dart';
 
-/// A feloldott tartalmak listájának egy kártyája (állomás/esemény, a
-/// beolvasáskor feltárt szöveggel és képekkel).
+/// A feloldott tartalmak listájának egy kártyája. Meleg, „pergamen"-hangulatú
+/// megjelenés az app témájához illesztve (krém háttér, olvasható sötét szöveg),
+/// típus szerint megkülönböztető akcentszínnel:
+///   • érdekesség (funFact) → borostyán/arany
+///   • feloldott tartalom (unlock) → olívazöld (a téma seed-színe)
 class UnlockedCard extends StatelessWidget {
   final Map<String, dynamic> item;
-  final int index;
   final VoidCallback onTapImage;
 
   const UnlockedCard({
     super.key,
     required this.item,
-    required this.index,
     required this.onTapImage,
   });
 
+  static const _cardBg = Color(0xFFFBF7EF);
+  static const _cardBorder = Color(0xFFE3D5BC);
+  static const _titleColor = Color(0xFF4A3F2E);
+  static const _bodyColor = Color(0xFF3A3226);
+  static const _amber = Color(0xFFA16207); // érdekesség akcent
+  static const _olive = Color(0xFF5B6F4C); // feloldott tartalom akcent
+
   @override
   Widget build(BuildContext context) {
-    const gradients = [
-      [Color(0xFF7C3AED), Color(0xFF4F46E5)],
-      [Color(0xFF0369A1), Color(0xFF0891B2)],
-      [Color(0xFF065F46), Color(0xFF059669)],
-      [Color(0xFF92400E), Color(0xFFD97706)],
-      [Color(0xFF9D174D), Color(0xFFDB2777)],
-    ];
-    final grad = gradients[(index - 1) % gradients.length];
     final images = (item['images'] as List<String>? ?? const []);
     final imageUrl = images.isNotEmpty ? images.first : '';
-    final type = item['type']?.toString() ?? 'unlock';
-    final icon = type == 'funFact'
-        ? Icons.lightbulb_rounded
-        : Icons.celebration_rounded;
-    final badge = type == 'funFact' ? 'Fun fact' : 'Feloldott tartalom';
+    final isFunFact = (item['type']?.toString() ?? 'unlock') == 'funFact';
+
+    final accent = isFunFact ? _amber : _olive;
+    final icon = isFunFact
+        ? Icons.auto_awesome_rounded
+        : Icons.auto_stories_rounded;
+    final badge = isFunFact ? 'Érdekesség' : 'Feloldott tartalom';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: grad),
-        borderRadius: BorderRadius.circular(20),
+        color: _cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _cardBorder, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: grad[0].withValues(alpha: 0.35),
-            blurRadius: 12,
+            color: const Color(0xFF3A3226).withValues(alpha: 0.08),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Fejléc: akcentszínű ikon + állomásnév + típuscímke
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(14),
+                    color: accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 20),
+                  child: Icon(icon, color: accent, size: 22),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        item['stationName']?.toString() ?? 'Ismeretlen állomás',
-                        style: const TextStyle(
-                          color: Colors.white,
+                        badge.toUpperCase(),
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          fontSize: 14,
+                          letterSpacing: 0.6,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
-                        badge,
+                        item['stationName']?.toString() ?? 'Ismeretlen állomás',
                         style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
+                          color: _titleColor,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(
-                  Icons.lock_open_rounded,
-                  color: Colors.white70,
-                  size: 18,
-                ),
               ],
             ),
-            if (imageUrl.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              GestureDetector(
+          ),
+
+          // Kép (ha van) — a fejléc és a szöveg között
+          if (imageUrl.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: GestureDetector(
                 onTap: onTapImage,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   child: Stack(
                     children: [
                       OfflineImage.network(
                         imageUrl,
-                        height: 210,
+                        height: 190,
                         width: double.infinity,
                         fit: BoxFit.cover,
                         errorBuilder: (_, _, _) => Container(
-                          height: 210,
-                          color: Colors.white12,
+                          height: 190,
+                          color: const Color(0xFFEADFCC),
                           alignment: Alignment.center,
                           child: const Icon(
                             Icons.broken_image_outlined,
-                            color: Colors.white70,
+                            color: Color(0xFF9C8A6E),
                           ),
                         ),
                       ),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withValues(alpha: 0.32),
+                      if (images.length > 1)
+                        Positioned(
+                          right: 10,
+                          bottom: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.photo_library_outlined,
+                                  color: Colors.white,
+                                  size: 13,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${images.length} kép',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        right: 10,
-                        bottom: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.48),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.zoom_in,
-                                color: Colors.white,
-                                size: 14,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                'Megnyitás',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
-              ),
-            ] else ...[
-              const SizedBox(height: 12),
-              Container(
-                height: 140,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, color: Colors.white70, size: 34),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Ehhez a tartalomhoz nincs külön kép',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 10),
-            Text(
-              item['title']?.toString() ?? '',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
+
+          // Szöveg
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Text(
               item['content']?.toString() ?? '',
               style: const TextStyle(
-                color: Colors.white,
+                color: _bodyColor,
                 fontSize: 15,
-                height: 1.5,
-                fontWeight: FontWeight.w500,
+                height: 1.55,
               ),
             ),
-            if (images.length > 1) ...[
-              const SizedBox(height: 12),
-              Text(
-                '${images.length} kép érhető el ehhez a feloldott tartalomhoz.',
-                style: const TextStyle(color: Colors.white70),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

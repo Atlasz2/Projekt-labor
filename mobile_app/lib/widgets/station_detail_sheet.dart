@@ -170,35 +170,47 @@ void showStationDetailSheet(
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
-                  ),
-                  borderRadius: BorderRadius.circular(18),
+                  color: const Color(0xFFFBF3E3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE8D5A8)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('✨', style: TextStyle(fontSize: 20)),
-                    const SizedBox(width: 10),
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFA16207).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Color(0xFFA16207),
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Feloldott fun fact',
+                            'ÉRDEKESSÉG',
                             style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFA16207),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.6,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             station['funFact'].toString(),
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              height: 1.4,
+                              color: Color(0xFF3A3226),
+                              fontWeight: FontWeight.w500,
+                              height: 1.45,
                             ),
                           ),
                         ],

@@ -230,20 +230,20 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
                                   colors: [
-                                    Color(0xFF312E81),
-                                    Color(0xFF7C3AED),
+                                    Color(0xFF5B6F4C),
+                                    Color(0xFF47563B),
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                borderRadius: BorderRadius.circular(24),
+                                borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF7C3AED).withValues(
-                                      alpha: 0.28,
+                                    color: const Color(0xFF47563B).withValues(
+                                      alpha: 0.3,
                                     ),
-                                    blurRadius: 18,
-                                    offset: const Offset(0, 8),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6),
                                   ),
                                 ],
                               ),
@@ -253,11 +253,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                                     width: 54,
                                     height: 54,
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.18),
-                                      borderRadius: BorderRadius.circular(18),
+                                      color: Colors.white.withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: const Icon(
-                                      Icons.auto_awesome_rounded,
+                                      Icons.auto_stories_rounded,
                                       color: Colors.white,
                                       size: 28,
                                     ),
@@ -277,7 +277,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                                         ),
                                         const SizedBox(height: 6),
                                         const Text(
-                                          'Minden teljesített állomás új vizuális vagy szöveges meglepetéseket nyit meg.',
+                                          'Minden teljesített állomás új érdekességeket és feloldott leírásokat nyit meg.',
                                           style: TextStyle(
                                             color: Colors.white70,
                                             height: 1.45,
@@ -294,7 +294,6 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                         final item = _unlockedItems[index - 1];
                         return UnlockedCard(
                           item: item,
-                          index: index,
                           onTapImage: () {
                             final images =
                                 (item['images'] as List<String>? ?? const []);

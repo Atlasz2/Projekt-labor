@@ -106,10 +106,10 @@ class ScanResultView extends StatelessWidget {
           if (unlockContent.isNotEmpty) ...[
             const SizedBox(height: 20),
             _InfoPanel(
-              backgroundColor: const Color(0xFFFFF8E1),
-              borderColor: Colors.amber.shade200,
-              iconColor: Colors.amber,
-              icon: Icons.lock_open,
+              backgroundColor: const Color(0xFFF0F3EC),
+              borderColor: const Color(0xFFC9D4BC),
+              iconColor: const Color(0xFF5B6F4C),
+              icon: Icons.auto_stories_rounded,
               title: 'Feloldott tartalom',
               body: unlockContent,
             ),
@@ -120,13 +120,14 @@ class ScanResultView extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0F4FF),
+                color: const Color(0xFFF5EFE2),
                 borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE3D5BC)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF667EEA), size: 18),
+                  const Icon(Icons.info_outline, color: Color(0xFF8B7355), size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
