@@ -15,29 +15,52 @@ const TREND_METRICS = [
   { key: 'stations',    label: 'Állomások',    color: '#d97706' },
 ];
 
+const formatAxisNumber = (n) => {
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k`;
+  return `${Math.round(n)}`;
+};
+
+const formatAxisDate = (raw) => {
+  const s = (raw ?? '').toString();
+  // "YYYY-MM-DD" -> "MM.DD"; egyébként a nyers érték.
+  const m = s.match(/(\d{2})-(\d{2})$/);
+  return m ? `${m[1]}.${m[2]}` : s;
+};
+
 function TrendChart({ points, color }) {
   if (points.length < 2) return null;
 
   const W = 560;
-  const H = 150;
-  const P = 14;
+  const H = 172;
+  const ML = 44; // bal margó – Y tengely értékek
+  const MR = 14;
+  const MT = 12;
+  const MB = 26; // alsó margó – X tengely dátumok
+  const plotW = W - ML - MR;
+  const plotH = H - MT - MB;
+
   const values = points.map((p) => p.value);
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min || 1;
-  const stepX = (W - P * 2) / (points.length - 1);
+  const mid = (max + min) / 2;
+  const stepX = plotW / (points.length - 1);
 
-  const coords = points.map((p, i) => {
-    const x = P + i * stepX;
-    const y = H - P - ((p.value - min) / range) * (H - P * 2);
-    return [x, y];
-  });
+  const yFor = (v) => MT + plotH - ((v - min) / range) * plotH;
+  const coords = points.map((p, i) => [ML + i * stepX, yFor(p.value)]);
 
   const line = coords
     .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
     .join(' ');
-  const area = `${line} L${coords[coords.length - 1][0].toFixed(1)},${H - P} L${coords[0][0].toFixed(1)},${H - P} Z`;
+  const baseY = MT + plotH;
+  const area = `${line} L${coords[coords.length - 1][0].toFixed(1)},${baseY} L${coords[0][0].toFixed(1)},${baseY} Z`;
   const last = coords[coords.length - 1];
+
+  const yTicks = [
+    { v: max, y: yFor(max) },
+    { v: mid, y: yFor(mid) },
+    { v: min, y: yFor(min) },
+  ];
 
   return (
     <svg className="trend-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Trend grafikon">
@@ -47,9 +70,28 @@ function TrendChart({ points, color }) {
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
+
+      {/* Y tengely: rácsvonalak + értékek */}
+      {yTicks.map((t, i) => (
+        <g key={i}>
+          <line x1={ML} y1={t.y} x2={W - MR} y2={t.y} stroke="currentColor" strokeOpacity="0.12" strokeWidth="1" />
+          <text x={ML - 8} y={t.y + 4} textAnchor="end" fontSize="11" fill="currentColor" fillOpacity="0.6">
+            {formatAxisNumber(t.v)}
+          </text>
+        </g>
+      ))}
+
       <path d={area} fill="url(#trendFill)" />
       <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={last[0]} cy={last[1]} r="4.5" fill={color} />
+
+      {/* X tengely: első és utolsó dátum */}
+      <text x={ML} y={H - 8} textAnchor="start" fontSize="11" fill="currentColor" fillOpacity="0.6">
+        {formatAxisDate(points[0].date)}
+      </text>
+      <text x={W - MR} y={H - 8} textAnchor="end" fontSize="11" fill="currentColor" fillOpacity="0.6">
+        {formatAxisDate(points[points.length - 1].date)}
+      </text>
     </svg>
   );
 }

@@ -15,6 +15,7 @@ import '../services/offline_image_service.dart';
 import '../services/offline_tiles_service.dart';
 import '../widgets/station_detail_sheet.dart';
 import 'full_screen_map_screen.dart';
+import 'trip_navigation_screen.dart';
 
 class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
@@ -670,6 +671,34 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     await _refreshSelectedTripMap();
   }
 
+  void _startNavigation() {
+    final tripId = _selectedTripId;
+    if (tripId == null) return;
+    final tripStations = _tripStationsFor(tripId);
+    if (tripStations.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ehhez a túrához nincs állomás.')),
+      );
+      return;
+    }
+    final trip = _trips.firstWhere(
+      (t) => t['id'] == tripId,
+      orElse: () => const <String, dynamic>{},
+    );
+    final routePoints = _routeCache[tripId] ?? const <LatLng>[];
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TripNavigationScreen(
+          tripName: trip['name']?.toString() ?? 'Túra',
+          stations: tripStations,
+          routePoints: routePoints,
+          completedIds: Set<String>.from(_completedIds),
+        ),
+      ),
+    );
+  }
+
   void _openFullScreenMap() {
     final tripStations = _tripStationsFor(_selectedTripId);
     final routePoints = _selectedTripId == null
@@ -835,6 +864,18 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _startNavigation,
+                      icon: const Icon(Icons.navigation),
+                      label: const Text('Túra indítása – navigáció'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
                   _infoChip(
                     Icons.route,
                     _routeStatus ?? 'Állomások összekötése',

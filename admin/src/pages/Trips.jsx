@@ -640,13 +640,25 @@ function Trips() {
       </div>
 
       <div className="trips-main">
-        {!showForm ? (
-          <button className="btn-create-trip" onClick={() => setShowForm(true)}>
-            <span className="btn-icon">+</span>
-            <span className="btn-text">Új túra létrehozása</span>
-          </button>
-        ) : (
-          <div className="form-wrapper">
+        <button className="btn-create-trip" onClick={() => setShowForm(true)}>
+          <span className="btn-icon">+</span>
+          <span className="btn-text">Új túra létrehozása</span>
+        </button>
+
+        {showForm && (
+          <div
+            className="trip-modal-backdrop"
+            role="presentation"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) handleCancel();
+            }}
+          >
+            <div
+              className="form-wrapper in-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label={editingId ? "Túra szerkesztése" : "Új túra hozzáadása"}
+            >
             <div className="form-header">
               <h2>{editingId ? "Túra szerkesztése" : "Új túra hozzáadása"}</h2>
               <button className="btn-close" onClick={handleCancel}>×</button>
@@ -709,6 +721,7 @@ function Trips() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         )}
 
