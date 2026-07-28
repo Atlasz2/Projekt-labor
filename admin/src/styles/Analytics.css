@@ -1,0 +1,257 @@
+.analytics-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.analytics-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.analytics-header h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  color: #2b2720;
+}
+
+.analytics-header p {
+  margin: 0;
+  color: #6b6255;
+  font-size: 0.9rem;
+}
+
+.analytics-refresh {
+  border: 1px solid #d6cdbe;
+  background: #fff;
+  color: #5b6f4c;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.analytics-refresh:hover {
+  background: #eef2e6;
+}
+
+/* ---- Totals ---- */
+.analytics-totals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.analytics-stat {
+  background: #fff;
+  border: 1px solid #ece5d8;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.analytics-stat-value {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #2e7d32;
+  line-height: 1;
+}
+
+.analytics-stat-label {
+  font-size: 0.8rem;
+  color: #6b6255;
+}
+
+/* ---- Cards ---- */
+.analytics-card {
+  background: #fff;
+  border: 1px solid #ece5d8;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+}
+
+.analytics-card h2 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  color: #2b2720;
+}
+
+.analytics-sub {
+  margin: 0 0 16px;
+  color: #6b6255;
+  font-size: 0.85rem;
+}
+
+.analytics-empty {
+  color: #8a8073;
+  font-style: italic;
+  margin: 8px 0 0;
+}
+
+/* ---- Funnel ---- */
+.funnel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.funnel-row {
+  border-top: 1px solid #f0ebe1;
+  padding-top: 14px;
+}
+.funnel-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.funnel-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.funnel-name {
+  font-weight: 700;
+  color: #2b2720;
+}
+
+.funnel-rate {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #2e7d32;
+  white-space: nowrap;
+}
+
+.funnel-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.funnel-bar-track {
+  background: #f2eee5;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.funnel-bar {
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  min-width: fit-content;
+  transition: width 0.4s ease;
+}
+
+.funnel-bar span {
+  padding: 0 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.funnel-bar.participants {
+  background: linear-gradient(90deg, #8d6e63, #6d4c41);
+}
+
+.funnel-bar.finishers {
+  background: linear-gradient(90deg, #43a047, #2e7d32);
+}
+
+.funnel-meta {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: #8a8073;
+}
+
+/* ---- Station popularity ---- */
+.popularity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.popularity-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.popularity-rank {
+  font-weight: 800;
+  color: #b0a894;
+  width: 30px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.popularity-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.popularity-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.popularity-name {
+  font-weight: 600;
+  color: #2b2720;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popularity-count {
+  font-weight: 800;
+  color: #2e7d32;
+}
+
+.popularity-track {
+  background: #f2eee5;
+  border-radius: 6px;
+  overflow: hidden;
+  height: 10px;
+}
+
+.popularity-bar {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #d97706, #b45309);
+  transition: width 0.4s ease;
+}
+
+.popularity-trip {
+  font-size: 0.75rem;
+  color: #8a8073;
+}
+
+.analytics-generated {
+  text-align: right;
+  font-size: 0.75rem;
+  color: #a59c8c;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .analytics-totals {
+    grid-template-columns: 1fr;
+  }
+}

@@ -27,7 +27,25 @@ const formatAxisDate = (raw) => {
   return m ? `${m[1]}.${m[2]}` : s;
 };
 
+const formatFullDate = (raw) => {
+  const s = (raw ?? '').toString();
+  // "YYYY-MM-DD" -> "YYYY.MM.DD"; egyébként a nyers érték.
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}.${m[2]}.${m[3]}` : s;
+};
+
+// Egyenletesen elosztott indexek az X tengely dátumcímkéihez (max `count`).
+const tickIndices = (n, count) => {
+  if (n <= count) return Array.from({ length: n }, (_, i) => i);
+  const set = new Set();
+  for (let k = 0; k < count; k += 1) {
+    set.add(Math.round((k * (n - 1)) / (count - 1)));
+  }
+  return [...set].sort((a, b) => a - b);
+};
+
 function TrendChart({ points, color }) {
+  const [hover, setHover] = useState(null);
   if (points.length < 2) return null;
 
   const W = 560;
@@ -61,9 +79,28 @@ function TrendChart({ points, color }) {
     { v: mid, y: yFor(mid) },
     { v: min, y: yFor(min) },
   ];
+  const xTicks = tickIndices(points.length, 5);
+
+  // Aktív (hover) pont + tooltip geometria.
+  const active = hover != null ? coords[hover] : null;
+  const tipW = 92;
+  const tipH = 30;
+  let tipX = 0;
+  let tipY = 0;
+  if (active) {
+    tipX = Math.max(ML, Math.min(active[0] - tipW / 2, W - MR - tipW));
+    tipY = active[1] - tipH - 8;
+    if (tipY < MT) tipY = active[1] + 10;
+  }
 
   return (
-    <svg className="trend-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Trend grafikon">
+    <svg
+      className="trend-svg"
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label="Trend grafikon"
+      onMouseLeave={() => setHover(null)}
+    >
       <defs>
         <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.28" />
@@ -85,13 +122,55 @@ function TrendChart({ points, color }) {
       <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={last[0]} cy={last[1]} r="4.5" fill={color} />
 
-      {/* X tengely: első és utolsó dátum */}
-      <text x={ML} y={H - 5} textAnchor="start" fontSize="7.5" fill="currentColor" fillOpacity="0.55">
-        {formatAxisDate(points[0].date)}
-      </text>
-      <text x={W - MR} y={H - 5} textAnchor="end" fontSize="7.5" fill="currentColor" fillOpacity="0.55">
-        {formatAxisDate(points[points.length - 1].date)}
-      </text>
+      {/* X tengely: több egyenletesen elosztott dátum */}
+      {xTicks.map((idx) => {
+        const anchor = idx === 0 ? 'start' : idx === points.length - 1 ? 'end' : 'middle';
+        return (
+          <text
+            key={idx}
+            x={coords[idx][0]}
+            y={H - 5}
+            textAnchor={anchor}
+            fontSize="7.5"
+            fill="currentColor"
+            fillOpacity="0.55"
+          >
+            {formatAxisDate(points[idx].date)}
+          </text>
+        );
+      })}
+
+      {/* Hover: vezetővonal + kiemelt pont + tooltip */}
+      {active && (
+        <g pointerEvents="none">
+          <line x1={active[0]} y1={MT} x2={active[0]} y2={baseY} stroke={color} strokeOpacity="0.35" strokeWidth="1" strokeDasharray="3 3" />
+          <circle cx={active[0]} cy={active[1]} r="5" fill={color} stroke="#fff" strokeWidth="1.5" />
+          <g>
+            <rect x={tipX} y={tipY} width={tipW} height={tipH} rx="6" fill="#2b2720" opacity="0.92" />
+            <text x={tipX + 8} y={tipY + 13} fontSize="9" fontWeight="700" fill="#fff">
+              {points[hover].value.toLocaleString('hu-HU')}
+            </text>
+            <text x={tipX + 8} y={tipY + 24} fontSize="7.5" fill="#fff" fillOpacity="0.75">
+              {formatFullDate(points[hover].date)}
+            </text>
+          </g>
+        </g>
+      )}
+
+      {/* Átlátszó találati sávok – a pontok fölé húzva mutatják az értéket */}
+      {coords.map(([x], i) => (
+        <rect
+          key={i}
+          x={x - stepX / 2}
+          y={MT}
+          width={stepX}
+          height={plotH}
+          fill="transparent"
+          onMouseEnter={() => setHover(i)}
+          onMouseMove={() => setHover(i)}
+          onClick={() => setHover(i)}
+        />
+      ))}
     </svg>
   );
 }
@@ -303,8 +382,8 @@ function Dashboard() {
           <section className="card trend-card">
             <div className="card-header">
               <div>
-                <h2>📈 Trend</h2>
-                <p>Az utóbbi {trendData.length} napi pillanatkép alapján</p>
+                <h2>📈 {activeMetric.label}</h2>
+                <p>Trend – az utóbbi {trendData.length} napi pillanatkép alapján</p>
               </div>
               <div className="trend-metric-tabs">
                 {TREND_METRICS.map((m) => (

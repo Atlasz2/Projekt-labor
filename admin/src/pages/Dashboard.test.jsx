@@ -129,7 +129,7 @@ describe("Dashboard", () => {
     // Default metric = totalPoints; latest snapshot value is 777.
     // A .trend-current KPI-t célozzuk – a nyers érték a tengely-címkéken is
     // megjelenhet, ezért a laza szövegkeresés kétértelmű lenne.
-    await waitFor(() => expect(screen.getByText("📈 Trend")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("📈 Összpontszám")).toBeInTheDocument());
     expect(screen.getByText("777", { selector: ".trend-current" })).toBeInTheDocument();
 
     // Switching to the "Felhasználók" metric shows its latest value (9).
@@ -140,7 +140,7 @@ describe("Dashboard", () => {
   it("shows the trend-building hint when fewer than two snapshots exist", async () => {
     mockSuccess(); // stats_daily read returns []
     renderDashboard();
-    await waitFor(() => expect(screen.getByText("📈 Trend")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("📈 Összpontszám")).toBeInTheDocument());
     expect(screen.getByText(/A trend épül/)).toBeInTheDocument();
   });
 });

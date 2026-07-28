@@ -9,8 +9,36 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { redeemQrCore } from './lib/redeem-core.js';
 import { buildEventNotification } from './lib/notification-builder.js';
 import { collectUserData, deleteUserData } from './lib/gdpr-core.js';
+import { computeTripAnalytics } from './lib/analytics-core.js';
 
 initializeApp();
+
+// Admin-jogosultság ellenőrzése – ugyanaz a logika, mint a firestore.rules
+// isAdmin() függvényében (users/{uid}.role == 'admin', vagy az email-doc
+// variáns). Nem-admin hívóra permission-denied.
+async function assertAdmin(db, request) {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
+  }
+  const byUid = await db.collection('users').doc(uid).get();
+  if (byUid.exists && byUid.data()?.role === 'admin') return uid;
+
+  const email = request.auth?.token?.email;
+  if (email) {
+    const byEmail = await db.collection('users').doc(email).get();
+    const data = byEmail.exists ? byEmail.data() : null;
+    if (
+      data &&
+      data.role === 'admin' &&
+      data.email === email &&
+      data.uid === uid
+    ) {
+      return uid;
+    }
+  }
+  throw new HttpsError('permission-denied', 'Admin jogosultság szükséges.');
+}
 
 // Szerveroldali QR-jóváírás. A kliens (mobil app) csak a nyers kódot küldi;
 // a validáció, pontszámítás, jutalom-feloldás és leaderboard-írás itt fut
@@ -90,6 +118,35 @@ export const deleteMyAccount = onCall({ region: 'europe-west1' }, async (request
   } catch (err) {
     logger.error('deleteMyAccount failed', { uid, err });
     throw new HttpsError('internal', 'A fiók törlése nem sikerült, próbáld újra.');
+  }
+});
+
+// Admin-only viselkedési analitika: túra-tölcsér (résztvevők → befejezők) és
+// állomás-népszerűség. A számítás szerveroldalon, Admin SDK jogosultsággal fut,
+// így a kliensnek nem kell letöltenie az összes user_progress dokumentumot.
+// Az aggregáció tiszta függvénye a lib/analytics-core.js-ben tesztelt.
+export const tripAnalytics = onCall({ region: 'europe-west1' }, async (request) => {
+  const db = getFirestore();
+  await assertAdmin(db, request);
+
+  try {
+    const [tripsSnap, stationsSnap, progressSnap] = await Promise.all([
+      db.collection('trips').get(),
+      db.collection('stations').get(),
+      db.collection('user_progress').get(),
+    ]);
+
+    const trips = tripsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const stations = stationsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const progressDocs = progressSnap.docs.map((d) => d.data());
+
+    return {
+      generatedAt: new Date().toISOString(),
+      ...computeTripAnalytics({ trips, stations, progressDocs }),
+    };
+  } catch (err) {
+    logger.error('tripAnalytics failed', { err });
+    throw new HttpsError('internal', 'Az analitika számítása nem sikerült.');
   }
 });
 

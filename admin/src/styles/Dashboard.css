@@ -359,7 +359,7 @@
 .trend-delta.down { color: #b23a2e; }
 .trend-delta-label { color: var(--muted); font-weight: 500; }
 
-.trend-svg { width: 100%; height: auto; display: block; }
+.trend-svg { width: 100%; height: auto; display: block; cursor: crosshair; }
 
 .trend-empty {
   margin: 6px 2px 2px;

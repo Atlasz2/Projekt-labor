@@ -56,6 +56,7 @@ const queryClient = new QueryClient({
 const Layout         = lazy(() => import('./components/Layout'));
 const Login          = lazy(() => import('./pages/Login'));
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
+const Analytics      = lazy(() => import('./pages/Analytics'));
 const Trips          = lazy(() => import('./pages/Trips'));
 const Stations       = lazy(() => import('./pages/Stations'));
 const Map            = lazy(() => import('./pages/Map'));
@@ -94,6 +95,7 @@ function AppRoutes() {
           {isLoggedIn ? (
             <Route path="/" element={<Layout />}>
               <Route path="dashboard"      element={adminOnly(<Dashboard />)} />
+              <Route path="analytics"      element={adminOnly(<Analytics />)} />
               <Route path="map"            element={adminOnly(<Map />)} />
               <Route path="users"          element={adminOnly(<Users />)} />
               <Route path="trips"          element={adminOnly(<Trips />)} />

@@ -73,6 +73,7 @@ function Layout() {
           <nav className="sidebar-nav">
             <ul className="nav-links">
               {renderNavLink('/dashboard', 'DB', 'Vezérlőpult')}
+              {userRole === 'admin' && renderNavLink('/analytics', 'AN', 'Analitika')}
 
               {userRole === 'admin' && (
                 <>
