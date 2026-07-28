@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../firebaseConfig';
 import {
-  collection, getDocs, query, doc, setDoc, orderBy, limit,
+  collection, getDocs, getDoc, query, doc, setDoc, orderBy, limit,
   getCountFromServer, getAggregateFromServer, sum, count,
 } from 'firebase/firestore';
 import StateCard from '../components/StateCard';
@@ -31,11 +31,11 @@ function TrendChart({ points, color }) {
   if (points.length < 2) return null;
 
   const W = 560;
-  const H = 172;
-  const ML = 44; // bal margó – Y tengely értékek
-  const MR = 14;
-  const MT = 12;
-  const MB = 26; // alsó margó – X tengely dátumok
+  const H = 150;
+  const ML = 30; // bal margó – Y tengely értékek
+  const MR = 12;
+  const MT = 10;
+  const MB = 16; // alsó margó – X tengely dátumok
   const plotW = W - ML - MR;
   const plotH = H - MT - MB;
 
@@ -75,7 +75,7 @@ function TrendChart({ points, color }) {
       {yTicks.map((t, i) => (
         <g key={i}>
           <line x1={ML} y1={t.y} x2={W - MR} y2={t.y} stroke="currentColor" strokeOpacity="0.12" strokeWidth="1" />
-          <text x={ML - 8} y={t.y + 4} textAnchor="end" fontSize="11" fill="currentColor" fillOpacity="0.6">
+          <text x={ML - 4} y={t.y + 2.5} textAnchor="end" fontSize="7.5" fill="currentColor" fillOpacity="0.55">
             {formatAxisNumber(t.v)}
           </text>
         </g>
@@ -86,10 +86,10 @@ function TrendChart({ points, color }) {
       <circle cx={last[0]} cy={last[1]} r="4.5" fill={color} />
 
       {/* X tengely: első és utolsó dátum */}
-      <text x={ML} y={H - 8} textAnchor="start" fontSize="11" fill="currentColor" fillOpacity="0.6">
+      <text x={ML} y={H - 5} textAnchor="start" fontSize="7.5" fill="currentColor" fillOpacity="0.55">
         {formatAxisDate(points[0].date)}
       </text>
-      <text x={W - MR} y={H - 8} textAnchor="end" fontSize="11" fill="currentColor" fillOpacity="0.6">
+      <text x={W - MR} y={H - 5} textAnchor="end" fontSize="7.5" fill="currentColor" fillOpacity="0.55">
         {formatAxisDate(points[points.length - 1].date)}
       </text>
     </svg>
@@ -164,12 +164,30 @@ function Dashboard() {
         .slice(0, 3);
       setTopAchievements(achData);
 
-      const playerData = topPlayersSnapshot.docs.map((d) => {
+      // A név gyakran a users kollekcióban van, nem a user_progress-ben, ezért
+      // az 5 élen álló játékoshoz behúzzuk a users doksit is (csak 5 olvasás).
+      const topPlayerDocs = topPlayersSnapshot.docs;
+      const topUserDocs = await Promise.all(
+        topPlayerDocs.map((d) =>
+          getDoc(doc(db, 'users', d.id)).catch(() => null),
+        ),
+      );
+      const playerData = topPlayerDocs.map((d, idx) => {
         const data = d.data();
+        const userDoc = topUserDocs[idx];
+        const userData = userDoc && userDoc.exists() ? userDoc.data() : {};
+        const name =
+          data.name ||
+          data.userName ||
+          userData.name ||
+          userData.userName ||
+          data.email ||
+          userData.email ||
+          'Ismeretlen játékos';
         return {
           id: d.id,
-          name: data.userName || data.email || 'Ismeretlen játékos',
-          email: data.email || '',
+          name,
+          email: data.email || userData.email || '',
           points: Number(data.totalPoints ?? data.points ?? 0),
         };
       });
@@ -229,13 +247,6 @@ function Dashboard() {
     { key: 'achievements', label: 'Jutalmak', value: stats.achievements, hint: 'Létrehozott jutalmak', tone: 'mint', badge: 'J' },
     { key: 'totalPoints', label: 'Össz. pontok', value: stats.totalPoints, hint: 'Minden felhasználótól', tone: 'sky', badge: 'P' },
     { key: 'avgPoints', label: 'Átlag pont', value: stats.averagePoints, hint: 'Felhasználónként', tone: 'sun', badge: '~' },
-  ];
-
-  const quickActions = [
-    { to: '/trips', title: 'Túrák', desc: 'Útvonalak, állomások, szakaszok', badge: 'U' },
-    { to: '/stations', title: 'Állomások', desc: 'Helyszínek, pontok, leírások', badge: 'A' },
-    { to: '/map', title: 'Térkép', desc: 'Teljes térképáttekintés', badge: 'T' },
-    { to: '/users', title: 'Felhasználók', desc: 'Haladás és statisztikák', badge: 'F' },
   ];
 
   const activeMetric = TREND_METRICS.find((m) => m.key === trendMetric) || TREND_METRICS[0];
@@ -348,26 +359,6 @@ function Dashboard() {
                     <p className="kpi-hint">{item.hint}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="card quick-card">
-            <div className="card-header">
-              <div>
-                <h2>Gyors műveletek</h2>
-                <p>Ugorj oda, ahová mennél</p>
-              </div>
-            </div>
-            <div className="quick-grid">
-              {quickActions.map((item) => (
-                <Link key={item.to} to={item.to} className="quick-tile">
-                  <span className="quick-badge">{item.badge}</span>
-                  <div>
-                    <p className="quick-title">{item.title}</p>
-                    <p className="quick-desc">{item.desc}</p>
-                  </div>
-                </Link>
               ))}
             </div>
           </section>

@@ -10,6 +10,7 @@ vi.mock("../styles/Dashboard.css", () => ({}));
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn(),
   getDocs: vi.fn(),
+  getDoc: vi.fn().mockResolvedValue({ exists: () => false, data: () => ({}) }),
   query: vi.fn(),
   doc: vi.fn(),
   setDoc: vi.fn().mockResolvedValue(undefined),
@@ -112,12 +113,6 @@ describe("Dashboard", () => {
     mockSuccess();
     await userEvent.click(screen.getByText("Újrapróbálás"));
     await waitFor(() => expect(screen.getByText("Statisztikák")).toBeInTheDocument());
-  });
-
-  it("shows quick actions after load", async () => {
-    mockSuccess();
-    renderDashboard();
-    await waitFor(() => expect(screen.getByText("Gyors műveletek")).toBeInTheDocument());
   });
 
   it("refresh button is disabled while loading", () => {
