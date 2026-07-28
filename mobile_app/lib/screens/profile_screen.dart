@@ -23,26 +23,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Map<String, dynamic>? _currentUserData;
   List<Map<String, dynamic>> _allUsers = [];
-  List<Map<String, dynamic>> _newlyUnlockedAchievements = [];
   List<Map<String, dynamic>> _achievementDefinitions = [];
   Set<String> _unlockedAchievementIds = <String>{};
 
   bool _isLoading = true;
-  bool _showAchievementBanner = false;
   String? _error;
   int _userRank = 0;
-  Timer? _bannerDismissTimer;
 
   @override
   void initState() {
     super.initState();
     _refreshAll();
-  }
-
-  @override
-  void dispose() {
-    _bannerDismissTimer?.cancel();
-    super.dispose();
   }
 
   Future<void> _refreshAll() async {
@@ -200,34 +191,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
 
-      final now = DateTime.now();
-      final last24Hours = now.subtract(const Duration(hours: 24));
-      final newlyUnlocked = unlockedSnap.docs
-          .where((doc) {
-            final unlockedAt = doc.data()['unlockedAt'];
-            if (unlockedAt == null) return false;
-            final date = (unlockedAt as Timestamp).toDate();
-            return date.isAfter(last24Hours);
-          })
-          .map((doc) => {'id': doc.id, ...doc.data()})
-          .toList();
-
       if (!mounted) return;
       setState(() {
         _achievementDefinitions = defs;
         _unlockedAchievementIds = unlockedIds;
-        _newlyUnlockedAchievements = newlyUnlocked;
-        _showAchievementBanner = newlyUnlocked.isNotEmpty;
       });
-
-      if (newlyUnlocked.isNotEmpty) {
-        _bannerDismissTimer?.cancel();
-        _bannerDismissTimer = Timer(const Duration(seconds: 5), () {
-          if (mounted) {
-            setState(() => _showAchievementBanner = false);
-          }
-        });
-      }
     } catch (e) {
       debugPrint('Jutalmak betöltése sikertelen: $e');
     }
@@ -538,57 +506,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                 ),
-          if (_showAchievementBanner && _newlyUnlockedAchievements.isNotEmpty)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                color: Colors.amber[600],
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.stars, color: Colors.white, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Új achievement feloldva!',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Text(
-                            _newlyUnlockedAchievements
-                                .map((a) => (a['name'] ?? a['id']).toString())
-                                .join(', '),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      tooltip: 'Értesítés bezárása',
-                      onPressed: () =>
-                          setState(() => _showAchievementBanner = false),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

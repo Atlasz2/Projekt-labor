@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -118,13 +118,17 @@ class OfflineSyncService {
       return;
     }
 
+    // Valós elérhetőség DNS-lookuppal ellenőrizve. Korábban egy Firestore
+    // Source.server lekérdezés volt a próba, de a Firestore offline-cache
+    // miatt a kliens a hálózat visszatértekor még "offline" állapotban van,
+    // így a próba timeout-olt — ezért nem ismerte fel az offline->online
+    // átmenetet. A DNS-lookup nem függ a Firestore kliens belső állapotától.
     try {
-      await _firestore
-          .collection('trips')
-          .limit(1)
-          .get(const GetOptions(source: Source.server))
+      final lookup = await InternetAddress.lookup('firestore.googleapis.com')
           .timeout(const Duration(seconds: 4));
-      _setOnline(true);
+      final reachable =
+          lookup.isNotEmpty && lookup.first.rawAddress.isNotEmpty;
+      _setOnline(reachable);
     } catch (_) {
       _setOnline(false);
     }

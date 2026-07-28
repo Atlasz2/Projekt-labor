@@ -232,14 +232,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Válassz korszakot, majd nyisd le az eseménykártyát a részletekért. Így hosszabb leírásoknál is átlátható marad az oldal.',
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              height: 1.5,
-                            ),
-                          ),
                           if (periods.isNotEmpty) ...[
                             const SizedBox(height: 16),
                             SingleChildScrollView(
