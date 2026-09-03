@@ -4,9 +4,11 @@ import { Link } from 'react-router-dom';
 import { db } from '../firebaseConfig';
 import {
   collection, getDocs, getDoc, query, doc, setDoc, orderBy, limit,
-  getCountFromServer, getAggregateFromServer, sum, count,
+  getCountFromServer,
 } from 'firebase/firestore';
 import StateCard from '../components/StateCard';
+import { useProject } from '../context/ProjectContext';
+import { docProjectId, DEFAULT_PROJECT_ID } from '../utils/projects';
 import '../styles/Dashboard.css';
 
 const TREND_METRICS = [
@@ -181,6 +183,10 @@ TrendChart.propTypes = {
 };
 
 function Dashboard() {
+  // A vezérlőpult településspecifikus: az admin csak a saját települése adatait
+  // látja. A developer emellett kérhet összesített (minden település) nézetet.
+  const { activeProjectId, activeProject, canSwitchProject } = useProject();
+  const [scope, setScope] = useState('project');
   const [stats, setStats] = useState({
     trips: 0, stations: 0, users: 0, trackedUsers: 0,
     activeTrips: 0, achievements: 0, totalPoints: 0, averagePoints: 0,
@@ -199,60 +205,95 @@ function Dashboard() {
       setError(null);
       const progressCol = collection(db, 'user_progress');
 
-      // Counts and the points sum are computed server-side, so the dashboard does
-      // not download every user / progress document — this scales to thousands of
-      // users. Only the top 5 progress docs are fetched (for the leaderboard).
+      // A statisztika településspecifikus: a pontokat az adott település saját
+      // állomásaiból számoljuk, ezért a haladás-dokumentumokat be kell olvasni.
+      // (A user_progress kicsi; nagyobb méretnél a tripAnalytics-hez hasonló
+      // szerveroldali aggregációra érdemes váltani.)
+      const scopeAll = scope === 'all';
+      const inScope = (d) => scopeAll || docProjectId(d) === activeProjectId;
+
       const [
         tripsSnapshot,
         stationsSnapshot,
         achievementsSnapshot,
         usersCount,
-        progressAgg,
-        topPlayersSnapshot,
+        progressSnapshot,
       ] = await Promise.all([
         getDocs(collection(db, 'trips')),
         getDocs(collection(db, 'stations')),
         getDocs(collection(db, 'achievements')),
         getCountFromServer(collection(db, 'users')),
-        getAggregateFromServer(progressCol, { total: sum('totalPoints'), n: count() }),
-        getDocs(query(progressCol, orderBy('totalPoints', 'desc'), limit(5))),
+        getDocs(progressCol),
       ]);
 
-      const activeTrips = tripsSnapshot.docs.filter((d) => d.data().isActive === true).length;
-      const totalPts = progressAgg.data().total || 0;
-      const trackedUsers = progressAgg.data().n || 0;
-      const usersTotal = usersCount.data().count;
+      // Tartalom az aktív településre szűrve (a hiányzó projectId az
+      // alapértelmezett településhez tartozik).
+      const toObj = (d) => ({ id: d.id, ...d.data() });
+      const tripDocs = tripsSnapshot.docs.map(toObj).filter(inScope);
+      const stationDocs = stationsSnapshot.docs.map(toObj).filter(inScope);
+      const achDocs = achievementsSnapshot.docs.map(toObj).filter(inScope);
+
+      // A pontokat a település SAJÁT állomásaiból számoljuk, így az "összpont"
+      // valóban az adott településen szerzett pont (a totalPoints globális).
+      const stationPoints = new Map(
+        stationDocs.map((st) => [st.id, Number(st.points) || 10]),
+      );
+
+      let trackedUsers = 0;
+      let totalPts = 0;
+      const scopedPlayers = [];
+      progressSnapshot.docs.forEach((d) => {
+        const data = d.data();
+        const completed = Array.isArray(data.completedStations)
+          ? data.completedStations
+          : [];
+        let pts = 0;
+        let hits = 0;
+        completed.forEach((sid) => {
+          if (stationPoints.has(sid)) {
+            pts += stationPoints.get(sid);
+            hits += 1;
+          }
+        });
+        if (hits > 0) {
+          trackedUsers += 1;
+          totalPts += pts;
+          scopedPlayers.push({ id: d.id, data, points: pts });
+        }
+      });
+
+      const activeTrips = tripDocs.filter((t) => t.isActive === true).length;
+      const usersTotal = scopeAll ? usersCount.data().count : trackedUsers;
       const avgPts = trackedUsers > 0 ? Math.round(totalPts / trackedUsers) : 0;
-      const assignedStations = stationsSnapshot.docs.filter((d) => d.data().tripId).length;
+      const assignedStations = stationDocs.filter((st) => st.tripId).length;
 
       setStats({
-        trips: tripsSnapshot.size,
-        stations: stationsSnapshot.size,
+        trips: tripDocs.length,
+        stations: stationDocs.length,
         users: usersTotal,
         trackedUsers,
         activeTrips,
-        achievements: achievementsSnapshot.size,
+        achievements: achDocs.length,
         totalPoints: totalPts,
         averagePoints: avgPts,
         assignedStations,
       });
 
-      const achData = achievementsSnapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
+      const achData = [...achDocs]
         .sort((a, b) => (b.unlockedCount || 0) - (a.unlockedCount || 0))
         .slice(0, 3);
       setTopAchievements(achData);
 
       // A név gyakran a users kollekcióban van, nem a user_progress-ben, ezért
       // az 5 élen álló játékoshoz behúzzuk a users doksit is (csak 5 olvasás).
-      const topPlayerDocs = topPlayersSnapshot.docs;
+      const topPlayerRows = [...scopedPlayers]
+        .sort((a, b) => b.points - a.points)
+        .slice(0, 5);
       const topUserDocs = await Promise.all(
-        topPlayerDocs.map((d) =>
-          getDoc(doc(db, 'users', d.id)).catch(() => null),
-        ),
+        topPlayerRows.map((r) => getDoc(doc(db, 'users', r.id)).catch(() => null)),
       );
-      const playerData = topPlayerDocs.map((d, idx) => {
-        const data = d.data();
+      const playerData = topPlayerRows.map((row, idx) => {
+        const data = row.data;
         const userDoc = topUserDocs[idx];
         const userData = userDoc && userDoc.exists() ? userDoc.data() : {};
         const name =
@@ -264,10 +305,10 @@ function Dashboard() {
           userData.email ||
           'Ismeretlen játékos';
         return {
-          id: d.id,
+          id: row.id,
           name,
           email: data.email || userData.email || '',
-          points: Number(data.totalPoints ?? data.points ?? 0),
+          points: row.points,
         };
       });
       setTopPlayers(playerData);
@@ -275,17 +316,21 @@ function Dashboard() {
       // Persist a once-per-day snapshot so the dashboard can show real trends over time.
       // Non-blocking: if security rules forbid the write, the trend simply stays empty.
       const today = new Date().toISOString().slice(0, 10);
+      // A pillanatkép településenként külön dokumentumba megy, különben a
+      // különböző települések adminjai felülírnák egymás napi értékeit.
+      const scopeKey = scopeAll ? 'all' : activeProjectId;
       try {
         await setDoc(
-          doc(db, 'stats_daily', today),
+          doc(db, 'stats_daily', `${scopeKey}_${today}`),
           {
             date: today,
-            trips: tripsSnapshot.size,
-            stations: stationsSnapshot.size,
+            projectId: scopeKey,
+            trips: tripDocs.length,
+            stations: stationDocs.length,
             users: usersTotal,
             trackedUsers,
             totalPoints: totalPts,
-            achievements: achievementsSnapshot.size,
+            achievements: achDocs.length,
             updatedAt: Date.now(),
           },
           { merge: true },
@@ -295,10 +340,18 @@ function Dashboard() {
       }
 
       try {
+        // Több település pillanatképei egy kollekcióban vannak, ezért bővebben
+        // olvasunk és az aktív hatókörre szűrünk (így nem kell összetett index).
         const trendSnapshot = await getDocs(
-          query(collection(db, 'stats_daily'), orderBy('date', 'desc'), limit(14)),
+          query(collection(db, 'stats_daily'), orderBy('date', 'desc'), limit(90)),
         );
-        setTrendData(trendSnapshot.docs.map((d) => d.data()).reverse());
+        const scoped = trendSnapshot.docs
+          .map((d) => d.data())
+          // A régi, projectId nélküli pillanatképek az alapértelmezett
+          // településhez tartoznak (visszamenőleges kompatibilitás).
+          .filter((row) => (row.projectId || DEFAULT_PROJECT_ID) === scopeKey)
+          .slice(0, 14);
+        setTrendData(scoped.reverse());
       } catch {
         setTrendData([]);
       }
@@ -307,7 +360,7 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope, activeProjectId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -343,8 +396,30 @@ function Dashboard() {
     <div className="dashboard-shell">
       <header className="dashboard-hero">
         <div className="hero-copy">
-          <p className="hero-kicker">Admin irányítópult</p>
+          <p className="hero-kicker">
+            {scope === 'all'
+              ? 'Összesített áttekintés'
+              : `${activeProject?.name || 'Nagyvázsony'} · irányítópult`}
+          </p>
           <h1>Dashboard</h1>
+          {canSwitchProject && (
+            <div className="dashboard-scope">
+              <button
+                type="button"
+                className={`dashboard-scope-btn${scope === 'project' ? ' active' : ''}`}
+                onClick={() => setScope('project')}
+              >
+                {activeProject?.name || 'Ez a település'}
+              </button>
+              <button
+                type="button"
+                className={`dashboard-scope-btn${scope === 'all' ? ' active' : ''}`}
+                onClick={() => setScope('all')}
+              >
+                Összesített (minden település)
+              </button>
+            </div>
+          )}
         </div>
         <div className="hero-cta">
           <button className="cta ghost" onClick={() => void fetchStats()} disabled={loading} style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>

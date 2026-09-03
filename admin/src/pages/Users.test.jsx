@@ -6,6 +6,15 @@ import Users from "./Users";
 // ── Mocks ──────────────────────────────────────────────────────────────────
 vi.mock("../firebaseConfig", () => ({ db: {} }));
 vi.mock("../styles/Users.css", () => ({}));
+vi.mock("../context/ProjectContext", () => ({
+  useProject: () => ({
+    activeProjectId: "nagyvazsony",
+    activeProject: { id: "nagyvazsony", name: "Nagyvázsony" },
+    canSwitchProject: false,
+    projects: [{ id: "nagyvazsony", name: "Nagyvázsony" }],
+  }),
+}));
+
 vi.mock("../context/AdminAuthContext", () => ({
   useAdminAuth: () => ({ userEmail: "admin@test.hu" }),
 }));

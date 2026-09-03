@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/offline_sync_service.dart';
+import '../utils/project_filter.dart';
+import '../config/app_config.dart';
 
 class ContactScreen extends StatefulWidget {
   const ContactScreen({super.key});
@@ -54,9 +56,12 @@ class _ContactScreenState extends State<ContactScreen>
   Future<void> _loadContactData() async {
     try {
       setState(() => _isLoading = true);
-      final snapshot = await _firestore.collection('contact').limit(1).get();
-      if (snapshot.docs.isNotEmpty) {
-        final rawData = snapshot.docs.first.data();
+      // Településenként külön kapcsolati dokumentum van, ezért a teljes
+      // kollekcióból az aktív településhez tartozót választjuk ki.
+      final snapshot = await _firestore.collection('contact').get();
+      final scoped = whereActiveProject(snapshot.docs);
+      if (scoped.isNotEmpty) {
+        final rawData = scoped.first.data();
         final mainOffice =
             (rawData['mainOffice'] as Map<String, dynamic>?) ?? rawData;
         setState(() {
@@ -89,6 +94,9 @@ class _ContactScreenState extends State<ContactScreen>
     final user = FirebaseAuth.instance.currentUser;
     final now = DateTime.now();
     final payload = <String, dynamic>{
+      // Melyik település adminja lássa a bejelentést. A payloadban van, hogy az
+      // offline sorba tett bejelentés is megkapja.
+      'projectId': AppConfig.projectId,
       'title': 'Bejelentés a Kapcsolat oldalról',
       'description': _descriptionController.text.trim(),
       'severity': 'medium',

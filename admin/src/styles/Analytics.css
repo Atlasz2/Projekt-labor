@@ -18,19 +18,19 @@
 .analytics-header h1 {
   margin: 0 0 4px;
   font-size: 1.5rem;
-  color: #2b2720;
+  color: var(--admin-text);
 }
 
 .analytics-header p {
   margin: 0;
-  color: #6b6255;
+  color: var(--admin-text-muted);
   font-size: 0.9rem;
 }
 
 .analytics-refresh {
-  border: 1px solid #d6cdbe;
-  background: #fff;
-  color: #5b6f4c;
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-accent);
   border-radius: 10px;
   padding: 8px 14px;
   font-weight: 600;
@@ -39,7 +39,7 @@
 }
 
 .analytics-refresh:hover {
-  background: #eef2e6;
+  background: var(--admin-accent-soft);
 }
 
 /* ---- Totals ---- */
@@ -50,51 +50,51 @@
 }
 
 .analytics-stat {
-  background: #fff;
-  border: 1px solid #ece5d8;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
   border-radius: 14px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--admin-shadow-sm);
 }
 
 .analytics-stat-value {
   font-size: 1.7rem;
   font-weight: 800;
-  color: #2e7d32;
+  color: var(--admin-green);
   line-height: 1;
 }
 
 .analytics-stat-label {
   font-size: 0.8rem;
-  color: #6b6255;
+  color: var(--admin-text-muted);
 }
 
 /* ---- Cards ---- */
 .analytics-card {
-  background: #fff;
-  border: 1px solid #ece5d8;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--admin-shadow);
 }
 
 .analytics-card h2 {
   margin: 0 0 4px;
   font-size: 1.15rem;
-  color: #2b2720;
+  color: var(--admin-text);
 }
 
 .analytics-sub {
   margin: 0 0 16px;
-  color: #6b6255;
+  color: var(--admin-text-muted);
   font-size: 0.85rem;
 }
 
 .analytics-empty {
-  color: #8a8073;
+  color: var(--admin-text-muted);
   font-style: italic;
   margin: 8px 0 0;
 }
@@ -107,7 +107,7 @@
 }
 
 .funnel-row {
-  border-top: 1px solid #f0ebe1;
+  border-top: 1px solid var(--admin-border);
   padding-top: 14px;
 }
 .funnel-row:first-child {
@@ -125,13 +125,13 @@
 
 .funnel-name {
   font-weight: 700;
-  color: #2b2720;
+  color: var(--admin-text);
 }
 
 .funnel-rate {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #2e7d32;
+  color: var(--admin-green);
   white-space: nowrap;
 }
 
@@ -142,7 +142,7 @@
 }
 
 .funnel-bar-track {
-  background: #f2eee5;
+  background: var(--admin-surface-muted);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -160,7 +160,7 @@
   padding: 0 10px;
   font-size: 0.78rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--admin-surface);
   white-space: nowrap;
 }
 
@@ -169,13 +169,18 @@
 }
 
 .funnel-bar.finishers {
-  background: linear-gradient(90deg, #43a047, #2e7d32);
+  background: linear-gradient(90deg, #43a047, var(--admin-green));
 }
 
 .funnel-meta {
   margin-top: 8px;
   font-size: 0.78rem;
-  color: #8a8073;
+  color: var(--admin-text-muted);
+}
+
+.funnel-samples {
+  color: var(--admin-text-muted);
+  font-size: 0.72rem;
 }
 
 /* ---- Station popularity ---- */
@@ -193,7 +198,7 @@
 
 .popularity-rank {
   font-weight: 800;
-  color: #b0a894;
+  color: var(--admin-text-muted);
   width: 30px;
   flex-shrink: 0;
   padding-top: 1px;
@@ -213,7 +218,7 @@
 
 .popularity-name {
   font-weight: 600;
-  color: #2b2720;
+  color: var(--admin-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -221,11 +226,11 @@
 
 .popularity-count {
   font-weight: 800;
-  color: #2e7d32;
+  color: var(--admin-green);
 }
 
 .popularity-track {
-  background: #f2eee5;
+  background: var(--admin-surface-muted);
   border-radius: 6px;
   overflow: hidden;
   height: 10px;
@@ -240,13 +245,13 @@
 
 .popularity-trip {
   font-size: 0.75rem;
-  color: #8a8073;
+  color: var(--admin-text-muted);
 }
 
 .analytics-generated {
   text-align: right;
   font-size: 0.75rem;
-  color: #a59c8c;
+  color: var(--admin-text-muted);
   margin: 0;
 }
 
@@ -254,4 +259,32 @@
   .analytics-totals {
     grid-template-columns: 1fr;
   }
+}
+
+/* Hatókör-váltó (csak developernek): ez a település vs. összesített */
+.analytics-scope {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.analytics-scope-btn {
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-text-muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.analytics-scope-btn:hover { background: var(--admin-surface-muted); }
+
+.analytics-scope-btn.active {
+  background: var(--admin-green);
+  border-color: var(--admin-green);
+  color: var(--admin-surface);
 }

@@ -1,363 +1,343 @@
-# Firebase Adatstruktúra és Adatmodell
+# Firestore adatmodell
 
-## Adatbázis Architektúra
+> Ez a dokumentum a **tényleges** adatszerkezetet írja le (a mezőneveket az éles
+> adatbázisból és a forráskódból ellenőrizve). Ha a kód változik, ezt is
+> frissíteni kell — a dokumentáció ne mondjon ellent a kódnak.
 
-### 1. Firestore Collections
+## 1. Áttekintés
 
-```
-firestore
-├── trails/              # Túraútvonalak
-├── stations/            # Állomások
-├── users/               # Felhasználók
-├── user_progress/       # Előrehaladás
-├── qr_codes/            # QR-kód információk
-└── admin_users/         # Adminisztrátorok
-```
+A rendszer három komponensből áll, mind ugyanazt a Firestore adatbázist
+használja:
 
-## Részletes Adatmodellek
+- **Mobilalkalmazás** (Flutter) — a látogatók appja
+- **Admin panel** (React) — tartalomkezelés
+- **Cloud Functions** (Node 22) — szerveroldali validáció és jóváírás
 
-### 1.1 Trails (Túraútvonalak)
+### 1.1 White-label: a `projectId` elv
 
-**Collection**: `trails`
-**Document ID**: Auto-generated vagy egyedi azonosító
+A rendszer **több települést** tud kiszolgálni. Minden tartalom-dokumentum egy
+`projectId` mezővel jelöli, melyik településhez tartozik.
 
-```json
-{
-  "id": "trail_001",
-  "name": "Nagyvázsony Vár Túra",
-  "description": "Történelmi séta Nagyvázsony várának környékén",
-  "difficulty": "közepes",
-  "duration": 120,
-  "distance": 5.2,
-  "stationIds": ["station_001", "station_002", "station_003"],
-  "startPoint": {
-    "latitude": 47.0333,
-    "longitude": 17.7167,
-    "name": "Kinizsi Vár"
-  },
-  "endPoint": {
-    "latitude": 47.0400,
-    "longitude": 17.7200,
-    "name": "Kilátópont"
-  },
-  "polyline": [
-    {"lat": 47.0333, "lng": 17.7167},
-    {"lat": 47.0350, "lng": 17.7180},
-    {"lat": 47.0400, "lng": 17.7200}
-  ],
-  "imageUrl": "https://storage.firebase.com/trails/nagyvazsony.jpg",
-  "isActive": true,
-  "createdAt": "2026-01-15T10:00:00Z",
-  "updatedAt": "2026-02-01T14:30:00Z"
-}
+> **Fontos szabály:** a `projectId` **hiánya** az alapértelmezett települést
+> (`nagyvazsony`) jelenti. Ezt a szabályt az admin, a mobil és a szerver is
+> egyformán alkalmazza, így a migráció előtti (jelöletlen) adat is helyesen
+> működik.
+
+A szabályt megvalósító helyek:
+- admin: `admin/src/utils/projects.js` → `docProjectId()`
+- mobil: `mobile_app/lib/utils/project_filter.dart` → `projectIdOf()`
+- szerver: `functions/lib/redeem-core.js` → `projectOf()`
+- biztonsági szabályok: `firestore.rules` → `docProject()`
+
+A mobil kiadás települése **build-időben** dől el
+(`mobile_app/lib/config/app_config.dart`):
+
+```bash
+flutter build apk --dart-define=PROJECT_ID=nagyvazsony   # alapértelmezés
 ```
 
-**Mezők**:
-- `id`: Egyedi azonosító
-- `name`: Útvonal neve
-- `description`: Leírás
-- `difficulty`: Nehézség (könnyű, közepes, nehéz)
-- `duration`: Várható idő percben
-- `distance`: Távolság km-ben
-- `stationIds`: Állomások ID-i sorrendben
-- `startPoint`, `endPoint`: Kezdő/végpont koordináták
-- `polyline`: Útvonal pontjai
-- `imageUrl`: Borítókép
-- `isActive`: Aktív-e az útvonal
-- `createdAt`, `updatedAt`: Időbélyegek
+### 1.2 Szerepkörök
 
-### 1.2 Stations (Állomások)
+| Szerep | Jogosultság |
+|---|---|
+| `user` | Az app látogatója. Az admin panelbe nem léphet be. |
+| `admin` | **Egy** település kezelője. Csak a saját települése tartalmát írhatja. |
+| `developer` | Platform-szintű. Minden települést kezel, szerepet adhat, felhasználót törölhet/kitilthat. |
 
-**Collection**: `stations`
-**Document ID**: Auto-generated vagy egyedi azonosító
+Az admin települését a `users/{uid}.projectId` mező adja meg.
 
-```json
-{
-  "id": "station_001",
-  "trailId": "trail_001",
-  "name": "Kinizsi Vár",
-  "description": "XV. századi vár, Kinizsi Pál egykori birtoka",
-  "location": {
-    "latitude": 47.0333,
-    "longitude": 17.7167
-  },
-  "radius": 50,
-  "order": 1,
-  "qrCodeId": "qr_001",
-  "pointsValue": 10,
-  "content": {
-    "text": "A várat a 15. században építették...",
-    "images": [
-      "https://storage.firebase.com/stations/var_001.jpg",
-      "https://storage.firebase.com/stations/var_002.jpg"
-    ],
-    "audioUrl": "https://storage.firebase.com/audio/var_guide.mp3",
-    "videoUrl": null,
-    "quiz": {
-      "question": "Mikor épült a vár?",
-      "options": ["13. század", "14. század", "15. század", "16. század"],
-      "correctAnswer": 2,
-      "points": 5
-    }
-  },
-  "isActive": true,
-  "createdAt": "2026-01-15T10:00:00Z"
-}
-```
+---
 
-**Mezők**:
-- `id`: Egyedi azonosító
-- `trailId`: Melyik útvonalhoz tartozik
-- `name`: Állomás neve
-- `description`: Rövid leírás
-- `location`: GPS koordináták
-- `radius`: Közelség detektáláshoz (méterben)
-- `order`: Sorrend az útvonalon
-- `qrCodeId`: Kapcsolódó QR-kód
-- `pointsValue`: Pont értéke
-- `content`: Részletes tartalom (szöveg, kép, hang, videó, kvíz)
-- `isActive`: Aktív-e
-- `createdAt`: Létrehozás időpontja
+## 2. Kollekciók
 
-### 1.3 Users (Felhasználók)
+### 2.1 `projects` — települések
 
-**Collection**: `users`
-**Document ID**: Firebase Auth UID
+A white-label „bérlők" listája.
 
-```json
-{
-  "uid": "user_firebase_uid_123",
-  "email": "user@example.com",
-  "displayName": "Kovács János",
-  "photoURL": "https://storage.firebase.com/avatars/user123.jpg",
-  "totalPoints": 150,
-  "level": 3,
-  "badges": ["early_adopter", "trail_master"],
-  "preferences": {
-    "notifications": true,
-    "geofencing": true,
-    "theme": "light"
-  },
-  "createdAt": "2026-01-20T09:00:00Z",
-  "lastLoginAt": "2026-02-03T08:30:00Z"
-}
-```
+| Mező | Típus | Leírás |
+|---|---|---|
+| `name` | string | A település megjelenített neve |
+| `isActive` | bool | Aktív-e |
+| `createdAt` | timestamp | Létrehozás |
 
-**Mezők**:
-- `uid`: Firebase Auth User ID
-- `email`: E-mail cím
-- `displayName`: Megjelenítendő név
-- `photoURL`: Profilkép
-- `totalPoints`: Összesített pontszám
-- `level`: Felhasználói szint
-- `badges`: Elért jelvények
-- `preferences`: Beállítások
-- `createdAt`, `lastLoginAt`: Időbélyegek
+A dokumentum azonosítója a település „slug"-ja (pl. `nagyvazsony`). Az
+alapértelmezett projekt akkor is használható, ha nincs külön dokumentuma.
 
-### 1.4 User Progress (Felhasználói Előrehaladás)
+---
 
-**Collection**: `user_progress`
-**Document ID**: `{userId}_{trailId}` vagy auto-generated
+### 2.2 `trips` — túrák
 
-```json
-{
-  "id": "progress_user123_trail001",
-  "userId": "user_firebase_uid_123",
-  "trailId": "trail_001",
-  "status": "in_progress",
-  "startedAt": "2026-02-03T10:00:00Z",
-  "completedAt": null,
-  "visitedStations": [
-    {
-      "stationId": "station_001",
-      "visitedAt": "2026-02-03T10:15:00Z",
-      "pointsEarned": 10,
-      "qrScanned": true,
-      "quizCompleted": true,
-      "quizScore": 5
-    },
-    {
-      "stationId": "station_002",
-      "visitedAt": "2026-02-03T11:00:00Z",
-      "pointsEarned": 10,
-      "qrScanned": true,
-      "quizCompleted": false,
-      "quizScore": 0
-    }
-  ],
-  "totalPointsEarned": 25,
-  "completionPercentage": 66,
-  "lastActiveAt": "2026-02-03T11:00:00Z"
-}
-```
+| Mező | Típus | Leírás |
+|---|---|---|
+| `name` | string | Túra neve |
+| `description` | string | Leírás |
+| `isActive` | bool | Megjelenjen-e az appban |
+| `distance`, `duration` | string | Az útvonalból számított táv/idő (gyorsítótárazva) |
+| `projectId` | string | **Település** |
+| `createdAt` | timestamp | |
 
-**Mezők**:
-- `id`: Egyedi azonosító
-- `userId`, `trailId`: Felhasználó és útvonal
-- `status`: Állapot (not_started, in_progress, completed)
-- `startedAt`, `completedAt`: Kezdés/befejezés időpontja
-- `visitedStations`: Meglátogatott állomások részletei
-- `totalPointsEarned`: Összesített pontszám
-- `completionPercentage`: Teljesítés százalék
-- `lastActiveAt`: Utolsó aktivitás
+---
 
-### 1.5 QR Codes
+### 2.3 `stations` — állomások
 
-**Collection**: `qr_codes`
-**Document ID**: QR kód egyedi azonosítója
+| Mező | Típus | Leírás |
+|---|---|---|
+| `name`, `description` | string | Alapadatok |
+| `latitude`, `longitude` | number | Koordináta (alternatívaként beágyazott `location.{latitude,longitude}`) |
+| `radius` | number | Opcionális; a helyszín-ellenőrzés sugara méterben (alap: 150) |
+| `points` | number | A beolvasásért járó pont (alap: 10) |
+| `qrCode` | string | A kihelyezett QR-kód szövege |
+| `tripId` | string | Melyik túrához tartozik |
+| `orderIndex` | number | Sorrend a túrán belül |
+| `photos`, `photoUrls`, `imageUrl` | array/string | Képek (lásd lentebb) |
+| `unlockContent` | string | A teljesítés után feloldódó szöveg |
+| `unlockContentImageUrl` | string | A feloldott tartalom képe |
+| `isActive` | bool | |
+| `projectId` | string | **Település** |
 
-```json
-{
-  "id": "qr_001",
-  "code": "TRAIL001_STATION001",
-  "stationId": "station_001",
-  "type": "station_unlock",
-  "isActive": true,
-  "scanCount": 127,
-  "createdAt": "2026-01-15T10:00:00Z",
-  "expiresAt": null
-}
-```
+> **Képek:** a `photos` a forrás, a `photoUrls`/`imageUrl` visszamenőleges
+> kompatibilitási másolatok. A képek **Firebase Storage URL-ek** — a korábbi,
+> dokumentumba ágyazott base64 képeket migráltuk
+> (`functions/scripts/migrate-inline-images.mjs`), mert 460 KB-os
+> dokumentumokat okoztak. **Új képet mindig Storage-ba kell tölteni.**
 
-**Mezők**:
-- `id`: Egyedi azonosító
-- `code`: QR kód tartalma (amit beolvas)
-- `stationId`: Kapcsolódó állomás
-- `type`: Típus (station_unlock, bonus_content, stb.)
-- `isActive`: Aktív-e
-- `scanCount`: Beolvasások száma (statisztika)
-- `createdAt`: Létrehozás
-- `expiresAt`: Lejárati dátum (opcionális)
+> **Megszűnt mezők:** `funFact`, `funFactImageUrl`, `extraInfo` — eltávolítva,
+> csak a feloldott tartalom maradt.
 
-### 1.6 Admin Users (Adminisztrátorok)
+---
 
-**Collection**: `admin_users`
-**Document ID**: Firebase Auth UID
+### 2.4 `events` — rendezvények
 
-```json
-{
-  "uid": "admin_uid_456",
-  "email": "admin@nagyvazsony.hu",
-  "role": "admin",
-  "permissions": [
-    "manage_trails",
-    "manage_stations",
-    "manage_users",
-    "view_analytics"
-  ],
-  "createdAt": "2026-01-10T08:00:00Z",
-  "lastLoginAt": "2026-02-03T09:00:00Z"
-}
-```
+| Mező | Típus | Leírás |
+|---|---|---|
+| `name`, `description` | string | |
+| `date` | string | Az esemény dátuma |
+| `location` | string | Helyszín |
+| `points` | number | Pecsétért járó pont |
+| `qrCode` | string | Opcionális QR-kód |
+| `photos`, `photoUrls`, `imageUrl` | array/string | Képek |
+| `projectId` | string | **Település** |
 
-**Mezők**:
-- `uid`: Firebase Auth User ID
-- `email`: Admin e-mail
-- `role`: Szerep (admin, moderator)
-- `permissions`: Jogosultságok listája
-- `createdAt`, `lastLoginAt`: Időbélyegek
+Új esemény létrehozásakor a `notifyOnNewEvent` trigger push-értesítést küld az
+`events` topicra.
 
-## Firestore Security Rules
+---
 
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    // Trails - Mindenki olvashatja, admin írhatja
-    match /trails/{trailId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    // Stations - Mindenki olvashatja, admin írhatja
-    match /stations/{stationId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    // Users - Csak saját profil olvasható/írható
-    match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // User Progress - Csak saját előrehaladás
-    match /user_progress/{progressId} {
-      allow read: if request.auth != null && 
-                    resource.data.userId == request.auth.uid;
-      allow create, update: if request.auth != null && 
-                              request.resource.data.userId == request.auth.uid;
-      allow delete: if false; // Előrehaladás nem törölhető
-    }
-    
-    // QR Codes - Mindenki olvashatja, admin írhatja
-    match /qr_codes/{qrId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin();
-    }
-    
-    // Admin Users - Csak admin olvashatja
-    match /admin_users/{adminId} {
-      allow read: if isAdmin();
-      allow write: if isSuperAdmin();
-    }
-    
-    // Helper functions
-    function isAdmin() {
-      return request.auth != null && 
-             exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
-    }
-    
-    function isSuperAdmin() {
-      return request.auth != null && 
-             get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.role == 'super_admin';
-    }
-  }
-}
-```
+### 2.5 `accommodations` / `restaurants` — szállások és vendéglátóhelyek
 
-## Indexek
+Közös alap: `name`, `description`, `type`, `photos`/`photoUrls`/`imageUrl`,
+`projectId`, `createdAt`.
 
-### Compound Indexes (firebase.json)
+- `accommodations`: `pricePerNight`, `capacity`, `amenities`
+- `restaurants`: `cuisine`, `priceRange`
 
-```json
-{
-  "firestore": {
-    "indexes": [
-      {
-        "collectionGroup": "user_progress",
-        "queryScope": "COLLECTION",
-        "fields": [
-          {"fieldPath": "userId", "order": "ASCENDING"},
-          {"fieldPath": "status", "order": "ASCENDING"},
-          {"fieldPath": "lastActiveAt", "order": "DESCENDING"}
-        ]
-      },
-      {
-        "collectionGroup": "stations",
-        "queryScope": "COLLECTION",
-        "fields": [
-          {"fieldPath": "trailId", "order": "ASCENDING"},
-          {"fieldPath": "order", "order": "ASCENDING"}
-        ]
-      }
-    ]
-  }
-}
-```
+---
 
-## Best Practices
+### 2.6 `about` — a település története (idővonal)
 
-1. **Denormalizáció**: Gyakran használt adatok duplikálása (pl. `stationIds` a trail-ben)
-2. **Shallow Queries**: Ne tároljunk túl mély nested objektumokat
-3. **Batch Operations**: Több írás egyszerre (pl. station + QR kód létrehozása)
-4. **Security First**: Minden művelet előtt jogosultság ellenőrzés
-5. **Indexelés**: Összetett lekérdezésekhez index szükséges
+| Mező | Típus | Leírás |
+|---|---|---|
+| `year` | string | Évszám (rendezési kulcs) |
+| `title`, `description`, `content` | string | Szöveg |
+| `imageUrl` | string | Kép |
+| `projectId` | string | **Település** |
 
-## Scaling Considerations
+---
 
-- **Sharding**: Túl nagy collection-ök felosztása
-- **Caching**: Firestore cache + React/Flutter cache réteg
-- **Pagination**: Nagy listák lapozva
-- **Real-time vs Snapshot**: Csak szükséges helyen real-time listener
+### 2.7 `contact` — kapcsolati adatok
+
+**Településenként egy dokumentum.**
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `mainOffice` | map | `{ name, address, phone, email }` |
+| `projectId` | string | **Település** |
+
+> Ismert szépséghiba: néhány régi dokumentumban `cratedAt` (elgépelt
+> `createdAt`) mező szerepel; a kód nem használja.
+
+---
+
+### 2.8 `achievements` — jutalmak
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `name`, `description` | string | |
+| `icon`, `color` | string | Megjelenés |
+| `conditionType` | string | `station_count`, `event_count`, `qr_count`, `points_threshold`, `trip_complete`, `top_n`, `manual` |
+| `conditionValue` | number | A feltétel küszöbe (N) |
+| `unlockedCount` | number | Hányan oldották fel (**csak szerver írja**) |
+| `projectId` | string | **Település** |
+
+---
+
+### 2.9 `users` — fiókok és szerepkörök
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `uid` | string | Az Auth-azonosító |
+| `email`, `name`, `displayName` | string | |
+| `role` | string | `user` / `admin` / `developer` |
+| `projectId` | string | Az **admin** települése |
+| `banned` | bool | Kitiltva (az Auth-fiók is letiltva) |
+| `createdAt` | timestamp | |
+
+> A `role` mezőt **csak developer** írhatja (lásd `firestore.rules`) — így egy
+> felhasználó nem tud magának admin jogot adni.
+
+---
+
+### 2.10 `user_progress` — haladás
+
+Dokumentum-azonosító: a felhasználó `uid`-ja.
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `name`, `email` | string | |
+| `totalPoints` | number | **Globális** összpont (nem településenkénti) |
+| `completedStations` | array | Teljesített állomás-azonosítók |
+| `completedEvents` | array | Teljesített esemény-azonosítók |
+| `completedTripIds` | array | Végigjárt túrák |
+| `completedStationsAt` | map | `{ állomásId: timestamp }` — a beolvasás ideje; ebből számol az analitika **átlagos befejezési időt** |
+| `pendingAchievementBanner` | map | A mobilnak szóló egyszeri értesítés |
+| `createdAt`, `updatedAt` | timestamp | |
+
+**Alkollekció:** `user_progress/{uid}/unlocked_achievements/{achievementId}` →
+`{ unlockedAt }`.
+
+> A pontokat **kizárólag a szerver** (`redeemQr`) írja — a kliens csak a nyers
+> QR-kódot küldi be. Lásd `docs/SERVER_VALIDATION.md`.
+
+---
+
+### 2.11 Ranglisták
+
+**`leaderboards/{projectId}/entries/{uid}`** — az **aktuális**, településenkénti
+ranglista:
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `uid`, `projectId` | string | |
+| `displayName` | string | |
+| `points` | number | Az **adott településen** szerzett pont |
+| `completedStationsCount`, `completedEventsCount` | number | |
+| `updatedAt` | timestamp | |
+
+Csak a szerver írja (a szabályok a kliens-írást tiltják), így a pontszám nem
+hamisítható. A `top_n` jutalom ezen a ranglistán értékelődik ki.
+
+**`public_leaderboard/{uid}`** — a régi, **globális** ranglista. Megmarad, mert
+a még nem frissített appverziók ezt olvassák (átmeneti kettős írás).
+
+---
+
+### 2.12 `qr_codes` — QR-leképezés
+
+Dokumentum-azonosító: a QR-kód URI-kódolt alakja.
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `kind` | string | `station` vagy `event` |
+| `targetId` | string | A cél dokumentum azonosítója |
+
+Elsődleges feloldási út; ha nincs találat, a szerver a `qrCode` mezőre, majd a
+dokumentum-azonosítóra esik vissza.
+
+---
+
+### 2.13 `bug_reports` — hibabejelentések
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `title`, `description` | string | |
+| `status` | string | `open` / `active` / lezárt |
+| `severity` | string | |
+| `reported_by` | map | `{ name, email, user_id, app_version, os }` |
+| `admin_response`, `response_date` | string/ts | Admin válasza |
+| `screenshot_urls` | array | |
+| `projectId` | string | **Település** — mindenki a saját tájékán lévőket látja |
+| `created_at`, `updated_at` | timestamp | (+ `_ms` / `_text` másolatok az offline sorhoz) |
+
+---
+
+### 2.14 `stats_daily` — napi pillanatképek (trend)
+
+Dokumentum-azonosító: `{projectId}_{YYYY-MM-DD}` — **településenként külön**,
+hogy a különböző adminok ne írják felül egymás adatait.
+
+| Mező | Típus |
+|---|---|
+| `date`, `projectId` | string |
+| `trips`, `stations`, `users`, `trackedUsers`, `totalPoints`, `achievements` | number |
+| `updatedAt` | number |
+
+---
+
+### 2.15 `usernames` — egyedi nevek
+
+Dokumentum-azonosító: a normalizált (kisbetűs, szóköz-tömörített) név.
+`{ uid, displayName, normalized, createdAt }` — a névütközés elkerülésére.
+
+---
+
+## 3. Biztonsági alapelvek
+
+1. **Pontot csak a szerver ír.** A `redeemQr` Cloud Function validál (kód,
+   helyszín, település) és ír; a kliens a `user_progress`-t nem módosíthatja.
+2. **Helyszín-ellenőrzés**: a beolvasáskori GPS-pozíciót a szerver az állomás
+   koordinátájához méri (`radius`, alap 150 m).
+3. **Település-ellenőrzés**: másik település QR-kódja nem írható jóvá
+   (`wrong_project`).
+4. **Tenant-izoláció**: az admin csak a saját települése tartalmát írhatja; a
+   developer mindet.
+5. **Szerep-emelés tiltva**: a `role` mezőt csak developer állíthatja.
+6. **App Check**: a kliensek App Check tokent küldenek (a kikényszerítés a Play
+   Store-os kiadás után kapcsolható be).
+
+Részletek: `docs/SERVER_VALIDATION.md`, `docs/SZAKDOLGOZAT_BIZTONSAG.md`.
+
+---
+
+## 4. Cloud Functions
+
+| Függvény | Jogosultság | Feladat |
+|---|---|---|
+| `redeemQr` | bejelentkezett | QR-jóváírás (validáció + pont + jutalom + ranglista) |
+| `exportUserData` | saját | GDPR 20. cikk — adatexport |
+| `deleteMyAccount` | saját | GDPR 17. cikk — saját fiók törlése |
+| `adminDeleteUser` | developer | Másik felhasználó teljes törlése |
+| `setUserBanned` | developer | Kitiltás / feloldás (visszafordítható) |
+| `inviteAdmin` | developer | Admin meghívása e-mail alapján |
+| `tripAnalytics` | admin/developer | Viselkedési analitika (településre szűrve vagy összesítve) |
+| `seedProjectLeaderboards` | developer | A településenkénti ranglista feltöltése meglévő adatból |
+| `notifyOnNewEvent` | trigger | Push-értesítés új eseményről |
+
+---
+
+## 5. Migrációs és karbantartó szkriptek
+
+A `functions/scripts/` mappában. A legtöbb **nem igényel service accountot** —
+a developer fiók bejelentkezésével (REST) dolgozik.
+
+| Szkript | Feladat |
+|---|---|
+| `backfill-project-id.mjs` | `projectId` ráírása a régi tartalomra (idempotens, `--dry-run`) |
+| `migrate-inline-images.mjs` | Beágyazott base64 képek átmozgatása Storage-ba (`--dry-run`, `--backup-dir`) |
+| `cleanup-obsolete-station-fields.mjs` | Megszűnt állomás-mezők törlése (`funFact`, `extraInfo`) |
+| `backfill-qr-codes.mjs` | A `qr_codes` leképezés feltöltése |
+| `create-developer.mjs` | Developer fiók létrehozása/frissítése |
+
+---
+
+## 6. Skálázási megjegyzések
+
+- Az admin jelenleg **kliensoldalon** szűr településre. Ez a mostani
+  adatmennyiségnél (a képmigráció után a teljes tartalom ~30 KB) gyors; sok
+  település/tartalom esetén érdemes `where('projectId','==',…)` szerveroldali
+  szűrésre váltani (a backfill már lefutott, tehát minden dokumentumnak van
+  `projectId`-ja).
+- A `tripAnalytics` szerveroldalon aggregál, és csak a szükséges mezőket olvassa
+  (`select`), így nem tölti le az összes felhasználói dokumentumot.
+- A `user_progress` globális `totalPoints` mezője **nem** településenkénti; a
+  települési pontot a `leaderboards` alkollekció, illetve az analitika az adott
+  település állomásaiból számolja.

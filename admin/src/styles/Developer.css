@@ -1,0 +1,172 @@
+.developer-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.developer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.developer-header h1 {
+  margin: 0 0 6px;
+  font-size: 1.5rem;
+  color: var(--admin-text);
+}
+
+.developer-header p {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  max-width: 560px;
+}
+
+.developer-active {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--admin-accent-soft);
+  border: 1px solid #d5e0c2;
+  white-space: nowrap;
+}
+
+.developer-active-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--admin-accent);
+}
+
+.developer-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.developer-card {
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--admin-shadow);
+}
+
+.developer-card h2 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  color: var(--admin-text);
+}
+
+.developer-sub {
+  margin: 0 0 16px;
+  color: var(--admin-text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.developer-sub code {
+  background: var(--admin-surface-muted);
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 0.85em;
+}
+
+/* ── Település-lista ── */
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--admin-border);
+  background: var(--admin-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.project-item:hover {
+  border-color: #c9d4bc;
+  background: var(--admin-accent-soft);
+}
+
+.project-item.active {
+  border-color: var(--admin-accent);
+  background: var(--admin-accent-soft);
+}
+
+.project-item-name {
+  font-weight: 700;
+  color: var(--admin-text);
+}
+
+.project-item-id {
+  font-size: 0.75rem;
+  color: var(--admin-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.project-item-badge {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--admin-surface);
+  background: var(--admin-accent);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+/* ── Új település ── */
+.project-create {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.project-create input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--admin-surface-muted);
+  color: var(--admin-text);
+}
+
+.project-create input:focus {
+  outline: none;
+  border-color: var(--admin-accent);
+  background: var(--admin-surface);
+  box-shadow: 0 0 0 3px rgba(91, 111, 76, 0.12);
+}
+
+@media (max-width: 640px) {
+  .developer-header { flex-direction: column; }
+}

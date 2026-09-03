@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../firebaseConfig";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, addDoc } from "firebase/firestore";
 import "../styles/Content.css";
 import { safeString } from "../utils/safeString";
+import { useProject } from "../context/ProjectContext";
+import { docProjectId } from "../utils/projects";
 import StateCard from "../components/StateCard";
 
 function Contact() {
+  const { activeProjectId } = useProject();
   const [contact, setContact] = useState({
     name: "",
     address: "",
@@ -17,14 +20,18 @@ function Contact() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
-  async function fetchContact() {
+  const fetchContact = useCallback(async () => {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "contact"));
-      if (snapshot.size > 0) {
-        const contactDoc = snapshot.docs[0];
-        const data = contactDoc.data();
-        const office = data.mainOffice || {};
+      // Az aktív településhez tartozó kapcsolati doksi (a hiányzó projectId az
+      // alapértelmezett projektet jelenti). Ha nincs, üresen indul – mentéskor
+      // létrejön ehhez a projekthez.
+      const contactDoc = snapshot.docs.find(
+        (d) => docProjectId(d.data()) === activeProjectId,
+      );
+      if (contactDoc) {
+        const office = contactDoc.data().mainOffice || {};
         setDocId(contactDoc.id);
         setContact({
           name: safeString(office.name),
@@ -32,13 +39,16 @@ function Contact() {
           phone: safeString(office.phone),
           email: safeString(office.email),
         });
+      } else {
+        setDocId(null);
+        setContact({ name: "", address: "", phone: "", email: "" });
       }
       setLoading(false);
     } catch {
       setError("Hiba az adatok betöltése során");
       setLoading(false);
     }
-  }
+  }, [activeProjectId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -46,7 +56,7 @@ function Contact() {
     }, 0);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [fetchContact]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -55,7 +65,6 @@ function Contact() {
   };
 
   const handleSave = async () => {
-    if (!docId) return;
     try {
       setSaving(true);
       const cleanData = {
@@ -65,8 +74,15 @@ function Contact() {
           phone: safeString(contact.phone),
           email: safeString(contact.email),
         },
+        projectId: activeProjectId,
       };
-      await updateDoc(doc(db, "contact", docId), cleanData);
+      if (docId) {
+        await updateDoc(doc(db, "contact", docId), cleanData);
+      } else {
+        // Ehhez a településhez még nincs kapcsolati doksi – létrehozzuk.
+        const ref = await addDoc(collection(db, "contact"), cleanData);
+        setDocId(ref.id);
+      }
       setSaving(false);
       setSaved(true);
       setError(null);

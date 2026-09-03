@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'local_cache.dart';
+import '../utils/project_filter.dart';
 
 /// Elso indulas es 12 oran-kenti frissitesnel letolti Firestorebol az
 /// osszes tura, allomas es jutalom adatot, es elmenti a helyi cache-be.
@@ -19,13 +20,16 @@ class BootstrapService {
         db.collection('achievements').get(),
       ]).timeout(const Duration(seconds: 20));
 
+      // Az offline gyorsítótárba csak ennek a településnek a tartalma kerül.
       final trips = (results[0] as QuerySnapshot)
           .docs
           .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+          .where(inActiveProject)
           .toList();
       final stations = (results[1] as QuerySnapshot)
           .docs
           .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+          .where(inActiveProject)
           .toList();
       final achievements = (results[2] as QuerySnapshot)
           .docs

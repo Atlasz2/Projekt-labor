@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../services/auth_service.dart';
+import 'login_screen.dart';
+
 class NameScreen extends StatefulWidget {
   const NameScreen({super.key});
 
@@ -122,9 +125,44 @@ class _NameScreenState extends State<NameScreen> {
         SetOptions(merge: true),
       );
 
+      // Ha megadott emailt (és még nincs email-fiókkal összekötve), a
+      // fiókot email+jelszó hitelesítővel is összekötjük, hogy másik eszközön
+      // email+névvel visszaállítható legyen. Best-effort: ha az email már
+      // foglalt, a profil név alapján akkor is elkészült.
+      var linkedForMultiDevice = false;
+      if (email.isNotEmpty && user.email == null) {
+        try {
+          await AuthService.linkEmailPassword(email: email, name: displayName);
+          linkedForMultiDevice = true;
+        } on FirebaseAuthException catch (e) {
+          final code = e.code.toLowerCase();
+          if (mounted &&
+              (code.contains('email-already-in-use') ||
+                  code.contains('credential-already-in-use'))) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Ehhez az emailhez már tartozik fiók. A profilod elkészült; '
+                  'ha a korábbi haladásod kell, lépj be a „Van már fiókom” '
+                  'gombbal.',
+                ),
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
+          // Egyéb hibánál a profil név alapján így is működik (nem blokkoló).
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profil sikeresen létrehozva!')),
+          SnackBar(
+            content: Text(
+              linkedForMultiDevice
+                  ? 'Profil létrehozva! Másik eszközön email + névvel léphetsz be.'
+                  : 'Profil sikeresen létrehozva!',
+            ),
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {
@@ -228,6 +266,18 @@ class _NameScreenState extends State<NameScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _isLoading
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LoginScreen(),
+                        ),
+                      ),
+              icon: const Icon(Icons.devices, size: 18),
+              label: const Text('Van már fiókom (másik eszközön)'),
             ),
           ],
         ),

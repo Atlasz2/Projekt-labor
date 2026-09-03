@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/project_filter.dart';
 
 class AccommodationScreen extends StatefulWidget {
   const AccommodationScreen({super.key});
@@ -268,7 +269,10 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
           return Center(child: Text('Hiba: ${snapshot.error}'));
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        // Csak ennek a településnek a szállásai / vendéglátóhelyei.
+        final docs = (snapshot.data?.docs ?? [])
+            .where((d) => inActiveProject(d.data() as Map<String, dynamic>?))
+            .toList();
         if (docs.isEmpty) {
           return Center(child: Text(isRestaurant ? 'Nincsenek éttermek.' : 'Nincsenek szállások.'));
         }

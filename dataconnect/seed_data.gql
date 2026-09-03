@@ -1,0 +1,27 @@
+mutation SeedData @transaction {
+  user_insertMany(data: [
+    { email: "alice@example.com", displayName: "Alice" },
+    { email: "bob@example.com", displayName: "Bob" },
+    { email: "charlie@example.com", displayName: "Charlie" }
+  ])
+  folder_insertMany(data: [
+    { name: "Work", colorCode: "#FF0000", user: { id: "00000000-0000-0000-0000-000000000000" } },
+    { name: "Personal", colorCode: "#00FF00", user: { id: "00000000-0000-0000-0000-000000000001" } },
+    { name: "Shopping", colorCode: "#0000FF", user: { id: "00000000-0000-0000-0000-000000000002" } }
+  ])
+  task_insertMany(data: [
+    { title: "Finish report", status: "In Progress", priorityLevel: 1, folder: { id: "00000000-0000-0000-0000-000000000000" } },
+    { title: "Buy groceries", status: "Pending", priorityLevel: 2, folder: { id: "00000000-0000-0000-0000-000000000002" } },
+    { title: "Go to gym", status: "Completed", priorityLevel: 3, folder: { id: "00000000-0000-0000-0000-000000000001" } }
+  ])
+  taskLog_insertMany(data: [
+    { completedAt: "2023-10-01T10:00:00Z", notes: "Started working", task: { id: "00000000-0000-0000-0000-000000000000" } },
+    { completedAt: "2023-10-02T11:00:00Z", notes: "Bought milk", task: { id: "00000000-0000-0000-0000-000000000001" } },
+    { completedAt: "2023-10-03T12:00:00Z", notes: "Workout finished", task: { id: "00000000-0000-0000-0000-000000000002" } }
+  ])
+  settings_insertMany(data: [
+    { themePreference: "Dark", timezone: "UTC", user: { id: "00000000-0000-0000-0000-000000000000" } },
+    { themePreference: "Light", timezone: "PST", user: { id: "00000000-0000-0000-0000-000000000001" } },
+    { themePreference: "System", timezone: "EST", user: { id: "00000000-0000-0000-0000-000000000002" } }
+  ])
+}

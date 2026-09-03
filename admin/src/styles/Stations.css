@@ -74,13 +74,9 @@
 /* ---- Modal body ---- */
 .modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
 .form-section { display: flex; flex-direction: column; gap: 16px; }
-.field-group { display: flex; flex-direction: column; gap: 6px; }
-.field-group label { font-size: 13px; font-weight: 600; color: #5c5142; }
-.field-group input, .field-group textarea, .field-group select { padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #2b2720; background: #fafafa; transition: border-color .2s; }
-.field-group input:focus, .field-group textarea:focus, .field-group select:focus { outline: none; border-color: #5b6f4c; background: white; box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.field-hint { font-size: 11px; color: #94a3b8; margin: 0; }
-.required { color: #991b1b; }
+/* A .field-group / .field-row / .field-hint / .required alap-stílusok az
+   About.css-be kerültek (közös about-editor űrlaprendszer). Itt csak a
+   Stations-specifikus validációs variánsok maradnak (lentebb). */
 .coords-display { font-size: 12px; margin: 4px 0 0; padding: 6px 10px; border-radius: 6px; }
 .coords-display.warn { background: #f3e6c9; color: #7b4a24; }
 .coords-display:not(.warn) { background: #dcfce7; color: #3a4a2f; }

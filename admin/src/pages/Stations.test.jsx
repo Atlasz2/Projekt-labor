@@ -9,6 +9,17 @@ import Stations from "./Stations";
 vi.mock("../firebaseConfig", () => ({ db: {}, storage: {} }));
 vi.mock("../styles/Stations.css", () => ({}));
 
+// Az aktív projekt fix – a szűrés a valós filterByProject-tel fut (a projectId
+// nélküli seed-dokumentumok az alapértelmezett projektbe tartoznak).
+vi.mock("../context/ProjectContext", () => ({
+  useProject: () => ({
+    activeProjectId: "nagyvazsony",
+    projects: [{ id: "nagyvazsony", name: "Nagyvázsony" }],
+    setActiveProjectId: vi.fn(),
+    createProject: vi.fn(),
+  }),
+}));
+
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn((_db, name) => name),
   getDocs: vi.fn(),

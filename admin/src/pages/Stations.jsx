@@ -5,6 +5,8 @@ import { db, storage } from '../firebaseConfig';
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uploadImageWithFallback, fetchDataUrl } from '../utils/imageUpload';
+import { useProject } from '../context/ProjectContext';
+import { filterByProject } from '../utils/projects';
 import { GoogleMap, Marker, useLoadScript } from '@react-google-maps/api';
 import { jsPDF } from 'jspdf';
 import Snackbar from '@mui/material/Snackbar';
@@ -62,26 +64,30 @@ const EMPTY_FORM = {
   qrCode: '',
   tripId: '',
   unlockContent: '',
-  extraInfo: '',
   unlockContentImageUrl: '',
 };
 
 export default function Stations() {
   const queryClient = useQueryClient();
+  const { activeProjectId } = useProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const [paramsHandled, setParamsHandled] = useState(false);
+  // A listák az aktív településre (projectId) szűrve – a hiányzó projectId az
+  // alapértelmezett projektet jelenti, így a régi adat is látszik.
   const { data: stations = [], isLoading } = useQuery({
-    queryKey: ['stations'],
+    queryKey: ['stations', activeProjectId],
     queryFn: async () => {
       const snapshot = await getDocs(collection(db, 'stations'));
-      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      const all = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      return filterByProject(all, activeProjectId);
     },
   });
   const { data: trips = [] } = useQuery({
-    queryKey: ['trips'],
+    queryKey: ['trips', activeProjectId],
     queryFn: async () => {
       const snapshot = await getDocs(collection(db, 'trips'));
-      return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      const all = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      return filterByProject(all, activeProjectId);
     },
   });
   const [editingId, setEditingId] = useState(null);
@@ -116,7 +122,6 @@ export default function Stations() {
       qrCode: station.qrCode || '',
       tripId: station.tripId || '',
       unlockContent: station.unlockContent || '',
-      extraInfo: station.extraInfo || '',
       unlockContentImageUrl: station.unlockContentImageUrl || '',
     });
     setShowModal(true);
@@ -195,8 +200,9 @@ export default function Stations() {
         qrCode: formData.qrCode.trim() || '',
         tripId: formData.tripId || '',
         unlockContent: formData.unlockContent.trim(),
-        extraInfo: formData.extraInfo.trim(),
         unlockContentImageUrl: formData.unlockContentImageUrl || '',
+        // White-label: az állomás az aktív településhez tartozik.
+        projectId: activeProjectId,
       };
 
       await assertQrCodeAvailable(db, {
@@ -563,10 +569,6 @@ export default function Stations() {
                       </div>
                     )}
                     <span className="field-hint">A beolvasás után a feloldott szöveggel együtt jelenik meg</span>
-                  </div>
-                  <div className="field-group">
-                    <label>Extra információ</label>
-                    <textarea rows="2" value={formData.extraInfo} onChange={(e) => setFormData({ ...formData, extraInfo: e.target.value })} placeholder="Nyitvatartás, belépési díj, megközelítés..." />
                   </div>
                 </section>
 

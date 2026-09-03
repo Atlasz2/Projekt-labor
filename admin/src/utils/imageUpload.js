@@ -83,7 +83,7 @@ export async function uploadImageWithFallback({ file, storage, folder }) {
     const url = await Promise.race([
       uploadBytes(storageRef, file).then((snap) => getDownloadURL(snap.ref)),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("storage-timeout")), 5000),
+        setTimeout(() => reject(new Error("storage-timeout")), 30000),
       ),
     ]);
     return { url, mode: "storage", message: "Kep feltoltve." };
@@ -92,7 +92,14 @@ export async function uploadImageWithFallback({ file, storage, folder }) {
   }
 
   const url = await fileToOptimizedDataUrl(file);
-  return { url, mode: "inline", message: "Kep beagyazva." };
+  return {
+    url,
+    mode: "inline",
+    // Figyelmeztetes: a beagyazott (base64) kep a Firestore dokumentumba kerul,
+    // ami erosen lassitja a betoltest. Csak vegso menedek.
+    message:
+      "FIGYELEM: a kep a Storage helyett a dokumentumba agyazodott (lassitja az appot). Ellenorizd a Storage jogosultsagot es probald ujra.",
+  };
 }
 export const fetchDataUrl = async (url) => {
   const response = await fetch(url);

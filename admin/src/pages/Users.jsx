@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { db } from "../firebaseConfig";
-import { collection, getDocs } from "firebase/firestore";
+import { db, functions } from "../firebaseConfig";
+import { collection, getDocs, doc, setDoc } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import "../styles/Users.css";
 import StateCard from "../components/StateCard";
+import ConfirmDialog from "../components/ConfirmDialog";
+import { useAdminAuth } from "../context/AdminAuthContext";
+import { useProject } from "../context/ProjectContext";
+import { DEFAULT_PROJECT_ID } from "../utils/projects";
 import { buildCsv, downloadCsv } from "../utils/exportCsv";
+
+// Szerepkör olvasható neve. A 'developer' a platform-szintű (admin fölötti)
+// szerep, ezért külön jelenik meg, nem "Felhasználó"-ként.
+const roleLabel = (role) => {
+  if (role === "developer") return "Developer";
+  if (role === "admin") return "Admin";
+  return "Felhasználó";
+};
 
 const formatDate = (value) => {
   if (!value) return "N/A";
@@ -26,6 +39,17 @@ function Users() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
+  // Developer-only műveletek: szerep-adás és teljes törlés.
+  const { userRole, userEmail } = useAdminAuth();
+  const isDeveloper = userRole === "developer";
+  const { projects } = useProject();
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [actionBusyId, setActionBusyId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: "", name: "", projectId: "" });
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [inviteLink, setInviteLink] = useState("");
   async function fetchUsers() {
     try {
       setLoading(true);
@@ -95,6 +119,8 @@ function Users() {
           email,
           userName: userData.name || userData.userName || email || "Ismeretlen",
           role: userData.role || "user",
+          projectId: userData.projectId || "",
+          banned: userData.banned === true,
           tripId: "N/A",
           completedStations: 0,
           totalStations: totalStationsCount,
@@ -167,7 +193,7 @@ function Users() {
       { key: "rank", label: "Rang" },
       { key: "userName", label: "Név" },
       { key: "email", label: "Email" },
-      { key: "role", label: "Szerepkör", format: (v) => (v === "admin" ? "Admin" : "Felhasználó") },
+      { key: "role", label: "Szerepkör", format: (v) => roleLabel(v) },
       { key: "points", label: "Pont" },
       { key: "completedStations", label: "Teljesített állomások" },
       { key: "totalStations", label: "Összes állomás" },
@@ -178,6 +204,154 @@ function Users() {
     const today = new Date().toISOString().slice(0, 10);
     downloadCsv(`felhasznalok_${today}.csv`, buildCsv(rows, columns));
     setSnack({ open: true, severity: "success", message: `${users.length} felhasználó exportálva CSV-be.` });
+  };
+
+  // A users doksi azonosítója: ahonnan olvastuk (id), egyébként az uid.
+  const targetDocId = (user) => user.id || user.uid;
+
+  // Admin jog adása/elvétele. A szabályok szerint szerepet csak developer
+  // állíthat, ezért a gomb is csak neki jelenik meg.
+  const handleToggleAdmin = async (user) => {
+    const id = targetDocId(user);
+    if (!id) return;
+    const nextRole = user.role === "admin" ? "user" : "admin";
+    setActionBusyId(id);
+    try {
+      await setDoc(
+        doc(db, "users", id),
+        {
+          role: nextRole,
+          ...(user.uid ? { uid: user.uid } : {}),
+          ...(user.email ? { email: user.email } : {}),
+        },
+        { merge: true },
+      );
+      setSnack({
+        open: true,
+        severity: "success",
+        message:
+          nextRole === "admin"
+            ? `${user.userName} mostantól admin.`
+            : `${user.userName} admin joga visszavonva.`,
+      });
+      await fetchUsers();
+    } catch (err) {
+      setSnack({
+        open: true,
+        severity: "error",
+        message: `Nem sikerült a szerep módosítása: ${err.message || err}`,
+      });
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  // Település hozzárendelése egy adminhoz: ettől kezdve ő csak annak a
+  // településnek a tartalmát látja/kezeli (users/{uid}.projectId).
+  const handleAssignProject = async (user, projectId) => {
+    const id = targetDocId(user);
+    if (!id) return;
+    setActionBusyId(id);
+    try {
+      await setDoc(doc(db, "users", id), { projectId }, { merge: true });
+      setSnack({
+        open: true,
+        severity: "success",
+        message: `${user.userName} települése: ${
+          projects.find((p) => p.id === projectId)?.name || projectId
+        }`,
+      });
+      await fetchUsers();
+    } catch (err) {
+      setSnack({
+        open: true,
+        severity: "error",
+        message: `Nem sikerült a hozzárendelés: ${err.message || err}`,
+      });
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  // Admin meghívása e-mail alapján. A szerver létrehozza/frissíti a fiókot
+  // admin szerepkörrel, és visszaad egy jelszó-beállító linket, amit a
+  // meghívottnak kell eljuttatni (nem kell külön e-mail-küldő szolgáltatás).
+  const handleInvite = async () => {
+    const email = inviteForm.email.trim();
+    if (!email) return;
+    setInviteBusy(true);
+    setInviteLink("");
+    try {
+      const call = httpsCallable(functions, "inviteAdmin");
+      const res = await call({
+        email,
+        name: inviteForm.name.trim(),
+        projectId: inviteForm.projectId || projects[0]?.id,
+      });
+      setInviteLink(res.data?.resetLink || "");
+      setSnack({
+        open: true,
+        severity: "success",
+        message: res.data?.created
+          ? `${email} meghívva adminként.`
+          : `${email} admin jogot kapott.`,
+      });
+      await fetchUsers();
+    } catch (err) {
+      const reason = err?.details?.reason || err?.message || err;
+      setSnack({ open: true, severity: "error", message: `Meghívás sikertelen: ${reason}` });
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
+  // Kitiltás / feloldás: visszafordítható alternatíva a végleges törlés helyett.
+  const handleToggleBan = async (user) => {
+    const uid = user.uid || user.id;
+    if (!uid) return;
+    setActionBusyId(user.id || user.uid);
+    try {
+      const call = httpsCallable(functions, "setUserBanned");
+      await call({ uid, banned: !user.banned });
+      setSnack({
+        open: true,
+        severity: "success",
+        message: user.banned
+          ? `${user.userName} kitiltása feloldva.`
+          : `${user.userName} kitiltva (nem tud belépni).`,
+      });
+      await fetchUsers();
+    } catch (err) {
+      const reason = err?.details?.reason || err?.message || err;
+      setSnack({ open: true, severity: "error", message: `Sikertelen: ${reason}` });
+    } finally {
+      setActionBusyId(null);
+    }
+  };
+
+  // Teljes törlés: Auth-fiók + minden kapcsolódó dokumentum, szerveroldalon
+  // (adminDeleteUser callable, developer-jogosultsággal).
+  const handleDeleteUser = async () => {
+    const user = deleteTarget;
+    if (!user) return;
+    const uid = user.uid || user.id;
+    setDeleteTarget(null);
+    setActionBusyId(uid);
+    try {
+      const call = httpsCallable(functions, "adminDeleteUser");
+      await call({ uid });
+      setSnack({
+        open: true,
+        severity: "success",
+        message: `${user.userName} törölve.`,
+      });
+      await fetchUsers();
+    } catch (err) {
+      const reason = err?.details?.reason || err?.message || err;
+      setSnack({ open: true, severity: "error", message: `Törlés sikertelen: ${reason}` });
+    } finally {
+      setActionBusyId(null);
+    }
   };
 
   if (loading) {
@@ -225,19 +399,35 @@ function Users() {
   };
 
   const adminCount = users.filter((item) => item.role === "admin").length;
+  // Megjegyzés: a fenti számláló a teljes körre vonatkozik; a lista a
+  // szerep-hierarchia szerint szűrt (lásd visibleUsers).
   // reduce (not Math.max(...spread)) so this stays safe with thousands of users.
   const maxPoints = users.reduce((max, u) => (u.points > max ? u.points : max), 0);
 
   // Search + pagination keep the ranking responsive even with thousands of users:
   // only one page worth of rows is ever rendered into the DOM.
   const q = search.trim().toLowerCase();
-  const filteredUsers = q
-    ? users.filter(
+  // Szerep-hierarchia: mindenki legfeljebb a SAJÁT szintjét látja. Az admin
+  // nem látja a developereket (a developer mindenkit lát).
+  const visibleUsers = isDeveloper
+    ? users
+    : users.filter((u) => (u.role || "user") !== "developer");
+
+  const bySearch = q
+    ? visibleUsers.filter(
         (u) =>
           (u.userName && u.userName.toLowerCase().includes(q)) ||
           (u.email && u.email.toLowerCase().includes(q))
       )
-    : users;
+    : visibleUsers;
+  // Szerep szerinti szűrő (pl. csak az adminok listázása).
+  // A 'developer' szűrő nem-developernél nem érvényesül (nem is választható).
+  const effectiveRoleFilter =
+    roleFilter === "developer" && !isDeveloper ? "all" : roleFilter;
+  const filteredUsers =
+    effectiveRoleFilter === "all"
+      ? bySearch
+      : bySearch.filter((u) => (u.role || "user") === effectiveRoleFilter);
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageStart = (safePage - 1) * PAGE_SIZE;
@@ -286,6 +476,35 @@ function Users() {
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
             />
+            <select
+              className="users-role-filter"
+              value={roleFilter}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setPage(1);
+              }}
+              title="Szűrés szerepkör szerint"
+            >
+              <option value="all">Minden szerep</option>
+              {/* A 'developer' szűrő csak developernek – az admin a
+                  developereket nem is látja, így nem is szűrhet rájuk. */}
+              {isDeveloper && <option value="developer">Developer</option>}
+              <option value="admin">Admin</option>
+              <option value="user">Felhasználó</option>
+            </select>
+            {isDeveloper && (
+              <button
+                type="button"
+                className="users-invite-btn"
+                onClick={() => {
+                  setInviteForm({ email: "", name: "", projectId: projects[0]?.id || "" });
+                  setInviteLink("");
+                  setInviteOpen(true);
+                }}
+              >
+                ＋ Admin meghívása
+              </button>
+            )}
             <button type="button" className="users-export-btn" onClick={handleExportCsv}>
               ⬇ CSV export ({users.length})
             </button>
@@ -303,13 +522,14 @@ function Users() {
           ) : (
             <>
               <div className="users-ranking">
-                <div className="users-header">
+                <div className={`users-header${isDeveloper ? " with-actions" : ""}`}>
                   <div className="rank-col">Rang</div>
                   <div className="name-col">Felhasználó</div>
                   <div className="role-col">Szerepkör</div>
                   <div className="points-col">Pontok</div>
                   <div className="progress-col">Haladás</div>
                   <div className="activity-col">Utolsó aktivitás</div>
+                  {isDeveloper && <div className="actions-col">Műveletek</div>}
                 </div>
 
                 {pagedUsers.map((user, localIndex) => {
@@ -317,7 +537,7 @@ function Users() {
                   return (
                     <div
                       key={user.id || user.userId}
-                      className={`user-row${index < 3 ? " top" : ""}`}
+                      className={`user-row${index < 3 ? " top" : ""}${isDeveloper ? " with-actions" : ""}`}
                     >
                       <div className="rank-col">
                         <div className="rank-badge">{getRankBadge(index)}</div>
@@ -326,13 +546,14 @@ function Users() {
                       <div className="name-col">
                         <strong title={user.uid ? `uid: ${user.uid}` : undefined}>
                           {user.userName}
+                          {user.banned && <span className="banned-pill">kitiltva</span>}
                         </strong>
                         <small>{user.email || "Nincs email"}</small>
                       </div>
 
                       <div className="role-col">
-                        <span className={`role-badge ${user.role === "admin" ? "admin" : "user"}`}>
-                          {user.role === "admin" ? "Admin" : "Felhasználó"}
+                        <span className={`role-badge ${user.role === "admin" || user.role === "developer" ? "admin" : "user"}`}>
+                          {roleLabel(user.role)}
                         </span>
                       </div>
 
@@ -355,6 +576,80 @@ function Users() {
                       <div className="activity-col" title={`doc: ${user.id || "N/A"}`}>
                         {formatDate(user.lastUpdated)}
                       </div>
+
+                      {isDeveloper && (() => {
+                        // Saját magadon és más developeren nem lehet műveletet
+                        // végezni (kizárás / véletlen jogvesztés elkerülése).
+                        const isSelf =
+                          !!userEmail && !!user.email && user.email === userEmail;
+                        const isOtherDeveloper = user.role === "developer";
+                        const locked = isSelf || isOtherDeveloper;
+                        const busy = actionBusyId === (user.id || user.uid);
+                        return (
+                          <div className="actions-col">
+                            {locked ? (
+                              <span className="actions-locked">
+                                {isSelf ? "saját fiók" : "developer"}
+                              </span>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="user-action-btn"
+                                  disabled={busy}
+                                  onClick={() => handleToggleAdmin(user)}
+                                  title={
+                                    user.role === "admin"
+                                      ? "Admin jog visszavonása"
+                                      : "Admin jog adása"
+                                  }
+                                >
+                                  {user.role === "admin" ? "Jog elvétele" : "Admin jog"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="user-action-btn"
+                                  disabled={busy}
+                                  onClick={() => handleToggleBan(user)}
+                                  title={
+                                    user.banned
+                                      ? "Kitiltás feloldása"
+                                      : "Kitiltás (nem tud belépni, visszafordítható)"
+                                  }
+                                >
+                                  {user.banned ? "Feloldás" : "Kitiltás"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="user-action-btn danger"
+                                  disabled={busy}
+                                  onClick={() => setDeleteTarget(user)}
+                                  title="Felhasználó és minden adatának végleges törlése"
+                                >
+                                  Törlés
+                                </button>
+                                {user.role === "admin" && (
+                                  <select
+                                    className="user-project-select"
+                                    disabled={busy}
+                                    value={user.projectId || DEFAULT_PROJECT_ID}
+                                    onChange={(e) =>
+                                      handleAssignProject(user, e.target.value)
+                                    }
+                                    title="Melyik települést kezelheti"
+                                  >
+                                    {projects.map((p) => (
+                                      <option key={p.id} value={p.id}>
+                                        {p.name || p.id}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -388,6 +683,96 @@ function Users() {
         </>
       )}
 
+      {inviteOpen && (
+        <div
+          className="invite-backdrop"
+          role="presentation"
+          onClick={(e) => e.target === e.currentTarget && setInviteOpen(false)}
+        >
+          <div className="invite-modal" role="dialog" aria-modal="true">
+            <h2>Admin meghívása</h2>
+            <p className="invite-hint">
+              A megadott e-mail címhez admin fiók jön létre (ha még nincs), és
+              hozzárendeljük a kiválasztott településhez. A mentés után kapsz egy
+              jelszó-beállító linket, amit el kell juttatnod a meghívottnak.
+            </p>
+
+            <label className="invite-label" htmlFor="invite-email">E-mail *</label>
+            <input
+              id="invite-email"
+              className="invite-input"
+              type="email"
+              value={inviteForm.email}
+              disabled={inviteBusy}
+              onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+              placeholder="pl. admin@mencshely.hu"
+            />
+
+            <label className="invite-label" htmlFor="invite-name">Név</label>
+            <input
+              id="invite-name"
+              className="invite-input"
+              type="text"
+              value={inviteForm.name}
+              disabled={inviteBusy}
+              onChange={(e) => setInviteForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="pl. Kiss János"
+            />
+
+            <label className="invite-label" htmlFor="invite-project">Település</label>
+            <select
+              id="invite-project"
+              className="invite-input"
+              value={inviteForm.projectId}
+              disabled={inviteBusy}
+              onChange={(e) => setInviteForm((f) => ({ ...f, projectId: e.target.value }))}
+            >
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name || p.id}</option>
+              ))}
+            </select>
+
+            {inviteLink && (
+              <div className="invite-link-box">
+                <strong>Jelszó-beállító link (küldd el a meghívottnak):</strong>
+                <textarea readOnly rows="3" value={inviteLink} onFocus={(e) => e.target.select()} />
+              </div>
+            )}
+
+            <div className="invite-actions">
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={inviteBusy || !inviteForm.email.trim()}
+                onClick={handleInvite}
+              >
+                {inviteBusy ? "Meghívás..." : "Meghívás"}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setInviteOpen(false)}
+              >
+                {inviteLink ? "Bezárás" : "Mégse"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Felhasználó törlése"
+        message={
+          deleteTarget
+            ? `Biztosan törlöd: ${deleteTarget.userName}${deleteTarget.email ? ` (${deleteTarget.email})` : ""}? ` +
+              "A fiók és MINDEN adata (haladás, jutalmak, ranglista) véglegesen törlődik. Ez nem vonható vissza."
+            : ""
+        }
+        confirmText="Végleges törlés"
+        onConfirm={handleDeleteUser}
+        onClose={() => setDeleteTarget(null)}
+      />
       <Snackbar
         open={snack.open}
         autoHideDuration={4000}

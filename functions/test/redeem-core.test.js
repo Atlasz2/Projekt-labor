@@ -13,8 +13,15 @@ import { FakeFirestore, FakeFieldValue } from './fake-firestore.js';
 const uid = 'user-1';
 let db;
 
-function redeem(code, location) {
-  return redeemQrCore({ db, FieldValue: FakeFieldValue, uid, code, location });
+function redeem(code, location, projectId) {
+  return redeemQrCore({
+    db,
+    FieldValue: FakeFieldValue,
+    uid,
+    code,
+    location,
+    projectId,
+  });
 }
 
 beforeEach(() => {
@@ -228,8 +235,15 @@ test('túra-teljesítés: hiányzó állomásnál nem íródik completedTripIds'
 
 test('top_n jutalom: a friss pontszámmal top 2-be kerülve feloldódik', async () => {
   db.seed('stations/st1', { name: 'Kinizsi vár', qrCode: 'VAR-001', points: 50 });
-  db.seed('public_leaderboard/masik-1', { displayName: 'Éllovas', points: 100 });
-  db.seed('public_leaderboard/masik-2', { displayName: 'Második', points: 30 });
+  // A top_n a település SAJÁT ranglistáján értékelődik ki.
+  db.seed('leaderboards/nagyvazsony/entries/masik-1', {
+    displayName: 'Éllovas',
+    points: 100,
+  });
+  db.seed('leaderboards/nagyvazsony/entries/masik-2', {
+    displayName: 'Második',
+    points: 30,
+  });
   db.seed('achievements/podium', {
     name: 'Dobogós',
     conditionType: 'top_n',
@@ -245,8 +259,8 @@ test('top_n jutalom: a friss pontszámmal top 2-be kerülve feloldódik', async 
 
 test('top_n jutalom: rangon kívül nem oldódik fel', async () => {
   db.seed('stations/st1', { name: 'Kinizsi vár', qrCode: 'VAR-001', points: 5 });
-  db.seed('public_leaderboard/masik-1', { displayName: 'A', points: 100 });
-  db.seed('public_leaderboard/masik-2', { displayName: 'B', points: 90 });
+  db.seed('leaderboards/nagyvazsony/entries/masik-1', { displayName: 'A', points: 100 });
+  db.seed('leaderboards/nagyvazsony/entries/masik-2', { displayName: 'B', points: 90 });
   db.seed('achievements/podium', {
     name: 'Dobogós',
     conditionType: 'top_n',
@@ -353,4 +367,78 @@ test('redeem: pozíció nélkül a helyhez kötött állomás is jóváíródik 
 
   const result = await redeem('VAR-001'); // nincs location
   assert.equal(result.updatedPoints, 25);
+});
+
+test('redeem: másik település QR-kódja -> wrong_project, nincs jóváírás', async () => {
+  db.seed('stations/st-masik', {
+    name: 'Idegen állomás',
+    qrCode: 'MASIK-001',
+    points: 25,
+    projectId: 'masik-telepules',
+  });
+
+  const result = await redeem('MASIK-001', null, 'nagyvazsony');
+
+  assert.equal(result.found, true);
+  assert.equal(result.rejected, 'wrong_project');
+  assert.equal(result.targetProjectId, 'masik-telepules');
+  const progress = db.read(`user_progress/${uid}`);
+  assert.equal(progress.totalPoints, 0);
+  assert.deepEqual(progress.completedStations, []);
+});
+
+test('redeem: a saját település kódja jóváíródik', async () => {
+  db.seed('stations/st1', {
+    name: 'Kinizsi vár',
+    qrCode: 'VAR-001',
+    points: 25,
+    projectId: 'nagyvazsony',
+  });
+
+  const result = await redeem('VAR-001', null, 'nagyvazsony');
+
+  assert.equal(result.found, true);
+  assert.equal(result.rejected, undefined);
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 25);
+});
+
+test('redeem: projectId nélküli állomás az alapértelmezett településhez tartozik', async () => {
+  db.seed('stations/st-regi', { name: 'Régi', qrCode: 'REGI-001', points: 10 });
+
+  const result = await redeem('REGI-001', null, 'nagyvazsony');
+
+  assert.equal(result.rejected, undefined);
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 10);
+});
+
+test('redeem: régi kliens (nincs projectId) esetén nincs település-szűrés', async () => {
+  db.seed('stations/st-masik', {
+    name: 'Idegen',
+    qrCode: 'MASIK-001',
+    points: 15,
+    projectId: 'masik-telepules',
+  });
+
+  const result = await redeem('MASIK-001');
+
+  assert.equal(result.rejected, undefined);
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 15);
+});
+
+test('ranglista: a település saját bejegyzése jön létre a szerzett ponttal', async () => {
+  db.seed('stations/st1', {
+    name: 'Kinizsi vár',
+    qrCode: 'VAR-001',
+    points: 25,
+    projectId: 'nagyvazsony',
+  });
+
+  await redeem('VAR-001', null, 'nagyvazsony');
+
+  const entry = db.read(`leaderboards/nagyvazsony/entries/${uid}`);
+  assert.equal(entry.points, 25);
+  assert.equal(entry.completedStationsCount, 1);
+  assert.equal(entry.projectId, 'nagyvazsony');
+  // A régi globális ranglista is frissül (átmeneti kettős írás).
+  assert.equal(db.read(`public_leaderboard/${uid}`).points, 25);
 });

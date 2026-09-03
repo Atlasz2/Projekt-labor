@@ -6,11 +6,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Staff = admin (egy település kezelője) vagy developer (platform-szintű,
+    // több települést kezel). A developer mindenhez hozzáfér, amihez az admin.
+    function staffRoles() {
+      return ['admin', 'developer'];
+    }
+
     // Primary admin check: UID-based only (cannot be spoofed by creating a doc)
     function adminByUid() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in staffRoles();
     }
 
     // Email-doc fallback: also requires a uid field in the doc matching the caller
@@ -19,12 +25,65 @@ service cloud.firestore {
         && request.auth.token.email != null
         && exists(/databases/$(database)/documents/users/$(request.auth.token.email))
         && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.email == request.auth.token.email
-        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'admin'
+        && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role in staffRoles()
         && get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.uid == request.auth.uid;
     }
 
     function isAdmin() {
       return adminByUid() || adminByEmailDoc();
+    }
+
+    // Csak developer: a platform-szintű település (projekt) kezeléséhez.
+    function isDeveloper() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'developer';
+    }
+
+    // ── White-label: tenant-izoláció ──────────────────────────────────────
+    // Az alapértelmezett település. A projectId NÉLKÜLI dokumentumok ide
+    // tartoznak (visszamenőleges kompatibilitás a migráció előtti adattal).
+    function defaultProject() {
+      return 'nagyvazsony';
+    }
+
+    // Egy dokumentum települése.
+    function docProject(data) {
+      return 'projectId' in data ? data.projectId : defaultProject();
+    }
+
+    // A bejelentkezett admin SAJÁT települése (users/{uid}.projectId).
+    function myProject() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && 'projectId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectId
+        : defaultProject();
+    }
+
+    // Tartalom létrehozása/módosítása: a developer bármelyik településen,
+    // az admin CSAK a sajátján.
+    function canCreateContent() {
+      return isDeveloper()
+        || (isAdmin() && docProject(request.resource.data) == myProject());
+    }
+
+    function canUpdateContent() {
+      return isDeveloper()
+        || (isAdmin()
+            && docProject(resource.data) == myProject()
+            && docProject(request.resource.data) == myProject());
+    }
+
+    function canDeleteContent() {
+      return isDeveloper() || (isAdmin() && docProject(resource.data) == myProject());
+    }
+
+    // Települések (white-label projektek): bárki olvashatja (a mobil app is
+    // választ belőle), de csak a developer hozhat létre/módosíthat.
+    match /projects/{projectId} {
+      allow read: if true;
+      allow write: if isDeveloper();
     }
 
     // Validates a user's self-write to their own progress document:
@@ -97,7 +156,17 @@ service cloud.firestore {
         || !resource.data.keys().hasAny(['role'])
         || request.resource.data.role == resource.data.role
       );
-      allow create, update, delete: if isAdmin();
+      // Staff-jogok szétválasztva: az admin (egy település kezelője) létrehozhat
+      // és szerkeszthet felhasználói doksit, de a SZEREPET nem változtathatja és
+      // nem törölhet. Szerep-adás (pl. admin kinevezés) és törlés = developer.
+      allow create: if isAdmin();
+      allow update: if isDeveloper()
+        || (isAdmin() && (
+          !request.resource.data.keys().hasAny(['role'])
+          || (resource.data.keys().hasAny(['role'])
+              && request.resource.data.role == resource.data.role)
+        ));
+      allow delete: if isDeveloper();
     }
 
     match /usernames/{normalizedName} {
@@ -126,44 +195,67 @@ service cloud.firestore {
              get(/databases/$(database)/documents/user_progress/$(userId)).data.totalPoints;
     }
 
+    // Projektenkénti ranglista. Kizárólag a szerver (redeemQr, Admin SDK) írja,
+    // ezért a kliens-írás tiltott – így a pontszám nem hamisítható.
+    match /leaderboards/{projectId}/entries/{userId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /trips/{tripId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     match /stations/{stationId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     match /accommodations/{accommodationId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     match /restaurants/{restaurantId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     match /about/{aboutId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     match /contact/{contactId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     match /achievements/{achievementId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateContent();
+      allow update: if canUpdateContent();
+      allow delete: if canDeleteContent();
     }
 
     // QR-kód -> cél (állomás/esemény) leképezés. Az admin felület tartja

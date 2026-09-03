@@ -1,12 +1,15 @@
+/* Közös állapot-kártya (betöltés / üres lista / hiba).
+   Témaváltozókat használ, így sötét módban is helyes — korábban beégetett
+   világos háttérrel vakított. */
+
 .state-card {
   text-align: center;
   padding: 56px 24px;
   border-radius: 16px;
-  border: 1px solid #dbe6f3;
-  background:
-    radial-gradient(circle at 10% 20%, rgba(191, 219, 254, 0.45), transparent 42%),
-    linear-gradient(160deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  box-shadow: var(--admin-shadow);
 }
 
 .state-card__icon {
@@ -19,13 +22,13 @@
   margin: 0;
   font-size: 1.2rem;
   font-weight: 800;
-  color: #2b2720;
+  color: var(--admin-text);
 }
 
 .state-card__description {
   max-width: 520px;
   margin: 10px auto 0;
-  color: #52627a;
+  color: var(--admin-text-muted);
   font-size: 0.95rem;
   line-height: 1.55;
 }
@@ -37,12 +40,27 @@
   padding: 10px 18px;
   font-weight: 700;
   color: #ffffff;
-  background: linear-gradient(135deg, #46583b 0%, #5b6f4c 100%);
+  background: linear-gradient(135deg, var(--admin-accent-deep) 0%, var(--admin-accent) 100%);
   cursor: pointer;
 }
 
 .state-card__action:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.08);
+}
+
+/* Betöltés: finom pulzálás az ikonon + halvány "csillanó" sáv, hogy
+   érzékelhető legyen a folyamat. */
+.state-card--loading {
+  background:
+    linear-gradient(
+      100deg,
+      transparent 30%,
+      color-mix(in srgb, var(--admin-text) 5%, transparent) 50%,
+      transparent 70%
+    ),
+    var(--admin-surface);
+  background-size: 220% 100%, auto;
+  animation: state-card-shimmer 1.8s linear infinite;
 }
 
 .state-card--loading .state-card__icon {
@@ -53,4 +71,16 @@
   0%,
   100% { transform: scale(1); opacity: 0.72; }
   50% { transform: scale(1.08); opacity: 1; }
+}
+
+@keyframes state-card-shimmer {
+  from { background-position: 200% 0, 0 0; }
+  to   { background-position: -100% 0, 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .state-card--loading,
+  .state-card--loading .state-card__icon {
+    animation: none;
+  }
 }

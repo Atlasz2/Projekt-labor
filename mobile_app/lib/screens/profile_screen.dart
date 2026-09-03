@@ -9,6 +9,8 @@ import '../widgets/achievement_chip.dart';
 import '../widgets/data_rights_section.dart';
 import '../widgets/profile_skeleton.dart';
 import 'achievement_progress_screen.dart';
+import '../utils/project_filter.dart';
+import '../config/app_config.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -116,13 +118,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       int? higherCount;
       try {
         final leaderboardResults = await Future.wait<Object>([
+          // A település SAJÁT ranglistája (nem keverednek a falvak játékosai).
           _firestore
-              .collection('public_leaderboard')
+              .collection('leaderboards')
+              .doc(AppConfig.projectId)
+              .collection('entries')
               .orderBy('points', descending: true)
               .limit(50)
               .get(),
           _firestore
-              .collection('public_leaderboard')
+              .collection('leaderboards')
+              .doc(AppConfig.projectId)
+              .collection('entries')
               .where('points', isGreaterThan: safeInt(current['points']))
               .count()
               .get(),
@@ -179,7 +186,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (uid == null) return;
 
       final achSnap = await _firestore.collection('achievements').get();
-      final defs = achSnap.docs
+      // Csak ennek a településnek a jutalmai.
+      final defs = whereActiveProject(achSnap.docs)
           .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
           .toList();
 

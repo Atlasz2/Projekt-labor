@@ -8,6 +8,8 @@ import {
   doc,
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import { useProject } from '../context/ProjectContext';
+import { docProjectId } from '../utils/projects';
 
 /**
  * Generic CRUD hook for a Firestore collection.
@@ -20,20 +22,30 @@ import { db } from '../firebaseConfig';
  */
 export function useFirestoreCollection(collectionName, mapper, options = {}) {
   const queryClient = useQueryClient();
-  const key = [collectionName];
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
+  // White-label: a tartalom az aktív településre (projectId) van szűrve, és az
+  // új/szerkesztett elem is oda kerül. A hiányzó projectId az alapértelmezett
+  // projektet jelenti (a régi adat is látszik).
+  const { activeProjectId } = useProject();
+  const key = [collectionName, activeProjectId];
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: [collectionName] });
 
   const query = useQuery({
     queryKey: key,
     queryFn: async () => {
       const snapshot = await getDocs(collection(db, collectionName));
-      return snapshot.docs.map(mapper);
+      return snapshot.docs
+        .filter((d) => docProjectId(d.data()) === activeProjectId)
+        .map(mapper);
     },
   });
 
   const add = useMutation({
     mutationFn: async (data) => {
-      const ref = await addDoc(collection(db, collectionName), data);
+      const ref = await addDoc(collection(db, collectionName), {
+        ...data,
+        projectId: activeProjectId,
+      });
       if (options.afterAdd) await options.afterAdd(ref.id, data);
       return ref;
     },
@@ -41,7 +53,11 @@ export function useFirestoreCollection(collectionName, mapper, options = {}) {
   });
 
   const update = useMutation({
-    mutationFn: ({ id, data }) => updateDoc(doc(db, collectionName, id), data),
+    mutationFn: ({ id, data }) =>
+      updateDoc(doc(db, collectionName, id), {
+        ...data,
+        projectId: activeProjectId,
+      }),
     onSuccess: invalidate,
   });
 

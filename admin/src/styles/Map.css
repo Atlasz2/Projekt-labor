@@ -286,3 +286,20 @@
 }
 
 
+
+/* Az útvonalak a térkép megjelenése után, háttérben töltődnek – ez jelzi. */
+.map-routes-loading {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--admin-surface);
+  color: var(--admin-text-muted);
+  border: 1px solid var(--admin-border);
+  box-shadow: var(--admin-shadow-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+}

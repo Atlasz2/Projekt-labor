@@ -1,0 +1,32 @@
+type User @table {
+  email: String!
+  displayName: String!
+  createdAt: Timestamp
+}
+
+type Folder @table {
+  name: String!
+  colorCode: String
+  user: User!
+}
+
+type Task @table {
+  title: String!
+  status: String!
+  description: String
+  dueDate: Date
+  priorityLevel: Int
+  folder: Folder!
+}
+
+type TaskLog @table {
+  completedAt: Timestamp!
+  notes: String
+  task: Task!
+}
+
+type Settings @table {
+  themePreference: String!
+  timezone: String
+  user: User!
+}

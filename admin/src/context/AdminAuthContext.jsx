@@ -10,6 +10,7 @@ export function AdminAuthProvider({ children }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState("user");
   const [userEmail, setUserEmail] = useState("");
+  const [userUid, setUserUid] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,17 +19,21 @@ export function AdminAuthProvider({ children }) {
         setIsLoggedIn(false);
         setUserRole("user");
         setUserEmail("");
+        setUserUid("");
         setLoading(false);
         return;
       }
 
       const role = await resolveUserRole(user);
-      if (role !== "admin") {
+      // A 'developer' az admin fölötti szint (több település kezelése), ezért
+      // ugyanúgy beléphet, mint az admin.
+      if (role !== "admin" && role !== "developer") {
         sessionStorage.setItem("admin_access_error", "Ehhez a fiokhhoz nincs admin jogosultsag.");
         await signOut(auth);
         setIsLoggedIn(false);
         setUserRole("user");
         setUserEmail("");
+        setUserUid("");
         setLoading(false);
         return;
       }
@@ -36,6 +41,7 @@ export function AdminAuthProvider({ children }) {
       setIsLoggedIn(true);
       setUserRole(role);
       setUserEmail(user.email || "");
+      setUserUid(user.uid);
       setLoading(false);
     });
 
@@ -48,7 +54,7 @@ export function AdminAuthProvider({ children }) {
   };
 
   return (
-    <AdminAuthContext.Provider value={{ isLoggedIn, userRole, userEmail, loading, logout }}>
+    <AdminAuthContext.Provider value={{ isLoggedIn, userRole, userEmail, userUid, loading, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

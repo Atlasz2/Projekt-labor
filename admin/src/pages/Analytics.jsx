@@ -1,10 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebaseConfig';
+import { useProject } from '../context/ProjectContext';
 import StateCard from '../components/StateCard';
 import '../styles/Analytics.css';
 
 const pct = (rate) => `${Math.round((rate || 0) * 100)}%`;
+
+// Percben kapott átlagos befejezési idő olvasható alakra (perc / óra).
+const formatDuration = (minutes) => {
+  if (minutes == null) return null;
+  if (minutes < 60) return `${minutes} perc`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} óra` : `${h} ó ${m} p`;
+};
 
 // A callable hibáiból felhasználóbarát üzenet – kiemelten a "nincs deployolva"
 // esetet (a függvényt még nem telepítették).
@@ -14,12 +24,21 @@ const friendlyError = (err) => {
     return 'Az analitika függvény (tripAnalytics) még nincs telepítve. Futtasd: firebase deploy --only functions:tripAnalytics';
   }
   if (code.includes('permission-denied')) {
-    return 'Ehhez a nézethez admin jogosultság szükséges.';
+    return 'Ehhez a nézethez admin jogosultság szükséges (users/{uid}.role == "admin").';
+  }
+  // A szerver a valódi okot a details.reason mezőben küldi vissza (admin-only).
+  const reason = err?.details?.reason;
+  if (reason) {
+    return `A számítás szerveroldali hibába futott: ${reason}`;
   }
   return err?.message || 'Ismeretlen hiba történt az analitika betöltésekor.';
 };
 
 function Analytics() {
+  // Az analitika településspecifikus. A developer emellett kérhet összesített
+  // (minden település) nézetet is.
+  const { activeProjectId, activeProject, canSwitchProject } = useProject();
+  const [scope, setScope] = useState('project');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -29,14 +48,16 @@ function Analytics() {
     setError(null);
     try {
       const callable = httpsCallable(functions, 'tripAnalytics');
-      const res = await callable();
+      const res = await callable({
+        projectId: scope === 'all' ? 'all' : activeProjectId,
+      });
       setData(res.data);
     } catch (err) {
       setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope, activeProjectId]);
 
   useEffect(() => {
     // A betöltés a következő tick-re halasztva, hogy ne hívjunk setState-et
@@ -79,7 +100,29 @@ function Analytics() {
       <div className="analytics-header">
         <div>
           <h1>Viselkedési analitika</h1>
-          <p>Túra-tölcsér és állomás-népszerűség a felhasználók haladása alapján</p>
+          <p>
+            {scope === 'all'
+              ? 'Összesített nézet – minden település együtt'
+              : `${activeProject?.name || 'Nagyvázsony'} – túra-tölcsér és állomás-népszerűség`}
+          </p>
+          {canSwitchProject && (
+            <div className="analytics-scope">
+              <button
+                type="button"
+                className={`analytics-scope-btn${scope === 'project' ? ' active' : ''}`}
+                onClick={() => setScope('project')}
+              >
+                {activeProject?.name || 'Ez a település'}
+              </button>
+              <button
+                type="button"
+                className={`analytics-scope-btn${scope === 'all' ? ' active' : ''}`}
+                onClick={() => setScope('all')}
+              >
+                Összesített (minden település)
+              </button>
+            </div>
+          )}
         </div>
         <button className="analytics-refresh" type="button" onClick={load}>
           ↻ Frissítés
@@ -131,6 +174,9 @@ function Analytics() {
                   </div>
                   <div className="funnel-meta">
                     {t.stationCount} állomás · átlag {t.avgStationsPerParticipant.toFixed(1)} teljesítve / résztvevő
+                    {t.avgCompletionMinutes != null && (
+                      <> · ⏱️ átlag befejezés: {formatDuration(t.avgCompletionMinutes)} <span className="funnel-samples">({t.completionTimeSamples} mintából)</span></>
+                    )}
                   </div>
                 </div>
               );

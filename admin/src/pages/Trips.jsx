@@ -2,6 +2,8 @@ import PropTypes from "prop-types";
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebaseConfig";
+import { useProject } from "../context/ProjectContext";
+import { filterByProject } from "../utils/projects";
 import {
   collection,
   getDocs,
@@ -20,7 +22,12 @@ import {
 import { jsPDF } from "jspdf";
 import "../styles/Trips.css";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { getValhallaRouteData, formatDistance, formatDuration } from "../utils/routeService";
+import {
+  getRouteData,
+  formatDistance,
+  formatDuration,
+  getStoredRouteCoordinates,
+} from "../utils/routeService";
 import { getQrValue, getQrImageUrl } from "../utils/qrHelpers";
 import { fetchDataUrl } from "../utils/imageUpload";
 import Snackbar from "@mui/material/Snackbar";
@@ -28,45 +35,6 @@ import Alert from "@mui/material/Alert";
 import StateCard from "../components/StateCard";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
-
-const normalizeCoordinatePair = (pair, reverse = false) => {
-  if (!Array.isArray(pair) || pair.length < 2) return null;
-
-  const first = Number(pair[0]);
-  const second = Number(pair[1]);
-
-  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
-
-  return reverse ? [second, first] : [first, second];
-};
-
-const getStoredRouteCoordinates = (trip) => {
-  const routeFields = [
-    trip?.routeCoordinates,
-    trip?.routePoints,
-    trip?.path,
-    trip?.waypoints,
-  ];
-
-  for (const field of routeFields) {
-    if (!Array.isArray(field) || field.length === 0) continue;
-
-    const coords = field
-      .map((pair) => normalizeCoordinatePair(pair))
-      .filter(Boolean);
-
-    if (coords.length > 0) return coords;
-  }
-
-  const geometryCoordinates = trip?.geometry?.coordinates;
-  if (!Array.isArray(geometryCoordinates) || geometryCoordinates.length === 0) {
-    return [];
-  }
-
-  return geometryCoordinates
-    .map((pair) => normalizeCoordinatePair(pair, true))
-    .filter(Boolean);
-};
 
 const getDistanceValue = (distance) => {
   if (typeof distance === "number" && Number.isFinite(distance) && distance > 0) {
@@ -208,6 +176,7 @@ TripMap.defaultProps = {
 
 function Trips() {
   const navigate = useNavigate();
+  const { activeProjectId } = useProject();
   const [trips, setTrips] = useState([]);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -237,11 +206,13 @@ function Trips() {
     try {
       setLoading(true);
 
+      // A listák az aktív településre (projectId) szűrve – a hiányzó projectId
+      // az alapértelmezett projektet jelenti (a régi adat is látszik).
       const tripsSnapshot = await getDocs(collection(db, "trips"));
-      const tripsData = tripsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const tripsData = filterByProject(
+        tripsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        activeProjectId,
+      );
       setTrips(tripsData);
 
       const hydratedRoutes = {};
@@ -263,17 +234,17 @@ function Trips() {
       setTripMetrics(hydratedMetrics);
 
       const stationsSnapshot = await getDocs(collection(db, "stations"));
-      const stationsData = stationsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const stationsData = filterByProject(
+        stationsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        activeProjectId,
+      );
       setStations(stationsData);
     } catch {
       showMsg("Hiba az adatok betöltéseinél");
     } finally {
       setLoading(false);
     }
-  }, [showMsg]);
+  }, [showMsg, activeProjectId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -330,7 +301,7 @@ function Trips() {
       const coords = tripStations.map(getStationCoords).filter(Boolean);
 
       if (!routeCoordinates[tripId] && coords.length > 1) {
-        const routeData = await getValhallaRouteData(coords);
+        const routeData = await getRouteData(coords);
         setRouteCoordinates((prev) => ({ ...prev, [tripId]: routeData.coords }));
 
         if (routeData.distanceMeters > 0) {
@@ -370,6 +341,8 @@ function Trips() {
         name: formData.name,
         description: formData.description || "",
         isActive: !!formData.isActive,
+        // White-label: a túra az aktív településhez tartozik.
+        projectId: activeProjectId,
       };
 
       if (editingId) {
@@ -461,7 +434,7 @@ function Trips() {
       }
 
       if (!nextRoute || nextRoute.length === 0) {
-        const routeData = await getValhallaRouteData(coords);
+        const routeData = await getRouteData(coords);
 
         if (!routeData.coords.length) {
           showMsg("Nem sikerült útvonalat számolni a túrához");

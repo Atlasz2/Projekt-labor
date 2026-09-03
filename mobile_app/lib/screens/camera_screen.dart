@@ -182,6 +182,14 @@ class _CameraScreenState extends State<CameraScreen> {
         unawaited(_loadHistory());
       }
       unawaited(PendingQrSyncService.start());
+    } on QrWrongProjectException {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _station = null;
+        _errorMsg = 'Ez a QR-kód egy másik település túrájához tartozik, '
+            'ezért itt nem írható jóvá.';
+      });
     } on QrOutOfRangeException catch (e) {
       if (!mounted) return;
       setState(() {

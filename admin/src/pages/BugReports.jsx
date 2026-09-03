@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../firebaseConfig";
+import { useProject } from "../context/ProjectContext";
+import { docProjectId } from "../utils/projects";
 import { collection, getDocs, updateDoc, deleteDoc, doc } from "firebase/firestore";
 import {
   Box, Typography, CircularProgress, Alert, Chip, Card, CardContent, CardActions,
@@ -29,6 +31,7 @@ const fmtDate = (val) => {
 };
 
 function BugReports() {
+  const { activeProjectId } = useProject();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(() => localStorage.getItem("admin_br_filter") || "all");
@@ -43,10 +46,15 @@ function BugReports() {
     try {
       setLoading(true);
       const snap = await getDocs(collection(db, "bug_reports"));
-      const data = snap.docs.map((d) => {
-        const raw = d.data();
-        return { id: d.id, ...raw, status: normalizeStatus(raw.status) };
-      });
+      // Mindenki a saját településének bejelentéseit látja. A projectId nélküli
+      // (régi / mobilból még jelöletlen) bejelentés az alapértelmezett
+      // településhez tartozik.
+      const data = snap.docs
+        .filter((d) => docProjectId(d.data()) === activeProjectId)
+        .map((d) => {
+          const raw = d.data();
+          return { id: d.id, ...raw, status: normalizeStatus(raw.status) };
+        });
       data.sort((a, b) => {
         const ta = a.created_at?.toDate?.() ?? new Date(a.created_at_ms ?? 0);
         const tb = b.created_at?.toDate?.() ?? new Date(b.created_at_ms ?? 0);
@@ -58,7 +66,7 @@ function BugReports() {
     } finally {
       setLoading(false);
     }
-  }, [showSnack]);
+  }, [showSnack, activeProjectId]);
 
   useEffect(() => {
     const t = setTimeout(() => void fetchReports(), 0);

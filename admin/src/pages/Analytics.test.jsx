@@ -6,6 +6,13 @@ import Analytics from "./Analytics";
 vi.mock("../firebaseConfig", () => ({ functions: {} }));
 vi.mock("../styles/Analytics.css", () => ({}));
 vi.mock("firebase/functions", () => ({ httpsCallable: vi.fn() }));
+vi.mock("../context/ProjectContext", () => ({
+  useProject: () => ({
+    activeProjectId: "nagyvazsony",
+    activeProject: { id: "nagyvazsony", name: "Nagyvázsony" },
+    canSwitchProject: false,
+  }),
+}));
 
 import { httpsCallable } from "firebase/functions";
 
@@ -13,7 +20,7 @@ const PAYLOAD = {
   generatedAt: "2026-07-28T10:00:00.000Z",
   totals: { participants: 3, totalStationCompletions: 7, trips: 2, stations: 3, trackedUsers: 5 },
   trips: [
-    { id: "t1", name: "Vár túra", stationCount: 2, participants: 3, finishers: 1, completionRate: 0.3333, avgStationsPerParticipant: 1.5 },
+    { id: "t1", name: "Vár túra", stationCount: 2, participants: 3, finishers: 1, completionRate: 0.3333, avgStationsPerParticipant: 1.5, avgCompletionMinutes: 42, completionTimeSamples: 3 },
   ],
   stations: [
     { id: "s1", name: "Vár", tripId: "t1", tripName: "Vár túra", completions: 3 },
@@ -41,6 +48,8 @@ describe("Analytics", () => {
     // Funnel trip
     expect(screen.getByText("Vár túra", { selector: ".funnel-name" })).toBeInTheDocument();
     expect(screen.getByText("33% befejezés")).toBeInTheDocument();
+    // Átlagos befejezési idő megjelenik a tölcsér-sorban
+    expect(screen.getByText(/42 perc/)).toBeInTheDocument();
     // Popularity: completed station shown, zero-completion station filtered out
     expect(screen.getByText("Vár", { selector: ".popularity-name" })).toBeInTheDocument();
     expect(screen.queryByText("Kápolna")).not.toBeInTheDocument();

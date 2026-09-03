@@ -1,108 +1,31 @@
-import { safeString } from "./safeString";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../firebaseConfig";
 
-const VALHALLA_URL = "https://valhalla1.openstreetmap.de/route";
+// Az útvonaltervezés SZERVEROLDALON fut (hikingRoute Cloud Function), mert a
+// böngészőből a Valhalla nem hívható megbízhatóan (CORS / hálózati korlátok).
+// Így az admin panel PONTOSAN ugyanazt a föld- és erdeiút-preferáló útvonalat
+// kapja, mint a mobilalkalmazás (use_tracks), OSRM tartalékkal.
+//
+// A válasz alakja: { coords: [[lat, lon], ...], distanceMeters,
+// durationSeconds, source } — a `source` mutatja, melyik ág adta
+// ("valhalla-pedestrian", "osrm-foot" vagy "fallback" = egyenes szakaszok).
 
-function decodePolyline6(encoded) {
-  const points = [];
-  const factor = 1e6;
-  let index = 0;
-  let lat = 0;
-  let lon = 0;
-
-  while (index < encoded.length) {
-    let result = 0;
-    let shift = 0;
-    let b;
-
-    do {
-      b = encoded.charCodeAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-
-    lat += (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
-
-    result = 0;
-    shift = 0;
-
-    do {
-      b = encoded.charCodeAt(index++) - 63;
-      result |= (b & 0x1f) << shift;
-      shift += 5;
-    } while (b >= 0x20);
-
-    lon += (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
-
-    points.push([lat / factor, lon / factor]);
-  }
-
-  return points;
-}
-
-function appendRoutePoints(target, segment) {
-  if (!segment.length) return;
-  if (!target.length) {
-    target.push(...segment);
-    return;
-  }
-
-  const [lastLat, lastLon] = target[target.length - 1];
-  const [firstLat, firstLon] = segment[0];
-  const sameStart =
-    Math.abs(lastLat - firstLat) <= 0.00002 &&
-    Math.abs(lastLon - firstLon) <= 0.00002;
-
-  target.push(...(sameStart ? segment.slice(1) : segment));
-}
-
-export async function getValhallaRouteData(coordinates) {
+/** Gyalogos túraútvonal a megadott [lat, lon] pontok között. Hiba esetén
+ *  egyenes összekötést ad vissza, hogy a térkép sose maradjon üresen. */
+export async function getRouteData(coordinates) {
   if (!Array.isArray(coordinates) || coordinates.length < 2) {
     return { coords: [], distanceMeters: 0, durationSeconds: 0, source: "none" };
   }
 
   try {
-    const payload = {
-      locations: coordinates.map(([lat, lon]) => ({ lat, lon, type: "break" })),
-      costing: "pedestrian",
-      costing_options: {
-        pedestrian: {
-          use_tracks: 1.0,
-          use_hills: 0.6,
-          walking_speed: 3.5,
-        },
-      },
-      directions_type: "none",
-    };
-
-    const response = await fetch(VALHALLA_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) throw new Error(`Valhalla HTTP ${response.status}`);
-
-    const data = await response.json();
-    const trip = data?.trip;
-    const legs = Array.isArray(trip?.legs) ? trip.legs : [];
-    const summary = trip?.summary || {};
-
-    const coords = [];
-    for (const leg of legs) {
-      const shape = safeString(leg?.shape);
-      if (!shape) continue;
-      appendRoutePoints(coords, decodePolyline6(shape));
+    const call = httpsCallable(functions, "hikingRoute");
+    const res = await call({ coordinates });
+    const data = res?.data;
+    if (Array.isArray(data?.coords) && data.coords.length >= 2) {
+      return data;
     }
-
-    if (coords.length >= 2) {
-      return {
-        coords,
-        distanceMeters: Number(summary.length || 0) * 1000,
-        durationSeconds: Number(summary.time || 0),
-        source: "valhalla-pedestrian",
-      };
-    }  } catch {
-    // Network/API errors fall back to direct station-to-station coordinates.
+  } catch {
+    // A függvény nem elérhető / hiba – marad az egyenes összekötés.
   }
 
   return {
@@ -125,4 +48,44 @@ export const formatDuration = (seconds) => {
   const minutes = totalMinutes % 60;
   if (hours > 0) return `${hours} o ${minutes} p`;
   return `${minutes} p`;
+};
+
+/** Egy [a, b] koordinátapár normalizálása számokká. A `reverse` a GeoJSON
+ *  [lng, lat] sorrendet fordítja [lat, lng]-re. */
+export const normalizeCoordinatePair = (pair, reverse = false) => {
+  if (!Array.isArray(pair) || pair.length < 2) return null;
+
+  const first = Number(pair[0]);
+  const second = Number(pair[1]);
+
+  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
+
+  return reverse ? [second, first] : [first, second];
+};
+
+/** A túrához KORÁBBAN ELMENTETT útvonal pontjai (a Túrák oldal menti el a
+ *  Valhalla-lekérés eredményét). Ha van, ezt kell használni: azonnali, és a
+ *  valódi turistaút — nem légvonal. Több régi mezőnevet is elfogad. */
+export const getStoredRouteCoordinates = (trip) => {
+  const routeFields = [
+    trip?.routeCoordinates,
+    trip?.routePoints,
+    trip?.path,
+    trip?.waypoints,
+  ];
+
+  for (const field of routeFields) {
+    if (!Array.isArray(field) || field.length === 0) continue;
+    const coords = field.map((pair) => normalizeCoordinatePair(pair)).filter(Boolean);
+    if (coords.length > 0) return coords;
+  }
+
+  const geometryCoordinates = trip?.geometry?.coordinates;
+  if (!Array.isArray(geometryCoordinates) || geometryCoordinates.length === 0) {
+    return [];
+  }
+
+  return geometryCoordinates
+    .map((pair) => normalizeCoordinatePair(pair, true))
+    .filter(Boolean);
 };

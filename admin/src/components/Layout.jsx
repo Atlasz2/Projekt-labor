@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
+import { useProject } from '../context/ProjectContext';
 import '../styles/Layout.css';
 
 function Layout() {
   const navigate = useNavigate();
   const { userEmail, userRole, logout } = useAdminAuth();
+  const { activeProject } = useProject();
+  const isDeveloper = userRole === 'developer';
+  // A developer az admin fölött áll: mindent lát, amit az admin, plusz a
+  // Fejlesztő fület (több település kezelése).
+  const isStaff = userRole === 'admin' || isDeveloper;
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(
     () => document.documentElement.classList.contains('dark')
@@ -45,8 +51,8 @@ function Layout() {
             <div className="header-brand">
               <div className="brand-mark">NV</div>
               <div className="header-content">
-                <p className="brand-kicker">Admin</p>
-                <h2>Nagyvázsony</h2>
+                <p className="brand-kicker">{isDeveloper ? 'Developer' : 'Admin'}</p>
+                <h2>{activeProject?.name || 'Nagyvázsony'}</h2>
               </div>
             </div>
             <button
@@ -73,16 +79,16 @@ function Layout() {
           <nav className="sidebar-nav">
             <ul className="nav-links">
               {renderNavLink('/dashboard', 'DB', 'Vezérlőpult')}
-              {userRole === 'admin' && renderNavLink('/analytics', 'AN', 'Analitika')}
+              {isStaff && renderNavLink('/analytics', 'AN', 'Analitika')}
 
-              {userRole === 'admin' && (
+              {isStaff && (
                 <>
                   <li className="nav-header">Túrák kezelése</li>
                   {renderNavLink('/trips',    'TÚ', 'Túrák')}
                   {renderNavLink('/stations', 'ÁL', 'Állomások')}
 
                   <li className="nav-header">Települési tartalom</li>
-                  {renderNavLink('/about',          'NT', 'Nagyvázsony története')}
+                  {renderNavLink('/about',          'NT', `${activeProject?.name || 'Nagyvázsony'} története`)}
                   {renderNavLink('/events',          'RE', 'Rendezvények')}
                   {renderNavLink('/accommodations',  'SZ', 'Szállások')}
                   {renderNavLink('/restaurants',     'VE', 'Vendéglátóhelyek')}
@@ -96,10 +102,10 @@ function Layout() {
               {renderNavLink('/map',          'TÉ', 'Térkép')}
               {renderNavLink('/users',        'FE', 'Felhasználók')}
 
-              {userRole === 'admin' && (
+              {isDeveloper && (
                 <>
-                  <li className="nav-header">Rendszer</li>
-                  {renderNavLink('/seed-database', 'AD', 'Adatbázis kezelése')}
+                  <li className="nav-header">Fejlesztő</li>
+                  {renderNavLink('/developer', 'FJ', 'Települések kezelése')}
                 </>
               )}
             </ul>

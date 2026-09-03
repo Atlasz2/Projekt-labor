@@ -390,3 +390,22 @@ html.dark .trend-delta.down { color: #fca5a5; }
   .dashboard-hero, .card, .kpi-item { animation: none; }
   .cta { transition: none; }
 }
+/* Hatókör-váltó a vezérlőpulton (csak developernek) */
+.dashboard-scope { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.dashboard-scope-btn {
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+  color: var(--admin-text-muted);
+  border-radius: 999px;
+  padding: 5px 13px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.dashboard-scope-btn:hover { border-color: var(--admin-accent-border); color: var(--admin-text); }
+.dashboard-scope-btn.active {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+  color: #fff;
+}

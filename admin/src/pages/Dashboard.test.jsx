@@ -6,6 +6,13 @@ import Dashboard from "./Dashboard";
 
 vi.mock("../firebaseConfig", () => ({ db: {} }));
 vi.mock("../styles/Dashboard.css", () => ({}));
+vi.mock("../context/ProjectContext", () => ({
+  useProject: () => ({
+    activeProjectId: "nagyvazsony",
+    activeProject: { id: "nagyvazsony", name: "Nagyvázsony" },
+    canSwitchProject: false,
+  }),
+}));
 
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn(),
@@ -30,8 +37,8 @@ const makeProgressSnap = (points = []) => ({
   size: points.length,
 });
 
-// Counts/sum are now server-side aggregations; getDocs is only used for
-// trips, stations, achievements, the top-5 players, and the trend read (in that order).
+// A getDocs sorrendje: trips, stations, achievements, user_progress (a
+// településspecifikus pontszámításhoz), végül a stats_daily trend.
 const mockAggregates = (usersTotal = 2, pointsTotal = 300, tracked = 2) => {
   getCountFromServer.mockResolvedValue({ data: () => ({ count: usersTotal }) });
   getAggregateFromServer.mockResolvedValue({ data: () => ({ total: pointsTotal, n: tracked }) });
@@ -43,7 +50,7 @@ const mockSuccess = () => {
     .mockResolvedValueOnce(makeSnap(3))                     // trips
     .mockResolvedValueOnce(makeSnap(5))                     // stations
     .mockResolvedValueOnce({ docs: [], size: 0 })          // achievements
-    .mockResolvedValueOnce(makeProgressSnap([200, 100]))   // top players
+    .mockResolvedValueOnce(makeProgressSnap([200, 100]))   // user_progress
     .mockResolvedValueOnce({ docs: [], size: 0 });         // stats_daily trend read
 };
 

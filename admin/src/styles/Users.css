@@ -330,3 +330,163 @@
   .user-row > div:first-child { display: none; }
   .points-badge { width: 100%; }
 }
+
+/* ── Developer műveletek oszlop (admin jog / törlés) ── */
+.users-header.with-actions,
+.user-row.with-actions {
+  grid-template-columns: 56px minmax(0, 1.3fr) 120px 100px 190px 140px 168px;
+}
+
+.actions-col {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.user-action-btn {
+  border: 1px solid var(--admin-border);
+  background: var(--admin-surface-muted);
+  color: var(--admin-text);
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.user-action-btn:hover:not(:disabled) {
+  background: var(--admin-accent-soft);
+  border-color: var(--admin-accent-border);
+}
+
+.user-action-btn.danger {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.35);
+}
+
+.user-action-btn.danger:hover:not(:disabled) {
+  background: rgba(185, 28, 28, 0.1);
+  border-color: rgba(185, 28, 28, 0.5);
+}
+
+.user-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.actions-locked {
+  font-size: 0.7rem;
+  opacity: 0.45;
+  font-style: italic;
+}
+
+@media (max-width: 1100px) {
+  .users-header.with-actions,
+  .user-row.with-actions {
+    grid-template-columns: 56px minmax(0, 1.2fr) 110px 90px 1fr 150px;
+  }
+  .users-header.with-actions .activity-col,
+  .user-row.with-actions .activity-col { display: none; }
+}
+
+.users-role-filter {
+  padding: 8px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.user-project-select {
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-muted);
+  color: var(--admin-text);
+  font-size: 0.7rem;
+  padding: 4px 6px;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+/* ── Admin meghívás + kitiltás ── */
+.users-invite-btn {
+  border: 1px solid var(--admin-accent-border);
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent);
+  border-radius: 9px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.users-invite-btn:hover { background: var(--admin-accent); color: #fff; }
+
+.banned-pill {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(185, 28, 28, 0.12);
+  color: #b91c1c;
+  border: 1px solid rgba(185, 28, 28, 0.3);
+  vertical-align: middle;
+}
+
+.invite-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  overflow-y: auto;
+  background: rgba(20, 18, 14, 0.55);
+}
+
+.invite-modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: var(--admin-shadow-lg);
+}
+.invite-modal h2 { margin: 0 0 6px; font-size: 1.15rem; }
+.invite-hint { margin: 0 0 16px; color: var(--admin-text-muted); font-size: 0.85rem; line-height: 1.5; }
+.invite-label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--admin-text-muted); margin: 12px 0 5px; }
+.invite-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 9px;
+  background: var(--admin-surface-muted);
+  color: var(--admin-text);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+.invite-link-box { margin-top: 16px; font-size: 0.78rem; color: var(--admin-text-muted); }
+.invite-link-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: var(--admin-surface-muted);
+  color: var(--admin-text);
+  font-size: 0.72rem;
+  font-family: monospace;
+  resize: vertical;
+}
+.invite-actions { display: flex; gap: 10px; margin-top: 20px; }

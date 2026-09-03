@@ -4,6 +4,8 @@ import { collection, getDocs, doc, updateDoc, deleteDoc, addDoc } from "firebase
 import "../styles/Content.css";
 import "../styles/About.css";
 import { safeString } from "../utils/safeString";
+import { useProject } from "../context/ProjectContext";
+import { docProjectId } from "../utils/projects";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { fileToOptimizedDataUrl } from "../utils/imageUpload";
 import Snackbar from "@mui/material/Snackbar";
@@ -18,6 +20,7 @@ const EMPTY_FORM = {
 };
 
 function About() {
+  const { activeProjectId } = useProject();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -37,13 +40,15 @@ function About() {
     try {
       setLoading(true);
       const snapshot = await getDocs(collection(db, "about"));
-      const data = snapshot.docs.map((item) => ({
-        id: item.id,
-        year: safeString(item.data().year),
-        title: safeString(item.data().title),
-        description: safeString(item.data().description),
-        imageUrl: safeString(item.data().imageUrl ?? ""),
-      }));
+      const data = snapshot.docs
+        .filter((item) => docProjectId(item.data()) === activeProjectId)
+        .map((item) => ({
+          id: item.id,
+          year: safeString(item.data().year),
+          title: safeString(item.data().title),
+          description: safeString(item.data().description),
+          imageUrl: safeString(item.data().imageUrl ?? ""),
+        }));
       data.sort((a, b) => (parseInt(a.year, 10) || 0) - (parseInt(b.year, 10) || 0));
       setEvents(data);
     } catch {
@@ -51,7 +56,7 @@ function About() {
     } finally {
       setLoading(false);
     }
-  }, [showMsg]);
+  }, [showMsg, activeProjectId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -103,6 +108,7 @@ function About() {
         title: safeString(formData.title),
         description: safeString(formData.description),
         imageUrl: safeString(formData.imageUrl),
+        projectId: activeProjectId,
       };
 
       if (editingId) {

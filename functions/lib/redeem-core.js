@@ -13,6 +13,18 @@ export function qrMappingDocId(code) {
   return encodeURIComponent(code);
 }
 
+// White-label: egy dokumentum települése. A mező HIÁNYA az alapértelmezett
+// települést jelenti (a még nem migrált, régi tartalom is oda tartozik) –
+// ugyanaz a szabály, mint az admin és a mobil oldalon.
+const DEFAULT_PROJECT_ID = 'nagyvazsony';
+
+function projectOf(data) {
+  const value = data?.projectId;
+  return typeof value === 'string' && value.trim() !== ''
+    ? value
+    : DEFAULT_PROJECT_ID;
+}
+
 /** A beolvasott kód feloldása állomásra vagy eseményre.
  *
  * Elsődleges út a privát `qr_codes` leképező kollekció; amíg a backfill le
@@ -161,7 +173,7 @@ async function detectTripCompletion({
   return result;
 }
 
-async function checkAchievements({ db, FieldValue, uid, counts }) {
+async function checkAchievements({ db, FieldValue, uid, counts, projectId }) {
   const [achSnap, unlockedSnap] = await Promise.all([
     db.collection('achievements').get(),
     db.collection('user_progress').doc(uid).collection('unlocked_achievements').get(),
@@ -186,8 +198,12 @@ async function checkAchievements({ db, FieldValue, uid, counts }) {
     else if (type === 'top_n') {
       // A leaderboard-szinkron ELŐBB fut, így a saját friss pontszámunkkal
       // versenyzünk. Holtversenynél a limit(N) találati sorrendje dönt.
+      // A település SAJÁT ranglistáján versenyzünk – egy másik falu
+      // játékosai nem szorítanak ki innen senkit.
       const top = await db
-        .collection('public_leaderboard')
+        .collection('leaderboards')
+        .doc(projectId)
+        .collection('entries')
         .orderBy('points', 'desc')
         .limit(target)
         .get();
@@ -229,7 +245,28 @@ async function checkAchievements({ db, FieldValue, uid, counts }) {
   return newlyUnlocked;
 }
 
-async function syncLeaderboard({ db, FieldValue, uid, points, counts, progressData }) {
+/** A projektenkénti ranglista bejegyzésének útvonala. Alkollekció, hogy a
+ *  rangsorolás (orderBy points) összetett index nélkül működjön, és egy
+ *  település ranglistája ne keveredjen a többiével. */
+export function leaderboardEntryRef(db, projectId, uid) {
+  return db
+    .collection('leaderboards')
+    .doc(projectId)
+    .collection('entries')
+    .doc(uid);
+}
+
+async function syncLeaderboard({
+  db,
+  FieldValue,
+  uid,
+  points,
+  counts,
+  progressData,
+  projectId,
+  awardedPoints,
+  kind,
+}) {
   let displayName = String(progressData?.name ?? '').trim();
   if (!displayName) {
     const userSnap = await db.collection('users').doc(uid).get();
@@ -237,12 +274,30 @@ async function syncLeaderboard({ db, FieldValue, uid, points, counts, progressDa
     displayName = String(user.displayName ?? user.name ?? 'Felhasználó');
   }
 
+  // Régi, globális ranglista – megmarad, hogy a még nem frissített
+  // appverziók se törjenek el (átmeneti kettős írás).
   await db.collection('public_leaderboard').doc(uid).set(
     {
       displayName,
       points,
       completedStationsCount: counts.stations,
       completedEventsCount: counts.events,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  // Projektenkénti ranglista: a pontokat NÖVELJÜK, mert itt csak az adott
+  // településen szerzett pont számít (a globális totalPoints nem jó erre).
+  // Csak új (nem duplikált) jóváíráskor fut, így az increment pontos.
+  await leaderboardEntryRef(db, projectId, uid).set(
+    {
+      uid,
+      displayName,
+      projectId,
+      points: FieldValue.increment(awardedPoints),
+      completedStationsCount: FieldValue.increment(kind === 'station' ? 1 : 0),
+      completedEventsCount: FieldValue.increment(kind === 'event' ? 1 : 0),
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
@@ -260,10 +315,35 @@ async function syncLeaderboard({ db, FieldValue, uid, points, counts, progressDa
  * eszközpozíció. Ha a cél helyhez kötött és a pozíció túl messze van, a
  * jóváírás elmarad: `{ found: true, rejected: 'out_of_range', ... }`.
  */
-export async function redeemQrCore({ db, FieldValue, uid, code, location }) {
+export async function redeemQrCore({
+  db,
+  FieldValue,
+  uid,
+  code,
+  location,
+  projectId,
+}) {
   const target = await resolveTarget(db, code);
   if (!target) {
     return { found: false };
+  }
+
+  // Több-települési (white-label) védelem: egy másik település QR-kódja nem
+  // írható jóvá ebben a kiadásban. A kliens elhagyhatja a projectId-t (régi
+  // appverzió) – ilyenkor nem szűrünk, hogy ne törjünk meglévő telepítéseket.
+  const callerProject =
+    typeof projectId === 'string' && projectId.trim() !== ''
+      ? projectId.trim()
+      : null;
+  if (callerProject && projectOf(target.data) !== callerProject) {
+    return {
+      found: true,
+      rejected: 'wrong_project',
+      kind: target.kind,
+      targetId: target.id,
+      target: target.data,
+      targetProjectId: projectOf(target.data),
+    };
   }
 
   const locationReject = checkLocation(target.data, location);
@@ -298,21 +378,38 @@ export async function redeemQrCore({ db, FieldValue, uid, code, location }) {
 
     if (!alreadyDone) {
       list.push(target.id);
+      // Állomás teljesítésekor rögzítjük a beolvasás időpontját is
+      // (completedStationsAt map), hogy az analitika kiszámíthassa az egyes
+      // túrák átlagos befejezési idejét (első → utolsó állomás). Eseményekre
+      // nem tároljuk (a tölcsér-analitika állomás-alapú).
+      const isStation = target.kind === 'station';
       if (!snap.exists) {
         tx.set(progressRef, {
           totalPoints: points,
           completedStations,
           completedEvents,
           completedTripIds: [],
+          ...(isStation
+            ? {
+                completedStationsAt: {
+                  [target.id]: FieldValue.serverTimestamp(),
+                },
+              }
+            : {}),
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else {
-        tx.update(progressRef, {
+        const update = {
           [listField]: FieldValue.arrayUnion(target.id),
           totalPoints: FieldValue.increment(points),
           updatedAt: FieldValue.serverTimestamp(),
-        });
+        };
+        if (isStation) {
+          update[`completedStationsAt.${target.id}`] =
+            FieldValue.serverTimestamp();
+        }
+        tx.update(progressRef, update);
       }
     }
 
@@ -357,8 +454,17 @@ export async function redeemQrCore({ db, FieldValue, uid, code, location }) {
       points: outcome.updatedPoints,
       counts,
       progressData: outcome.progressData,
+      projectId: projectOf(target.data),
+      awardedPoints: points,
+      kind: target.kind,
     });
-    newAchievements = await checkAchievements({ db, FieldValue, uid, counts });
+    newAchievements = await checkAchievements({
+      db,
+      FieldValue,
+      uid,
+      counts,
+      projectId: projectOf(target.data),
+    });
   }
 
   return {

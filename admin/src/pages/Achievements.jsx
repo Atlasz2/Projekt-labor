@@ -5,6 +5,9 @@ import {
   getDocs, serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
 import "../styles/Achievements.css";
+import "../styles/About.css";
+import { useProject } from "../context/ProjectContext";
+import { docProjectId } from "../utils/projects";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
@@ -34,6 +37,7 @@ const ICON_PRESETS = ["🏆","🥇","👣","🧭","🏃","🎉","👑","⭐","�
 const COLOR_PRESETS = ["#22c55e","#3b82f6","#f97316","#ec4899","#a855f7","#667EEA","#06b6d4","#eab308","#ef4444","#14b8a6"];
 
 export default function Achievements() {
+  const { activeProjectId } = useProject();
   const [loading, setLoading] = useState(true);
   const [achievements, setAchievements] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -61,11 +65,14 @@ export default function Achievements() {
         const reload = await getDocs(collection(db, "achievements"));
         list = reload.docs.map((d) => ({ id: d.id, ...d.data() }));
       }
-      setAchievements(list);
+      // Megjelenítés az aktív településre szűrve (a hiányzó projectId az
+      // alapértelmezett projektet jelenti). A seed a teljes kollekció ürességét
+      // nézi, hogy a fix doc-id-k projektenként ne ütközzenek.
+      setAchievements(list.filter((a) => docProjectId(a) === activeProjectId));
     } catch {
       showMsg("Hiba az adatok betoltésekor");
     } finally { setLoading(false); }
-  }, [showMsg]);
+  }, [showMsg, activeProjectId]);
 
   useEffect(() => { setTimeout(() => void loadAll(), 0); }, [loadAll]);
 
@@ -95,6 +102,7 @@ export default function Achievements() {
         color: form.color || "#667EEA",
         conditionType: form.conditionType || "station_count",
         conditionValue: Number(form.conditionValue) || 1,
+        projectId: activeProjectId,
       };
       if (editing) {
         await updateDoc(doc(db, "achievements", editing), payload);
@@ -169,100 +177,126 @@ export default function Achievements() {
       </div>
 
       {showForm && (
-        <div className="ach-overlay" onClick={(e) => e.target === e.currentTarget && setShowForm(false)}>
-          <div className="ach-modal">
-            <div className="ach-modal-header">
-              <h2>{editing ? "Jutalom szerkesztése" : "Új jutalom hozzáadása"}</h2>
-              <button className="ach-modal-x" onClick={() => setShowForm(false)}>✕</button>
+        <div className="about-editor-backdrop" onClick={(e) => e.target === e.currentTarget && setShowForm(false)} role="presentation">
+          <div className="about-editor-shell achievement-editor-shell" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="about-editor-header">
+              <div>
+                <p className="about-editor-kicker">Jutalom szerkesztő</p>
+                <h2>{editing ? "Jutalom szerkesztése" : "Új jutalom"}</h2>
+                <p>A látogatóknak automatikusan feloldódik, ha teljesítik a feltételt. A csillaggal jelölt mező kötelező.</p>
+              </div>
+              <button className="about-editor-close" onClick={() => setShowForm(false)} type="button">Bezárás</button>
             </div>
 
-            <div className="ach-modal-body">
-              <label className="ach-label">Megnevezés *</label>
-              <input
-                className="ach-input"
-                value={form.name}
-                onChange={(e) => setField("name", e.target.value)}
-                placeholder="pl. Felfedező"
-              />
+            <div className="about-editor-body">
+              <div className="about-editor-form">
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>1</span>
+                    <div><h3>Alapadatok</h3><p>A jutalom neve és rövid magyarázata.</p></div>
+                  </div>
+                  <div className="field-group">
+                    <label>Megnevezés <span className="required">*</span></label>
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={(e) => setField("name", e.target.value)}
+                      placeholder="pl. Felfedező"
+                    />
+                  </div>
+                  <div className="field-group">
+                    <label>Mire kap a látogató ezt a jutalmot?</label>
+                    <input
+                      type="text"
+                      value={form.description}
+                      onChange={(e) => setField("description", e.target.value)}
+                      placeholder="pl. Beolvasott 3 QR-kódot"
+                    />
+                  </div>
+                </section>
 
-              <label className="ach-label">Mire kap a látogató ezt a jutalmot?</label>
-              <input
-                className="ach-input"
-                value={form.description}
-                onChange={(e) => setField("description", e.target.value)}
-                placeholder="pl. Beolvasott 3 QR-kódot"
-              />
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>2</span>
+                    <div><h3>Feltétel</h3><p>Mikor oldódjon fel automatikusan a jutalom.</p></div>
+                  </div>
+                  <div className={form.conditionType !== "manual" ? "field-row" : "field-group"}>
+                    <div className="field-group">
+                      <label>Feltétel típusa</label>
+                      <select value={form.conditionType} onChange={(e) => setField("conditionType", e.target.value)}>
+                        {CONDITION_TYPES.map((ct) => (
+                          <option key={ct.value} value={ct.value}>{ct.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {form.conditionType !== "manual" && (
+                      <div className="field-group">
+                        <label>Feltétel értéke (N){form.conditionType === "top_n" ? " – top hányadik" : " – minimum darab/pont"}</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={form.conditionValue}
+                          onChange={(e) => setField("conditionValue", e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </section>
 
-              <label className="ach-label">Feltétel típusa</label>
-              <select
-                className="ach-input ach-select"
-                value={form.conditionType}
-                onChange={(e) => setField("conditionType", e.target.value)}
-              >
-                {CONDITION_TYPES.map((ct) => (
-                  <option key={ct.value} value={ct.value}>{ct.label}</option>
-                ))}
-              </select>
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>3</span>
+                    <div><h3>Megjelenés</h3><p>Ikon és szín, ahogy a látogatónál megjelenik.</p></div>
+                  </div>
+                  <div className="field-group">
+                    <label>Ikon</label>
+                    <div className="ach-icon-row">
+                      {ICON_PRESETS.map((ic) => (
+                        <button
+                          key={ic}
+                          className={`ach-icon-btn${form.icon === ic ? " active" : ""}`}
+                          onClick={() => setField("icon", ic)}
+                          type="button"
+                        >{ic}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="field-group">
+                    <label>Szín</label>
+                    <div className="ach-color-row">
+                      {COLOR_PRESETS.map((c) => (
+                        <button
+                          key={c}
+                          className={`ach-color-btn${form.color === c ? " active" : ""}`}
+                          style={{ background: c }}
+                          onClick={() => setField("color", c)}
+                          type="button"
+                        />
+                      ))}
+                      <input
+                        type="color"
+                        className="ach-color-picker"
+                        value={form.color}
+                        onChange={(e) => setField("color", e.target.value)}
+                        title="Egyedi szín"
+                      />
+                    </div>
+                  </div>
+                  <div className="ach-preview">
+                    <span className="ach-preview-icon" style={{ background: form.color }}>{form.icon}</span>
+                    <span className="ach-preview-name">{form.name || "Jutalom neve"}</span>
+                  </div>
+                </section>
 
-              {form.conditionType !== "manual" && (
-                <>
-                  <label className="ach-label">
-                    Feltétel értéke (N){form.conditionType === "top_n" ? " – top hányadik" : " – minimum darab/pont"}
-                  </label>
-                  <input
-                    className="ach-input"
-                    type="number"
-                    min="1"
-                    value={form.conditionValue}
-                    onChange={(e) => setField("conditionValue", e.target.value)}
-                  />
-                </>
-              )}
+                {saveError && <div className="ach-save-error">{saveError}</div>}
 
-              <label className="ach-label">Ikon</label>
-              <div className="ach-icon-row">
-                {ICON_PRESETS.map((ic) => (
-                  <button
-                    key={ic}
-                    className={`ach-icon-btn${form.icon === ic ? " active" : ""}`}
-                    onClick={() => setField("icon", ic)}
-                    type="button"
-                  >{ic}</button>
-                ))}
+                <div className="form-actions about-editor-actions">
+                  <button className="btn-primary" onClick={handleSave} disabled={saving || !form.name.trim()} type="button">
+                    {saving ? "Mentés..." : editing ? "💾 Mentés" : "💾 Hozzáadás"}
+                  </button>
+                  <button className="btn-secondary" onClick={() => setShowForm(false)} type="button">Mégse</button>
+                </div>
               </div>
-
-              <label className="ach-label">Szín</label>
-              <div className="ach-color-row">
-                {COLOR_PRESETS.map((c) => (
-                  <button
-                    key={c}
-                    className={`ach-color-btn${form.color === c ? " active" : ""}`}
-                    style={{ background: c }}
-                    onClick={() => setField("color", c)}
-                    type="button"
-                  />
-                ))}
-                <input
-                  type="color"
-                  className="ach-color-picker"
-                  value={form.color}
-                  onChange={(e) => setField("color", e.target.value)}
-                  title="Egyedi szín"
-                />
-              </div>
-
-              <div className="ach-preview">
-                <span className="ach-preview-icon" style={{ background: form.color }}>{form.icon}</span>
-                <span className="ach-preview-name">{form.name || "Jutalom neve"}</span>
-              </div>
-            </div>
-
-            <div className="ach-modal-footer">
-              {saveError && <div style={{color:"#dc2626",fontSize:"0.82rem",flex:1,padding:"0 8px"}}>{saveError}</div>}
-              <button className="ach-cancel-btn" onClick={() => setShowForm(false)}>Mégse</button>
-              <button className="ach-save-btn" onClick={handleSave} disabled={saving || !form.name.trim()}>
-                {saving ? "Mentés..." : editing ? "Mentés" : "Hozzáadás"}
-              </button>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
+import '../utils/project_filter.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -346,7 +347,10 @@ class _EventsScreenState extends State<EventsScreen> {
             return Center(child: Text('Hiba: ${snapshot.error}'));
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          // Csak ennek a településnek a rendezvényei.
+          final docs = (snapshot.data?.docs ?? [])
+              .where((d) => inActiveProject(d.data() as Map<String, dynamic>?))
+              .toList();
           final events = docs
               .asMap()
               .entries

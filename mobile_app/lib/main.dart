@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_performance/firebase_performance.dart';
@@ -26,6 +28,23 @@ Future<void> main() async {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+    }
+    // App Check: a backend csak a valódi appból érkező hívásokat fogadja el.
+    // NEM blokkoló – ha az aktiválás elhasal, az app működik tovább; a
+    // szerveroldali kikényszerítés (enforce) külön, tudatosan kapcsolható.
+    // Debug buildben a debug provider (a konzolba beírandó debug tokennel),
+    // release-ben Play Integrity / App Attest.
+    try {
+      await FirebaseAppCheck.instance.activate(
+        providerAndroid: kDebugMode
+            ? const AndroidDebugProvider()
+            : const AndroidPlayIntegrityProvider(),
+        providerApple: kDebugMode
+            ? const AppleDebugProvider()
+            : const AppleAppAttestProvider(),
+      );
+    } catch (e) {
+      debugPrint('App Check aktiválás hiba (nem blokkoló): $e');
     }
     firebaseReady = true;
     FirebaseFirestore.instance.settings = const Settings(

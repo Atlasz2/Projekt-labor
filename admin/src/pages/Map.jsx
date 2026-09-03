@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   GoogleMap,
   Marker,
@@ -9,7 +9,14 @@ import {
 import { db } from "../firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import "../styles/Map.css";
-import { getValhallaRouteData, formatDistance, formatDuration } from "../utils/routeService";
+import {
+  getRouteData,
+  formatDistance,
+  formatDuration,
+  getStoredRouteCoordinates,
+} from "../utils/routeService";
+import { useProject } from "../context/ProjectContext";
+import { filterByProject } from "../utils/projects";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: "100vh", width: "100%" };
@@ -39,10 +46,12 @@ const getStationCoords = (station) => {
 };
 
 function Map() {
+  const { activeProjectId } = useProject();
   const [stations, setStations] = useState([]);
   const [trips, setTrips] = useState([]);
   const [routeData, setRouteData] = useState({});
   const [loading, setLoading] = useState(true);
+  const [routesLoading, setRoutesLoading] = useState(false);
   const [error, setError] = useState(null);
   const [center, setCenter] = useState(DEFAULT_CENTER);
   const [selectedStation, setSelectedStation] = useState(null);
@@ -50,22 +59,24 @@ function Map() {
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
   });
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const tripsSnapshot = await getDocs(collection(db, "trips"));
-      const tripsData = tripsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      const stationsSnapshot = await getDocs(collection(db, "stations"));
-      const stationsData = stationsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      // Az aktív településre szűrve (a hiányzó projectId az alapértelmezett).
+      const [tripsSnapshot, stationsSnapshot] = await Promise.all([
+        getDocs(collection(db, "trips")),
+        getDocs(collection(db, "stations")),
+      ]);
+      const tripsData = filterByProject(
+        tripsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        activeProjectId,
+      );
+      const stationsData = filterByProject(
+        stationsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+        activeProjectId,
+      );
 
       const stationsWithCoords = stationsData
         .map((station) => {
@@ -78,24 +89,40 @@ function Map() {
       setTrips(tripsData);
       setStations(stationsWithCoords);
 
-      // Fetch routes for all trips
-      const routes = {};
+      // Az útvonalak a térkép megjelenése UTÁN töltődnek, hogy az oldal ne
+      // várjon a külső útvonal-szolgáltatásra. Ahol a túrához már el van
+      // mentve az útvonal (a Túrák oldal menti), azt használjuk – ez azonnali
+      // és a valódi turistaút, nem légvonal.
+      // FIGYELEM: ebben a komponensben a `Map` név magát a komponenst jelenti,
+      // ezért NEM használható a beépített `new Map()` – sima objektumot
+      // használunk túra-azonosító szerint.
+      const stationsByTrip = {};
       for (const trip of tripsData) {
-        const tripStations = stationsWithCoords
-          .filter((s) => s.tripId === trip.id)
+        stationsByTrip[trip.id] = stationsWithCoords
+          .filter((st) => st.tripId === trip.id)
           .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-
-        if (tripStations.length > 1) {
-          const coords = tripStations.map((s) => s._coords);
-          const routeResult = await getValhallaRouteData(coords);
-          routes[trip.id] = {
-            ...routeResult,
-            stations: tripStations,
-          };
-        }
       }
 
-      setRouteData(routes);
+      const storedRoutes = {};
+      const needsFetch = [];
+      for (const trip of tripsData) {
+        const tripStations = stationsByTrip[trip.id] ?? [];
+        if (tripStations.length < 2) continue;
+
+        const stored = getStoredRouteCoordinates(trip);
+        if (stored.length > 1) {
+          storedRoutes[trip.id] = {
+            coords: stored,
+            distanceMeters: 0,
+            durationSeconds: 0,
+            source: "stored",
+            stations: tripStations,
+          };
+        } else {
+          needsFetch.push({ trip, tripStations });
+        }
+      }
+      setRouteData(storedRoutes);
 
       if (stationsWithCoords.length > 0) {
         const avgLat =
@@ -108,12 +135,29 @@ function Map() {
       } else {
         setCenter(DEFAULT_CENTER);
       }
-    } catch {
-      setError("Nem sikerült betölteni a térkép adatait");
+      // A térkép már látszik – a hiányzó útvonalakat párhuzamosan töltjük.
+      if (needsFetch.length > 0) {
+        setRoutesLoading(true);
+        const fetched = await Promise.all(
+          needsFetch.map(async ({ trip, tripStations }) => {
+            const result = await getRouteData(
+              tripStations.map((st) => st._coords),
+            );
+            return [trip.id, { ...result, stations: tripStations }];
+          }),
+        );
+        setRouteData((prev) => ({ ...prev, ...Object.fromEntries(fetched) }));
+        setRoutesLoading(false);
+      }
+    } catch (err) {
+      // A konkrét ok is látszik – néma catch mellett nehéz diagnosztizálni.
+      setError(
+        `Nem sikerült betölteni a térkép adatait: ${err?.message ?? err}`,
+      );
     } finally {
       setLoading(false);
     }
-  }
+  }, [activeProjectId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -121,7 +165,7 @@ function Map() {
     }, 0);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -175,6 +219,9 @@ function Map() {
         </div>
       ) : (
         <>
+      {routesLoading && (
+        <div className="map-routes-loading">Útvonalak betöltése…</div>
+      )}
           <GoogleMap
             mapContainerStyle={MAP_CONTAINER_STYLE}
             center={center}

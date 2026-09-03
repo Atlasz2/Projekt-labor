@@ -6,10 +6,12 @@
 }
 
 .ach-loading {
+  padding: 48px 24px;
   text-align: center;
-  padding: 60px;
   color: var(--admin-text-muted);
-  font-size: 0.95rem;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
 }
 
 /* Header */
@@ -118,99 +120,16 @@
 }
 .ach-row-cond strong { color: var(--admin-accent); }
 
-/* Modal overlay */
-.ach-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15,23,42,0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
+/* Szerkesztő-modal – a közös about-editor rendszert használja (About.css).
+   Itt csak a jutalom-specifikus finomítások: szűkebb shell, hibaüzenet és a
+   lentebbi ikon/szín/előnézet választók. */
+.achievement-editor-shell { max-width: 720px; }
 
-.ach-modal {
-  background: var(--admin-surface);
-  border-radius: 16px;
-  width: 100%;
-  max-width: 460px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--admin-shadow-lg);
-  border: 1px solid var(--admin-border);
-}
-
-.ach-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 22px 14px;
-  border-bottom: 1px solid var(--admin-border);
-}
-
-.ach-modal-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--admin-text); }
-
-.ach-modal-x {
-  background: var(--admin-surface-muted);
-  border: none;
-  border-radius: 8px;
-  width: 30px;
-  height: 30px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  color: var(--admin-text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s;
-}
-
-.ach-modal-x:hover { background: var(--admin-bg-soft); }
-
-.ach-modal-body {
-  padding: 18px 22px;
-  overflow-y: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ach-label {
-  display: block;
-  font-size: 0.8rem;
+.ach-save-error {
+  color: #dc2626;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--admin-text-muted);
-  margin-bottom: -6px;
-}
-
-.ach-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1.5px solid var(--admin-border);
-  border-radius: 8px;
-  font-size: 0.9rem;
-  box-sizing: border-box;
-  outline: none;
-  font-family: inherit;
-  background: var(--admin-surface-muted);
-  color: var(--admin-text);
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.ach-input:focus { border-color: var(--admin-accent); box-shadow: 0 0 0 3px var(--admin-accent-soft); background: var(--admin-surface); }
-
-/* Select */
-.ach-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%236b7280' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
-  cursor: pointer;
+  padding: 2px 4px;
 }
 
 /* Icon picker */
@@ -282,44 +201,6 @@
 }
 
 .ach-preview-name { font-weight: 700; font-size: 0.92rem; color: var(--admin-text); }
-
-/* Footer */
-.ach-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 12px 22px 16px;
-  border-top: 1px solid var(--admin-border);
-}
-
-.ach-cancel-btn {
-  background: var(--admin-surface-muted);
-  color: var(--admin-text);
-  border: none;
-  border-radius: 8px;
-  padding: 9px 18px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-
-.ach-cancel-btn:hover { background: var(--admin-bg-soft); }
-
-.ach-save-btn {
-  background: var(--admin-accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 9px 22px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-
-.ach-save-btn:hover:not(:disabled) { background: var(--admin-accent-deep); }
-.ach-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Dark mode: colored pills need rgba for proper contrast ── */
 html.dark .ach-row-btn.edit { background: rgba(123,150,98,0.18); color: #b7c89b; }

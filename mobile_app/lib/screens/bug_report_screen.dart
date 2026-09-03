@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/offline_sync_service.dart';
+import '../config/app_config.dart';
 
 class BugReportScreen extends StatefulWidget {
   const BugReportScreen({super.key});
@@ -66,6 +67,9 @@ class _BugReportScreenState extends State<BugReportScreen> {
     final user = FirebaseAuth.instance.currentUser;
     final now = DateTime.now();
     final payload = <String, dynamic>{
+      // Melyik település adminja lássa a bejelentést. A payloadban van, hogy az
+      // offline sorba tett bejelentés is megkapja.
+      'projectId': AppConfig.projectId,
       'title': _titleController.text.trim(),
       'description': _descriptionController.text.trim(),
       'status': 'open',

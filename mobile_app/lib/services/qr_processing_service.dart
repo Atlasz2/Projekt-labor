@@ -4,6 +4,8 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 import 'leaderboard_service.dart';
 import 'location_service.dart';
+import '../utils/project_filter.dart';
+import '../config/app_config.dart';
 
 /// A beolvasás pillanatában rögzített eszközpozíció.
 typedef ScanLocation = ({double lat, double lng});
@@ -47,6 +49,16 @@ class QrCodeNotFoundException implements Exception {
 
   @override
   String toString() => 'Ismeretlen QR kod: $code';
+}
+
+/// A beolvasott QR-kód egy MÁSIK településhez tartozik, ezért ebben a
+/// kiadásban nem írható jóvá (white-label védelem).
+class QrWrongProjectException implements Exception {
+  const QrWrongProjectException();
+
+  @override
+  String toString() =>
+      'QrWrongProjectException: a kód másik településhez tartozik';
 }
 
 /// A szerveroldali jóváírás (redeemQr Cloud Function) nem elérhető — pl.
@@ -121,6 +133,9 @@ class QrProcessingService {
             await (serverRedeemOverride ?? _callRedeemFunction)(code, location);
         if (payload['found'] == false) {
           throw QrCodeNotFoundException(code);
+        }
+        if (payload['rejected'] == 'wrong_project') {
+          throw const QrWrongProjectException();
         }
         if (payload['rejected'] == 'out_of_range') {
           throw QrOutOfRangeException(
@@ -224,6 +239,9 @@ class QrProcessingService {
     try {
       final response = await callable.call<dynamic>({
         'code': code,
+        // A kiadás települése: a szerver elutasítja a más településhez tartozó
+        // QR-kódot (white-label védelem).
+        'projectId': AppConfig.projectId,
         if (location != null) 'lat': location.lat,
         if (location != null) 'lng': location.lng,
       });
@@ -489,6 +507,8 @@ class QrProcessingService {
         if (alreadyUnlocked.contains(id)) continue;
 
         final achData = doc.data() as Map<String, dynamic>;
+        // Más település jutalma itt nem oldódhat fel.
+        if (!inActiveProject(achData)) continue;
         final type = achData['conditionType']?.toString() ?? '';
         final target = (achData['conditionValue'] as num?)?.toInt() ?? 1;
 
@@ -506,6 +526,9 @@ class QrProcessingService {
         } else if (type == 'top_n') {
           // A leaderboard-szinkron előbb futott, így a saját friss
           // pontszámunkkal versenyzünk.
+          // A legacy (kliensoldali) út a globális public_leaderboard-ot írja,
+          // ezért itt is azt olvassa – így önmagában konzisztens. A szerveres
+          // úton (redeemQr) a településenkénti ranglista dönt.
           final top = await firestore
               .collection('public_leaderboard')
               .orderBy('points', descending: true)

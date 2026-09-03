@@ -82,6 +82,69 @@ test('összegzés: résztvevők (≥1 állomás) és összes teljesítés', () =
   assert.equal(out.totals.trackedUsers, 3);
 });
 
+test('átlagos befejezési idő a befejezők első→utolsó állomás ideje alapján', () => {
+  const min = 60000;
+  const progressDocs = [
+    {
+      // t1 befejezve: s1 @0, s2 @+30 perc  -> 30 perc
+      completedStations: ['s1', 's2'],
+      completedStationsAt: { s1: 0, s2: 30 * min },
+    },
+    {
+      // t1 befejezve: s1 @+10, s2 @+60 perc -> 50 perc
+      completedStations: ['s1', 's2'],
+      completedStationsAt: { s1: 10 * min, s2: 60 * min },
+    },
+    {
+      // csak s1 -> nem befejező, nem számít az időbe
+      completedStations: ['s1'],
+      completedStationsAt: { s1: 0 },
+    },
+  ];
+  const out = computeTripAnalytics({ trips, stations, progressDocs });
+  const t1 = out.trips.find((t) => t.id === 't1');
+  assert.equal(t1.avgCompletionMinutes, 40); // (30 + 50) / 2
+  assert.equal(t1.completionTimeSamples, 2);
+});
+
+test('nincs időbélyeg -> avgCompletionMinutes null, minta 0', () => {
+  const progressDocs = [{ completedStations: ['s1', 's2'] }];
+  const out = computeTripAnalytics({ trips, stations, progressDocs });
+  const t1 = out.trips.find((t) => t.id === 't1');
+  assert.equal(t1.avgCompletionMinutes, null);
+  assert.equal(t1.completionTimeSamples, 0);
+});
+
+test('hiányos időbélyeg (nem minden állomáshoz) kimarad az átlagból', () => {
+  const min = 60000;
+  const progressDocs = [
+    {
+      // befejező, de csak s1-hez van időbélyeg -> nem számítható
+      completedStations: ['s1', 's2'],
+      completedStationsAt: { s1: 0 },
+    },
+  ];
+  const out = computeTripAnalytics({ trips, stations, progressDocs });
+  const t1 = out.trips.find((t) => t.id === 't1');
+  assert.equal(t1.avgCompletionMinutes, null);
+  assert.equal(t1.completionTimeSamples, 0);
+  void min;
+});
+
+test('hibás alakú mezők (nem tömb, null) nem dobnak, üresnek számítanak', () => {
+  const progressDocs = [
+    { completedStations: null },
+    { completedStations: 'nem-tömb' },
+    { completedStations: { s1: true } }, // objektum, nem tömb
+    { completedStations: ['s1'] }, // ez az egyetlen valós résztvevő
+    {}, // hiányzó mező
+  ];
+  const out = computeTripAnalytics({ trips, stations, progressDocs });
+  assert.equal(out.totals.participants, 1);
+  const byId = Object.fromEntries(out.stations.map((s) => [s.id, s]));
+  assert.equal(byId.s1.completions, 1);
+});
+
 test('túrák részvétel szerint csökkenő sorrendben', () => {
   const progressDocs = [
     { completedStations: ['s1'] },

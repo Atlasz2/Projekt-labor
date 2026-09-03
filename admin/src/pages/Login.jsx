@@ -99,7 +99,8 @@ function Login() {
       const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
 
       const role = await resolveUserRole(credential.user);
-      if (role !== "admin") {
+      // A 'developer' az admin fölötti (platform-szintű) szerep – ő is beléphet.
+      if (role !== "admin" && role !== "developer") {
         await signOut(auth);
         setError("Ehhez a fiókhoz nincs admin jogosultság.");
         setLoading(false);

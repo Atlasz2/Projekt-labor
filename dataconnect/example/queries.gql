@@ -1,0 +1,99 @@
+mutation CreateUser @auth(level: USER) {
+  user_insert(data: { id_expr: "auth.uid", email: "user@example.com", displayName: "New User" })
+}
+
+mutation UpdateUser @auth(level: USER) {
+  user_update(key: { id_expr: "auth.uid" }, data: { displayName: "Updated Name" })
+}
+
+mutation DeleteUser @auth(level: USER) {
+  user_delete(key: { id_expr: "auth.uid" })
+}
+
+query GetUser @auth(level: USER) {
+  user(key: { id_expr: "auth.uid" }) { id email displayName }
+}
+
+query ListUsers @auth(level: PUBLIC, insecureReason: "Public profiles are part of the platform's social feature.") {
+  users { id displayName }
+}
+
+mutation CreateFolder @auth(level: USER) {
+  folder_insert(data: { name: "Personal", userId_expr: "auth.uid" })
+}
+
+mutation UpdateFolder @auth(level: USER) {
+  folder_update(key: { id: "00000000-0000-0000-0000-000000000000" }, data: { name: "Work" })
+}
+
+mutation DeleteFolder @auth(level: USER) {
+  folder_delete(key: { id: "00000000-0000-0000-0000-000000000000" })
+}
+
+query GetFolder @auth(level: USER) {
+  folder(id: "00000000-0000-0000-0000-000000000000") { id name }
+}
+
+query ListFolders @auth(level: USER) {
+  folders(where: { userId: { eq_expr: "auth.uid" } }) { id name }
+}
+
+mutation CreateTask @auth(level: USER) {
+  task_insert(data: { title: "New Task", status: "TODO", folder: { id: "00000000-0000-0000-0000-000000000000" } })
+}
+
+mutation UpdateTask @auth(level: USER) {
+  task_update(key: { id: "00000000-0000-0000-0000-000000000000" }, data: { status: "DONE" })
+}
+
+mutation DeleteTask @auth(level: USER) {
+  task_delete(key: { id: "00000000-0000-0000-0000-000000000000" })
+}
+
+query GetTask @auth(level: USER) {
+  task(id: "00000000-0000-0000-0000-000000000000") { id title status }
+}
+
+query ListTasks @auth(level: USER) {
+  tasks(where: { folder: { userId: { eq_expr: "auth.uid" } } }) { id title status }
+}
+
+mutation CreateTaskLog @auth(level: USER) {
+  taskLog_insert(data: { completedAt_expr: "request.time", task: { id: "00000000-0000-0000-0000-000000000000" } })
+}
+
+mutation UpdateTaskLog @auth(level: USER) {
+  taskLog_update(key: { id: "00000000-0000-0000-0000-000000000000" }, data: { notes: "Completed on time." })
+}
+
+mutation DeleteTaskLog @auth(level: USER) {
+  taskLog_delete(key: { id: "00000000-0000-0000-0000-000000000000" })
+}
+
+query GetTaskLog @auth(level: USER) {
+  taskLog(id: "00000000-0000-0000-0000-000000000000") { id completedAt notes }
+}
+
+query ListTaskLogs @auth(level: USER) {
+  taskLogs(where: { task: { folder: { userId: { eq_expr: "auth.uid" } } } }) { id completedAt }
+}
+
+mutation CreateSettings @auth(level: USER) {
+  settings_insert(data: { themePreference: "dark", userId_expr: "auth.uid" })
+}
+
+mutation UpdateSettings @auth(level: USER) {
+  settings_update(key: { id: "00000000-0000-0000-0000-000000000000" }, data: { themePreference: "light" })
+}
+
+mutation DeleteSettings @auth(level: USER) {
+  settings_delete(key: { id: "00000000-0000-0000-0000-000000000000" })
+}
+
+query GetSettings @auth(level: USER) {
+  settings(key: { id: "00000000-0000-0000-0000-000000000000" }) { themePreference timezone }
+}
+
+query ListSettings @auth(level: USER) {
+  settingss(where: { userId: { eq_expr: "auth.uid" } }) { id themePreference }
+}

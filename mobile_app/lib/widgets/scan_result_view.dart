@@ -23,7 +23,6 @@ class ScanResultView extends StatelessWidget {
     final points = (station['points'] as num?)?.toInt() ?? 10;
     final name = station['name']?.toString() ?? 'Állomás';
     final unlockContent = station['unlockContent']?.toString() ?? '';
-    final extraInfo = station['extraInfo']?.toString() ?? '';
     final imageUrl = primaryPhotoFromDoc(station);
     final newAch =
         (station['newAchievements'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -112,31 +111,6 @@ class ScanResultView extends StatelessWidget {
               icon: Icons.auto_stories_rounded,
               title: 'Feloldott tartalom',
               body: unlockContent,
-            ),
-          ],
-          if (extraInfo.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5EFE2),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFE3D5BC)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF8B7355), size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      extraInfo,
-                      style: const TextStyle(fontSize: 13, height: 1.5),
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
           const SizedBox(height: 28),

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../services/achievement_service.dart';
 import '../services/leaderboard_service.dart';
+import '../utils/project_filter.dart';
+import '../config/app_config.dart';
 
 class AchievementProgressScreen extends StatefulWidget {
   const AchievementProgressScreen({super.key});
@@ -92,8 +94,11 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
             .doc(uid)
             .collection('unlocked_achievements')
             .get(),
+        // A település saját ranglistája adja a rangot.
         _firestore
-            .collection('public_leaderboard')
+            .collection('leaderboards')
+            .doc(AppConfig.projectId)
+            .collection('entries')
             .orderBy('points', descending: true)
             .get(),
       ]);
@@ -102,7 +107,8 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
       final unlockedSnap = results[1];
       final leaderboardSnap = results[2];
 
-      final achievements = achSnap.docs
+      // Csak ennek a településnek a jutalmai.
+      final achievements = whereActiveProject(achSnap.docs)
           .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
           .toList();
       final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();

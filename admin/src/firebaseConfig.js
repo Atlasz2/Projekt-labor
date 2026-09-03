@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -14,6 +15,26 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// App Check (reCAPTCHA v3): a backend csak a valódi adminból érkező hívásokat
+// fogadja el (ha az enforce be van kapcsolva). A reCAPTCHA site key nyilvános,
+// ezért beágyazható; env-változóval felülírható. Nem blokkoló: ha az init
+// elhasal, az admin akkor is betölt.
+const appCheckSiteKey =
+  import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY ||
+  '6LeIv6QtAAAAAK7shTgh466rLa6-ZGIwkJ1AWawr';
+if (typeof window !== 'undefined' && appCheckSiteKey) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('App Check init kihagyva:', err);
+  }
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

@@ -4,6 +4,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import BugReports from "./BugReports";
 
 vi.mock("../firebaseConfig", () => ({ db: {} }));
+vi.mock("../context/ProjectContext", () => ({
+  useProject: () => ({
+    activeProjectId: "nagyvazsony",
+    activeProject: { id: "nagyvazsony", name: "Nagyvázsony" },
+    canSwitchProject: false,
+    projects: [{ id: "nagyvazsony", name: "Nagyvázsony" }],
+  }),
+}));
+
 
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn(),

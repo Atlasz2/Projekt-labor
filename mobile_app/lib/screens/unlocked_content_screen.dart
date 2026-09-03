@@ -6,6 +6,7 @@ import '../utils/image_normalizer.dart';
 import '../widgets/app_background.dart';
 import '../widgets/station_image_viewer.dart';
 import '../widgets/unlocked_card.dart';
+import '../utils/project_filter.dart';
 
 class UnlockedContentScreen extends StatefulWidget {
   const UnlockedContentScreen({super.key});
@@ -83,7 +84,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       final stationsSnap = await _firestore.collection('stations').get();
       final unlocked = <Map<String, dynamic>>[];
 
-      for (final doc in stationsSnap.docs) {
+      for (final doc in whereActiveProject(stationsSnap.docs)) {
         if (!completedIds.contains(doc.id)) continue;
         final data = doc.data();
         final stationName = (data['name'] ?? 'Ismeretlen állomás').toString();

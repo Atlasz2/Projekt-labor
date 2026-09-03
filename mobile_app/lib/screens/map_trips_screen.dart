@@ -16,6 +16,7 @@ import '../services/offline_tiles_service.dart';
 import '../widgets/station_detail_sheet.dart';
 import 'full_screen_map_screen.dart';
 import 'trip_navigation_screen.dart';
+import '../utils/project_filter.dart';
 
 class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
@@ -338,12 +339,14 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
         final tripsSnap = results[0] as QuerySnapshot;
         final stationsSnap = results[1] as QuerySnapshot;
+        // Csak ennek a kiadásnak a településéhez tartozó tartalom.
         trips = tripsSnap.docs
             .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
-            .where((t) => t['isActive'] != false)
+            .where((t) => t['isActive'] != false && inActiveProject(t))
             .toList();
         stations = stationsSnap.docs
             .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+            .where(inActiveProject)
             .toList();
 
         if (uid != null && results.length > 2) {

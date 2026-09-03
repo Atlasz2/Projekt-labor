@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/app_background.dart';
 import '../widgets/offline_image.dart';
+import '../utils/project_filter.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -67,7 +68,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
       if (!mounted) return;
       setState(() {
-        _events = snapshot.docs.map((doc) {
+        // Csak ennek a településnek a történeti bejegyzései.
+        _events = whereActiveProject(snapshot.docs).map((doc) {
           final data = doc.data();
           return {
             'id': doc.id,

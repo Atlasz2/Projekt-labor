@@ -2,6 +2,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
+import { ProjectProvider } from './context/ProjectContext';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 
@@ -57,6 +58,7 @@ const Layout         = lazy(() => import('./components/Layout'));
 const Login          = lazy(() => import('./pages/Login'));
 const Dashboard      = lazy(() => import('./pages/Dashboard'));
 const Analytics      = lazy(() => import('./pages/Analytics'));
+const Developer      = lazy(() => import('./pages/Developer'));
 const Trips          = lazy(() => import('./pages/Trips'));
 const Stations       = lazy(() => import('./pages/Stations'));
 const Map            = lazy(() => import('./pages/Map'));
@@ -66,13 +68,15 @@ const Events         = lazy(() => import('./pages/Events'));
 const Accommodations = lazy(() => import('./pages/Accommodations'));
 const Restaurants    = lazy(() => import('./pages/Restaurants'));
 const Contact        = lazy(() => import('./pages/Contact'));
-const SeedDatabase   = lazy(() => import('./pages/SeedDatabase'));
 const Achievements   = lazy(() => import('./pages/Achievements'));
 const BugReports     = lazy(() => import('./pages/BugReports'));
 
+// A teljes képernyős betöltő a téma változóit használja, így sötét módban is
+// helyes (korábban beégetett világos szöveg volt, háttér nélkül).
 function FullPageLoader() {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', fontSize: '16px', color: '#64748b' }}>
+    <div className="full-page-loader">
+      <div className="full-page-loader__dot" aria-hidden="true" />
       <p>Betöltés...</p>
     </div>
   );
@@ -83,8 +87,12 @@ function AppRoutes() {
 
   if (loading) return <FullPageLoader />;
 
+  // A developer az admin fölötti szint: mindenhez hozzáfér, amihez az admin.
+  const isStaff = userRole === 'admin' || userRole === 'developer';
   const adminOnly = (element) =>
-    userRole === 'admin' ? element : <Navigate to="/" replace />;
+    isStaff ? element : <Navigate to="/" replace />;
+  const developerOnly = (element) =>
+    userRole === 'developer' ? element : <Navigate to="/dashboard" replace />;
 
   return (
     <BrowserRouter>
@@ -96,6 +104,7 @@ function AppRoutes() {
             <Route path="/" element={<Layout />}>
               <Route path="dashboard"      element={adminOnly(<Dashboard />)} />
               <Route path="analytics"      element={adminOnly(<Analytics />)} />
+              <Route path="developer"      element={developerOnly(<Developer />)} />
               <Route path="map"            element={adminOnly(<Map />)} />
               <Route path="users"          element={adminOnly(<Users />)} />
               <Route path="trips"          element={adminOnly(<Trips />)} />
@@ -107,7 +116,6 @@ function AppRoutes() {
               <Route path="contact"        element={adminOnly(<Contact />)} />
               <Route path="achievements"   element={adminOnly(<Achievements />)} />
               <Route path="bug-reports"    element={adminOnly(<BugReports />)} />
-              <Route path="seed-database"  element={adminOnly(<SeedDatabase />)} />
               <Route path="*"              element={<Navigate to="/dashboard" replace />} />
             </Route>
           ) : (
@@ -147,7 +155,9 @@ function App() {
       <CssBaseline />
       <QueryClientProvider client={queryClient}>
         <AdminAuthProvider>
-          <AppRoutes />
+          <ProjectProvider>
+            <AppRoutes />
+          </ProjectProvider>
         </AdminAuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
