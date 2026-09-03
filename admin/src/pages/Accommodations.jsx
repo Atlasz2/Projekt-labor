@@ -11,6 +11,7 @@ import '../styles/Content.css';
 
 const EMPTY_FORM = {
   name:          '',
+  address:       '',
   type:          'hotel',
   pricePerNight: '',
   capacity:      '',
@@ -23,6 +24,7 @@ const mapAccommodation = (docSnap) => {
   return {
     id:            docSnap.id,
     name:          safeString(d.name),
+    address:       safeString(d.address),
     type:          safeString(d.type) || 'hotel',
     pricePerNight: safeString(d.pricePerNight),
     capacity:      safeString(d.capacity),
@@ -59,7 +61,7 @@ function Accommodations() {
   const visibleItems = accommodations.filter((item) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    return [item.name, item.type, item.description]
+    return [item.name, item.address, item.type, item.description]
       .some((field) => field?.toLowerCase().includes(q));
   });
 
@@ -68,6 +70,7 @@ function Accommodations() {
       setEditingId(item.id);
       setFormData({
         name:          item.name          || '',
+        address:       item.address       || '',
         type:          item.type          || 'hotel',
         pricePerNight: item.pricePerNight || '',
         capacity:      item.capacity      || '',
@@ -99,6 +102,7 @@ function Accommodations() {
     setMutateError(null);
     const cleanData = {
       name:          safeString(formData.name),
+      address:       safeString(formData.address),
       type:          safeString(formData.type),
       pricePerNight: safeString(formData.pricePerNight),
       capacity:      safeString(formData.capacity),
@@ -200,6 +204,15 @@ function Accommodations() {
                   <label>Név *</label>
                   <input type="text" value={formData.name} onChange={setField('name')} required />
                 </div>
+                <div className="editor-field">
+                  <label>Cím</label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={setField('address')}
+                    placeholder="pl. Nagyvázsony, Kinizsi u. 12."
+                  />
+                </div>
                 <div className="editor-row">
                   <div className="editor-field">
                     <label>Típus</label>
@@ -267,6 +280,7 @@ function Accommodations() {
             {acc.imageUrl && (
               <img src={acc.imageUrl} alt={acc.name} loading="lazy" className="content-cover" />
             )}
+            {acc.address       && <p><strong>Cím:</strong> {acc.address}</p>}
             {acc.type          && <p><strong>Típus:</strong> {acc.type}</p>}
             {acc.pricePerNight && <p><strong>Ár:</strong> {acc.pricePerNight}</p>}
             {acc.capacity      && <p><strong>Kapacitás:</strong> {acc.capacity}</p>}

@@ -305,14 +305,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-class _TimelineEntry extends StatelessWidget {
+class _TimelineEntry extends StatefulWidget {
   final Map<String, dynamic> event;
   final bool initiallyExpanded;
 
   const _TimelineEntry({required this.event, required this.initiallyExpanded});
 
   @override
+  State<_TimelineEntry> createState() => _TimelineEntryState();
+}
+
+class _TimelineEntryState extends State<_TimelineEntry> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
   Widget build(BuildContext context) {
+    final event = widget.event;
     final facts = (event['facts'] as List<String>?) ?? const [];
     final imageUrl = event['imageUrl']?.toString() ?? '';
     final description = event['description']?.toString() ?? '';
@@ -326,7 +334,10 @@ class _TimelineEntry extends StatelessWidget {
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          initiallyExpanded: initiallyExpanded,
+          initiallyExpanded: widget.initiallyExpanded,
+          // A leírás csak EGYSZER jelenjen meg: összecsukva rövidítve,
+          // kinyitva teljes egészében (a kép alatti duplikátum megszűnt).
+          onExpansionChanged: (value) => setState(() => _expanded = value),
           tilePadding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
           childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
           expandedCrossAxisAlignment: CrossAxisAlignment.start,
@@ -370,8 +381,10 @@ class _TimelineEntry extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   description,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: _expanded ? null : 3,
+                  overflow: _expanded
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
                   style: TextStyle(color: Colors.grey.shade700, height: 1.5),
                 ),
               ],
@@ -399,11 +412,6 @@ class _TimelineEntry extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   child: _placeholder(),
                 ),
-              ),
-            if (description.isNotEmpty)
-              Text(
-                description,
-                style: TextStyle(color: Colors.grey.shade800, height: 1.6),
               ),
             if ((event['quote']?.toString() ?? '').isNotEmpty) ...[
               const SizedBox(height: 14),

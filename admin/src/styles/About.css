@@ -520,3 +520,30 @@ html.dark .about-editor-preview-year { background: rgba(123,150,98,0.2); border-
     flex-direction: column;
   }
 }
+/* Az előnézet a mobil megjelenést tükrözi (összecsukva / kinyitva). */
+.about-preview-state {
+  margin: 14px 0 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 10px;
+}
+
+/* A mobilon összecsukva 3 sor után rövidül a leírás. */
+.about-preview-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.about-preview-note {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.5;
+}

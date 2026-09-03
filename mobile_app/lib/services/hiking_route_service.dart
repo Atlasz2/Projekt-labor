@@ -34,7 +34,70 @@ class HikingRouteService {
     final body =
         '{"locations": [$locations], "costing": "pedestrian", "costing_options": {"pedestrian": {"use_tracks": 1.0, "use_hills": 0.6, "walking_speed": 3.5, "transit_start_end_max_distance": 0}}, "directions_type": "none"}';
 
-    // 1. Valhalla: OSM-alapu erdei/turaoszvenyek
+    // 1. BRouter: kifejezetten TURAZASRA tervezett (hiking-beta profil) –
+    //    a fold- es erdei utakat, osvenyeket reszesiti elonyben a kozutak
+    //    helyett. Ez adja a legjobb turautvonalat, ezert ez az elso.
+    try {
+      final lonlats = waypoints
+          .map((p) => '${p.longitude},${p.latitude}')
+          .join('|');
+      final brouterUri = Uri.parse(
+        'https://brouter.de/brouter'
+        '?lonlats=$lonlats&profile=hiking-beta&alternativeidx=0&format=geojson',
+      );
+      final brouterClient = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 10);
+      try {
+        final request = await brouterClient.getUrl(brouterUri);
+        request.headers.set('User-Agent', 'NagyvazsonyTuraApp/1.0');
+        final response = await request.close().timeout(
+          const Duration(seconds: 12),
+        );
+        if (response.statusCode == 200) {
+          final body = await response
+              .transform(utf8.decoder)
+              .join()
+              .timeout(const Duration(seconds: 10));
+          final data = jsonDecode(body);
+          final features = (data is Map) ? data['features'] : null;
+          if (features is List && features.isNotEmpty) {
+            final feature = features.first;
+            final geometry = feature is Map ? feature['geometry'] : null;
+            final coords = geometry is Map ? geometry['coordinates'] : null;
+            if (coords is List && coords.length >= 2) {
+              final points = <LatLng>[];
+              for (final pair in coords) {
+                if (pair is! List || pair.length < 2) continue;
+                final lon = (pair[0] as num?)?.toDouble();
+                final lat = (pair[1] as num?)?.toDouble();
+                if (lat == null || lon == null) continue;
+                points.add(LatLng(lat, lon));
+              }
+              if (points.length >= 2) {
+                final props = feature is Map ? feature['properties'] : null;
+                final lengthM =
+                    double.tryParse('${(props is Map ? props['track-length'] : null) ?? 0}') ??
+                        0;
+                final timeSec =
+                    double.tryParse('${(props is Map ? props['total-time'] : null) ?? 0}') ??
+                        0;
+                return {
+                  'points': points,
+                  'distanceLabel': formatDistance(lengthM),
+                  'durationLabel': formatDuration(timeSec),
+                };
+              }
+            }
+          }
+        }
+      } finally {
+        brouterClient.close(force: true);
+      }
+    } catch (e) {
+      debugPrint('BRouter utvonaltervezes sikertelen: $e');
+    }
+
+    // 2. Valhalla: OSM-alapu erdei/turaoszvenyek
     try {
       final valhallaClient = HttpClient()
         ..connectionTimeout = const Duration(seconds: 14);
@@ -85,7 +148,7 @@ class HikingRouteService {
       debugPrint('Valhalla útvonaltervezés sikertelen: $e');
     }
 
-    // 2. Tartalek: OSRM foot (turazasi sebesseggel korrigalva)
+    // 3. Tartalek: OSRM foot (kozutakat is hasznal – csak vegszukseg)
     final coords = waypoints
         .map((pt) => '${pt.longitude},${pt.latitude}')
         .join(';');

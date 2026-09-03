@@ -6,7 +6,11 @@ import { collection, getDocs, updateDoc, deleteDoc, doc } from "firebase/firesto
 import {
   Box, Typography, CircularProgress, Alert, Chip, Card, CardContent, CardActions,
   Button, TextField, Select, MenuItem, FormControl, InputLabel, Stack, Divider, Snackbar,
+  Collapse, IconButton, Tooltip,
 } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
+import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
@@ -32,6 +36,19 @@ const fmtDate = (val) => {
 
 function BugReports() {
   const { activeProjectId } = useProject();
+  // Sok bejelentésnél a teljes kifejtés áttekinthetetlen, ezért alapból
+  // összecsukva látszanak: csak a fejléc (cím, státusz, dátum, bejelentő).
+  const [openIds, setOpenIds] = useState(() => new Set());
+  const toggleOpen = (id) =>
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(() => localStorage.getItem("admin_br_filter") || "all");
@@ -169,6 +186,18 @@ function BugReports() {
                 <MenuItem value="closed">Lezárt ({reports.filter(r => normalizeStatus(r.status) === "closed").length})</MenuItem>
               </Select>
             </FormControl>
+            <Tooltip title={openIds.size > 0 ? "Összes összecsukása" : "Összes kinyitása"}>
+              <IconButton
+                size="small"
+                onClick={() =>
+                  setOpenIds((prev) =>
+                    prev.size > 0 ? new Set() : new Set(filtered.map((r) => r.id)),
+                  )
+                }
+              >
+                {openIds.size > 0 ? <UnfoldLessIcon /> : <UnfoldMoreIcon />}
+              </IconButton>
+            </Tooltip>
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={fetchReports} size="small">Frissítés</Button>
             <Button variant="outlined" onClick={handleExportCsv} size="small" disabled={filtered.length === 0}>⬇ CSV</Button>
           </Stack>
@@ -187,7 +216,8 @@ function BugReports() {
                 return (
                 <Card key={r.id} variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: status === "closed" ? "grey.400" : "primary.main" }}>
                   <CardContent>
-                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={2} flexWrap="wrap">
+                    <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={2} flexWrap="wrap"
+                      onClick={() => toggleOpen(r.id)} sx={{ cursor: "pointer" }}>
                       <Box flex={1}>
                         <Typography variant="subtitle1" fontWeight={700}>{r.title || "(Cím nélkül)"}</Typography>
                         <Stack direction="row" gap={1} mt={0.5} flexWrap="wrap">
@@ -202,8 +232,31 @@ function BugReports() {
                           {r.reported_by?.name ? `${r.reported_by.name} \u2022 ` : ""}{r.reported_by?.email ?? ""}{r.reported_by?.os ? ` \u2022 ${r.reported_by.os}` : ""}
                         </Typography>
                       </Box>
+                      <ExpandMoreIcon
+                        fontSize="small"
+                        sx={{
+                          alignSelf: "center",
+                          transition: "transform .2s",
+                          transform: openIds.has(r.id) ? "rotate(180deg)" : "none",
+                          color: "text.secondary",
+                        }}
+                      />
                     </Stack>
 
+                    {/* Összecsukva egysoros előnézet – sok bejelentésnél így
+                        marad áttekinthető a lista. */}
+                    {!openIds.has(r.id) && (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        mt={1}
+                        sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {r.description}
+                      </Typography>
+                    )}
+
+                    <Collapse in={openIds.has(r.id)} timeout="auto" unmountOnExit>
                     <Typography variant="body2" mt={1.5} sx={{ whiteSpace: "pre-wrap" }}>{r.description}</Typography>
 
                     {r.admin_response && responseInputs[r.id] === undefined && (
@@ -225,6 +278,7 @@ function BugReports() {
                         placeholder="Válasz a felhasználónak..."
                       />
                     </Box>
+                    </Collapse>
                   </CardContent>
 
                   <Divider />

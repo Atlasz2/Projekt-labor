@@ -42,7 +42,7 @@ function Users() {
   // Developer-only műveletek: szerep-adás és teljes törlés.
   const { userRole, userEmail } = useAdminAuth();
   const isDeveloper = userRole === "developer";
-  const { projects } = useProject();
+  const { projects, activeProjectId } = useProject();
   const [roleFilter, setRoleFilter] = useState("all");
   const [actionBusyId, setActionBusyId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -55,11 +55,21 @@ function Users() {
       setLoading(true);
       setError(null);
 
-      const [usersSnapshot, progressSnapshot, stationsSnapshot] = await Promise.all([
-        getDocs(collection(db, "users")),
-        getDocs(collection(db, "user_progress")),
-        getDocs(collection(db, "stations")),
-      ]);
+      const [usersSnapshot, progressSnapshot, stationsSnapshot, leaderboardSnapshot] =
+        await Promise.all([
+          getDocs(collection(db, "users")),
+          getDocs(collection(db, "user_progress")),
+          getDocs(collection(db, "stations")),
+          // A rangsor UGYANABBÓL a forrásból jön, mint a mobilappban: a
+          // településenkénti ranglistából. Enélkül más sorrend jelenne meg a
+          // weben (globális pont) és a telefonon (települési pont).
+          getDocs(collection(db, "leaderboards", activeProjectId, "entries")),
+        ]);
+
+      const projectPoints = new Map();
+      leaderboardSnapshot.docs.forEach((d) => {
+        projectPoints.set(d.id, Number(d.data()?.points) || 0);
+      });
 
       // Az összes állomás száma globális (a user_progress nem tárolja),
       // ebből számoljuk a valós haladást minden felhasználónál.
@@ -94,7 +104,7 @@ function Users() {
             completedStations,
             totalStations,
             progress,
-            points: Number(progressData.totalPoints ?? progressData.points ?? 0),
+            points: projectPoints.get(progressDoc.id) ?? 0,
             lastUpdated:
               progressData.updatedAt || progressData.lastUpdated || null,
             createdAt: progressData.createdAt || null,
@@ -186,7 +196,9 @@ function Users() {
     }, 0);
 
     return () => clearTimeout(timer);
-  }, []);
+    // Projektváltáskor újratöltünk (más település ranglistája/tartalma).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId]);
 
   const handleExportCsv = () => {
     const columns = [

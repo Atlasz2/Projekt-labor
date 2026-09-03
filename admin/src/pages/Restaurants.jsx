@@ -11,6 +11,7 @@ import '../styles/Content.css';
 
 const EMPTY_FORM = {
   name:        '',
+  address:     '',
   type:        'hungarian',
   cuisine:     '',
   priceRange:  '',
@@ -23,6 +24,7 @@ const mapRestaurant = (docSnap) => {
   return {
     id:          docSnap.id,
     name:        safeString(d.name),
+    address:     safeString(d.address),
     type:        safeString(d.type) || 'hungarian',
     cuisine:     safeString(d.cuisine),
     priceRange:  safeString(d.priceRange),
@@ -59,7 +61,7 @@ function Restaurants() {
   const visibleItems = restaurants.filter((item) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    return [item.name, item.type, item.cuisine, item.description]
+    return [item.name, item.address, item.type, item.cuisine, item.description]
       .some((field) => field?.toLowerCase().includes(q));
   });
 
@@ -68,6 +70,7 @@ function Restaurants() {
       setEditingId(item.id);
       setFormData({
         name:        item.name        || '',
+        address:     item.address     || '',
         type:        item.type        || 'hungarian',
         cuisine:     item.cuisine     || '',
         priceRange:  item.priceRange  || '',
@@ -99,6 +102,7 @@ function Restaurants() {
     setMutateError(null);
     const cleanData = {
       name:        safeString(formData.name),
+      address:     safeString(formData.address),
       type:        safeString(formData.type),
       cuisine:     safeString(formData.cuisine),
       priceRange:  safeString(formData.priceRange),
@@ -200,6 +204,15 @@ function Restaurants() {
                   <label>Név *</label>
                   <input type="text" value={formData.name} onChange={setField('name')} required />
                 </div>
+                <div className="editor-field">
+                  <label>Cím</label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={setField('address')}
+                    placeholder="pl. Nagyvázsony, Fő u. 5."
+                  />
+                </div>
                 <div className="editor-row">
                   <div className="editor-field">
                     <label>Kategória</label>
@@ -269,6 +282,7 @@ function Restaurants() {
             {rest.imageUrl && (
               <img src={rest.imageUrl} alt={rest.name} loading="lazy" className="content-cover" />
             )}
+            {rest.address     && <p><strong>Cím:</strong> {rest.address}</p>}
             {rest.type        && <p><strong>Kategória:</strong> {rest.type}</p>}
             {rest.cuisine     && <p><strong>Konyha:</strong> {rest.cuisine}</p>}
             {rest.priceRange  && <p><strong>Árszint:</strong> {rest.priceRange}</p>}

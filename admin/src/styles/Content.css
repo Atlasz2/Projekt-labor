@@ -146,7 +146,9 @@
 .btn-primary {
   background: var(--admin-accent);
   color: white;
-  border: none;
+  /* Átlátszó keret, hogy PONTOSAN akkora legyen, mint a .btn-secondary
+     (aminek 1px kerete van) – enélkül 2px-szel alacsonyabb lenne. */
+  border: 1px solid transparent;
   padding: 12px 24px;
   border-radius: 10px;
   font-size: 0.95em;

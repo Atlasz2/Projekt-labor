@@ -77,7 +77,8 @@ body {
   background: var(--admin-accent);
   color: #fff;
   padding: 10px 20px;
-  border: none;
+  /* Átlátszó keret: azonos külső méret a keretes .btn-secondary-val. */
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   font-size: 0.9rem;
   font-weight: 600;
@@ -396,4 +397,27 @@ html.dark .message.error   { background: rgba(220,38,38,0.12); color: #fca5a5; b
 
 @media (prefers-reduced-motion: reduce) {
   .full-page-loader__dot { animation: none; }
+}
+
+/* Gombsorokban a gombok egy vonalban, azonos méretben álljanak: a
+   .btn-primary alap margója itt zavaró lenne. */
+.form-actions,
+.editor-actions,
+.about-editor-actions,
+.invite-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.form-actions .btn-primary,
+.editor-actions .btn-primary,
+.about-editor-actions .btn-primary,
+.invite-actions .btn-primary,
+.form-actions .btn-secondary,
+.editor-actions .btn-secondary,
+.about-editor-actions .btn-secondary,
+.invite-actions .btn-secondary {
+  margin-bottom: 0;
+  line-height: 1.2;
 }

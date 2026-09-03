@@ -32,10 +32,23 @@ const snap = (rows) => ({
 });
 
 // Route getDocs by collection name so users and user_progress get distinct data.
+// A rangsor a településenkénti ranglistából jön (mint a mobilappban), ezért a
+// haladás totalPoints értékéből építünk hozzá ranglista-bejegyzéseket.
 const setData = (users, progress = []) =>
-  getDocs.mockImplementation((col) =>
-    Promise.resolve(col === "user_progress" ? snap(progress) : snap(users))
-  );
+  getDocs.mockImplementation((col) => {
+    if (col === "user_progress") return Promise.resolve(snap(progress));
+    if (col === "leaderboards") {
+      return Promise.resolve(
+        snap(
+          progress.map((row) => ({
+            id: row.id,
+            data: { points: row.data.totalPoints ?? 0 },
+          })),
+        ),
+      );
+    }
+    return Promise.resolve(snap(users));
+  });
 
 const userDoc = (id, overrides = {}) => ({
   id,

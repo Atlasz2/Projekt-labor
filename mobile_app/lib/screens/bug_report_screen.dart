@@ -128,15 +128,37 @@ class _BugReportScreenState extends State<BugReportScreen> {
     }
   }
 
+  /// Lehúzásos frissítés: a lista élő stream, de a Firestore offline
+  /// gyorsítótára miatt elavult állapotot mutathat (pl. az admin már lezárta a
+  /// bejelentést). A szerver-forrású lekérés frissíti a gyorsítótárat, amit a
+  /// stream azonnal továbbít.
+  Future<void> _refreshReports() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('bug_reports')
+          .where('reported_by.user_id', isEqualTo: uid)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('Hibabejelentések frissítése sikertelen: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Hibabejelentés')),
-      body: Form(
+      body: RefreshIndicator(
+        onRefresh: _refreshReports,
+        child: Form(
         key: _formKey,
         child: ListView(
+          // Mindig görgethető, hogy a lehúzásos frissítés rövid listánál is menjen.
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             Container(
@@ -341,6 +363,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
               },
             ),
           ],
+        ),
         ),
       ),
     );

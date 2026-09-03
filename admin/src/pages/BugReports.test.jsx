@@ -132,6 +132,10 @@ describe("BugReports", () => {
   it("save response shows Válasz mentve snackbar", async () => {
     getDocs.mockResolvedValue(makeSnap([makeReport()]));
     render(<BugReports />);
+    // A bejelentések alapból összecsukva jelennek meg (sok bejelentésnél
+    // áttekinthetőbb), ezért előbb ki kell nyitni a kártyát.
+    await waitFor(() => expect(screen.getByText("Teszt hiba")).toBeInTheDocument());
+    await userEvent.click(screen.getByText("Teszt hiba"));
     await waitFor(() => expect(screen.getByPlaceholderText("Válasz a felhasználónak...")).toBeInTheDocument());
     await userEvent.type(screen.getByPlaceholderText("Válasz a felhasználónak..."), "Köszönjük a jelzést!");
     await userEvent.click(screen.getByText("Válasz mentése"));

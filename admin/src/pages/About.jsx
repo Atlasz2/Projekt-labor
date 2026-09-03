@@ -332,19 +332,31 @@ function About() {
               </form>
 
               <aside className="about-editor-preview-panel">
+                {/* Az előnézet a MOBIL megjelenést tükrözi: összecsukva évszám,
+                    cím és rövidített leírás; a kép csak kinyitva látszik. */}
                 <div className="about-editor-preview-card">
-                  <p className="about-editor-preview-label">Előnézet</p>
-                  <div className="about-editor-preview-media">
-                    {imagePreview ? <img alt="Kártya előnézet" src={imagePreview} /> : <span>📜</span>}
-                  </div>
+                  <p className="about-editor-preview-label">
+                    Előnézet – ahogy a mobilon megjelenik
+                  </p>
+
+                  <div className="about-preview-state">Összecsukva</div>
                   <div className="about-editor-preview-body">
                     <span className="about-editor-preview-year">{formData.year || "Időszak"}</span>
                     <h3>{formData.title || "Történeti esemény címe"}</h3>
-                    <p>
+                    <p className="about-preview-clamp">
                       {formData.description ||
-                        "Itt ellenőrizheted, hogyan hat együtt a cím, a kép és a bevezető szöveg az idővonal-kártyán."}
+                        "Itt ellenőrizheted, hogyan hat együtt a cím és a bevezető szöveg az idővonal-kártyán."}
                     </p>
                   </div>
+
+                  <div className="about-preview-state">Kinyitva</div>
+                  <div className="about-editor-preview-media">
+                    {imagePreview ? <img alt="Kártya előnézet" src={imagePreview} /> : <span>📜</span>}
+                  </div>
+                  <p className="about-preview-note">
+                    Kinyitva a kép jelenik meg, és a fenti leírás teljes
+                    egészében látszik (nem rövidítve).
+                  </p>
                 </div>
 
                 <div className="about-editor-tips">

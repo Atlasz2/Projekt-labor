@@ -286,6 +286,7 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
             final item = items[index];
             final photos = photoListFromDoc(item);
             final type = _safe(item['type']);
+            final address = _safe(item['address']);
 
             return Card(
               margin: const EdgeInsets.only(bottom: 14),
@@ -305,6 +306,31 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                           if (type.isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Text(type, style: TextStyle(color: Colors.grey.shade600)),
+                          ],
+                          // A cím a listában is látszik – enélkül a felhasználó
+                          // nem tudja, hol van a hely.
+                          if (address.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.place_outlined,
+                                  size: 16,
+                                  color: Colors.grey.shade600,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    address,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                           const SizedBox(height: 10),
                           if (!isRestaurant) _priceBlock(item),
