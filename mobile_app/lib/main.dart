@@ -10,6 +10,7 @@ import 'package:firebase_performance/firebase_performance.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/material.dart';
 
+import 'config/app_config.dart';
 import 'services/local_cache.dart';
 import 'firebase_options.dart';
 import 'screens/auth_gate.dart';
@@ -29,22 +30,24 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-    // App Check: a backend csak a valódi appból érkező hívásokat fogadja el.
-    // NEM blokkoló – ha az aktiválás elhasal, az app működik tovább; a
-    // szerveroldali kikényszerítés (enforce) külön, tudatosan kapcsolható.
-    // Debug buildben a debug provider (a konzolba beírandó debug tokennel),
-    // release-ben Play Integrity / App Attest.
-    try {
-      await FirebaseAppCheck.instance.activate(
-        providerAndroid: kDebugMode
-            ? const AndroidDebugProvider()
-            : const AndroidPlayIntegrityProvider(),
-        providerApple: kDebugMode
-            ? const AppleDebugProvider()
-            : const AppleAppAttestProvider(),
-      );
-    } catch (e) {
-      debugPrint('App Check aktiválás hiba (nem blokkoló): $e');
+    // App Check – ALAPBÓL KIKAPCSOLVA (AppConfig.appCheckEnabled).
+    // Amíg a szerveroldali kikényszerítés nincs bekapcsolva, nincs haszna,
+    // viszont sideloadolt (App Distribution) buildnél a Play Integrity
+    // elhasalhat és lassíthatja a Firebase-hívásokat. Bekapcsolás:
+    //   flutter build apk --dart-define=APP_CHECK=true
+    if (AppConfig.appCheckEnabled) {
+      try {
+        await FirebaseAppCheck.instance.activate(
+          providerAndroid: kDebugMode
+              ? const AndroidDebugProvider()
+              : const AndroidPlayIntegrityProvider(),
+          providerApple: kDebugMode
+              ? const AppleDebugProvider()
+              : const AppleAppAttestProvider(),
+        );
+      } catch (e) {
+        debugPrint('App Check aktiválás hiba (nem blokkoló): $e');
+      }
     }
     firebaseReady = true;
     FirebaseFirestore.instance.settings = const Settings(

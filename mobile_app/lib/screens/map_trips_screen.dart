@@ -339,15 +339,22 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
         final tripsSnap = results[0] as QuerySnapshot;
         final stationsSnap = results[1] as QuerySnapshot;
-        // Csak ennek a kiadásnak a településéhez tartozó tartalom.
-        trips = tripsSnap.docs
-            .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
-            .where((t) => t['isActive'] != false && inActiveProject(t))
-            .toList();
-        stations = stationsSnap.docs
-            .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
-            .where(inActiveProject)
-            .toList();
+        // Ennek a kiadásnak a településéhez tartozó tartalom. Hibatűrő: ha a
+        // szűrés mindent kidobna, inkább a teljes listát mutatjuk, semmint
+        // üres térképet.
+        trips = filterToActiveProject<Map<String, dynamic>>(
+          tripsSnap.docs
+              .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+              .where((t) => t['isActive'] != false)
+              .toList(),
+          (t) => t,
+        );
+        stations = filterToActiveProject<Map<String, dynamic>>(
+          stationsSnap.docs
+              .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
+              .toList(),
+          (st) => st,
+        );
 
         if (uid != null && results.length > 2) {
           final progress = results[2] as DocumentSnapshot;

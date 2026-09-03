@@ -27,4 +27,12 @@ class AppConfig {
   /// Egy-települési kiadásnál hamis: nincs választó, nincs zavaró extra lépés.
   static const bool multiProject =
       bool.fromEnvironment('MULTI_PROJECT', defaultValue: false);
+
+  /// App Check bekapcsolása. ALAPBÓL KI: amíg a szerveroldali kikényszerítés
+  /// (enforcement) nincs bekapcsolva, az App Checknek nincs haszna, viszont
+  /// sideloadolt (App Distribution) buildnél a Play Integrity elhasalhat és
+  /// lassíthatja a Firebase-hívásokat. Bekapcsolás:
+  ///   flutter build apk --dart-define=APP_CHECK=true
+  static const bool appCheckEnabled =
+      bool.fromEnvironment('APP_CHECK', defaultValue: false);
 }
