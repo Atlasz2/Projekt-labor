@@ -7,6 +7,11 @@
 // egyedi időbélyeg nélkül – ezért idő-alapú metrika (pl. átlagos befejezési
 // idő) nem számolható, viszont a részvételi tölcsér és az állomás-népszerűség
 // pontosan igen.
+//
+// Egy állomás TÖBB túrának is megállója lehet (lásd station-trips-core.js),
+// ezért az állomás->túra leképezés 1:N.
+
+import { stationTripIds } from './station-trips-core.js';
 
 /**
  * @param {object} args
@@ -60,13 +65,14 @@ export function computeTripAnalytics({
 
   const tripById = new Map(tripsArr.map((t) => [String(t?.id), t]));
 
-  // Túránként a hozzá tartozó állomás-azonosítók.
+  // Túránként a hozzá tartozó állomás-azonosítók (egy állomás több túrában
+  // is szerepelhet, ilyenkor mindegyiknél megjelenik).
   const tripStationIds = new Map();
   for (const s of stationsArr) {
-    const tid = s?.tripId != null ? String(s.tripId) : null;
-    if (!tid) continue;
-    if (!tripStationIds.has(tid)) tripStationIds.set(tid, []);
-    tripStationIds.get(tid).push(String(s?.id));
+    for (const tid of stationTripIds(s)) {
+      if (!tripStationIds.has(tid)) tripStationIds.set(tid, []);
+      tripStationIds.get(tid).push(String(s?.id));
+    }
   }
 
   const tripStats = tripsArr
@@ -132,13 +138,19 @@ export function computeTripAnalytics({
   const stationStats = stationsArr
     .map((s) => {
       const sid = String(s?.id);
-      const tid = s?.tripId != null ? String(s.tripId) : null;
-      const trip = tid != null ? tripById.get(tid) : null;
+      const tids = stationTripIds(s);
+      const tripNames = tids
+        .map((tid) => tripById.get(tid))
+        .filter(Boolean)
+        .map((t) => String(t?.name ?? ''));
       return {
         id: sid,
         name: String(s?.name ?? 'Állomás'),
-        tripId: tid,
-        tripName: trip ? String(trip?.name ?? '') : '',
+        tripIds: tids,
+        // Visszamenőleg kompatibilis egyszeres mezők (pl. admin UI-nak,
+        // ami eddig egy túrát várt egy állomáshoz).
+        tripId: tids[0] ?? null,
+        tripName: tripNames.join(', '),
         completions: stationCompletions.get(sid) ?? 0,
       };
     })

@@ -5,6 +5,7 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'leaderboard_service.dart';
 import 'location_service.dart';
 import '../utils/project_filter.dart';
+import '../utils/station_trips.dart';
 import '../config/app_config.dart';
 
 /// A beolvasás pillanatában rögzített eszközpozíció.
@@ -429,9 +430,10 @@ class QrProcessingService {
     );
   }
 
-  /// Túra-teljesítés detektálása állomás-jóváírás után: ha a beolvasott
-  /// állomás túrájának minden állomása megvan, a túra bekerül a
-  /// completedTripIds-be. A bővített listát adja vissza.
+  /// Túra-teljesítés detektálása állomás-jóváírás után: a beolvasott
+  /// állomás TÖBB túrának is megállója lehet, ezért mindegyiket
+  /// megvizsgáljuk – ha valamelyiknek minden állomása megvan, az a túra
+  /// bekerül a completedTripIds-be. A bővített listát adja vissza.
   static Future<List<String>> _detectTripCompletion({
     required String uid,
     required QrTargetKind kind,
@@ -442,24 +444,40 @@ class QrProcessingService {
     final result = List<String>.from(completedTripIds);
     if (kind != QrTargetKind.station) return result;
 
-    final tripId = (targetData['tripId'] ?? '').toString().trim();
-    if (tripId.isEmpty || result.contains(tripId)) return result;
+    final candidateTripIds = stationTripIds(
+      targetData,
+    ).where((id) => !result.contains(id)).toList();
+    if (candidateTripIds.isEmpty) return result;
 
     try {
-      final tripStations = await firestore
-          .collection('stations')
-          .where('tripId', isEqualTo: tripId)
-          .get();
-      if (tripStations.docs.isEmpty) return result;
+      final newlyCompleted = <String>[];
+      for (final tripId in candidateTripIds) {
+        // Két lekérdezés: az új `tripIds` tömbre (arrayContains) ÉS a régi
+        // egyszeres `tripId` mezőre (amíg a migráció nem futott le
+        // mindenhol) – összefésülve, doksinkénti dedup-pal.
+        final byArray = await firestore
+            .collection('stations')
+            .where('tripIds', arrayContains: tripId)
+            .get();
+        final byLegacy = await firestore
+            .collection('stations')
+            .where('tripId', isEqualTo: tripId)
+            .get();
+        final tripStationIds = <String>{
+          ...byArray.docs.map((d) => d.id),
+          ...byLegacy.docs.map((d) => d.id),
+        };
+        if (tripStationIds.isEmpty) continue;
 
-      final allDone = tripStations.docs.every(
-        (d) => completedStations.contains(d.id),
-      );
-      if (!allDone) return result;
+        final allDone = tripStationIds.every(completedStations.contains);
+        if (allDone) newlyCompleted.add(tripId);
+      }
 
-      result.add(tripId);
+      if (newlyCompleted.isEmpty) return result;
+
+      result.addAll(newlyCompleted);
       await firestore.collection('user_progress').doc(uid).update({
-        'completedTripIds': FieldValue.arrayUnion([tripId]),
+        'completedTripIds': FieldValue.arrayUnion(newlyCompleted),
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e, stack) {

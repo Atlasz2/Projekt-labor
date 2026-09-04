@@ -6,6 +6,8 @@
 // nyers QR-kódot küldi be, ezért a Firestore rules a user_progress kliens-
 // oldali írását teljesen lezárhatja (lásd docs/SERVER_VALIDATION.md).
 
+import { stationTripIds } from './station-trips-core.js';
+
 /** A QR-kód → cél leképezés dokumentum-azonosítója. A kódot URI-kódoljuk,
  *  hogy '/' és egyéb, dokumentum-útvonalban tiltott karakterek se okozzanak
  *  gondot. Az admin oldali qrMapping util ugyanígy képez azonosítót. */
@@ -136,9 +138,10 @@ export function checkLocation(targetData, location) {
   return null;
 }
 
-/** Túra-teljesítés detektálása állomás-jóváírás után: ha a beolvasott
- *  állomás túrájának minden állomása megvan, a túra bekerül a
- *  completedTripIds-be. A bővített listát adja vissza. */
+/** Túra-teljesítés detektálása állomás-jóváírás után: a beolvasott állomás
+ *  MOST MÁR TÖBB túrának is megállója lehet, ezért mindegyiket
+ *  megvizsgáljuk – ha valamelyiknek minden állomása megvan, az a túra
+ *  bekerül a completedTripIds-be. A bővített listát adja vissza. */
 async function detectTripCompletion({
   db,
   FieldValue,
@@ -151,23 +154,36 @@ async function detectTripCompletion({
   const result = [...completedTripIds];
   if (kind !== 'station') return result;
 
-  const tripId = String(targetData?.tripId ?? '').trim();
-  if (!tripId || result.includes(tripId)) return result;
-
-  const tripStations = await db
-    .collection('stations')
-    .where('tripId', '==', tripId)
-    .get();
-  if (tripStations.docs.length === 0) return result;
-
-  const allDone = tripStations.docs.every((d) =>
-    completedStations.includes(d.id),
+  const candidateTripIds = stationTripIds(targetData).filter(
+    (tripId) => !result.includes(tripId),
   );
-  if (!allDone) return result;
+  if (candidateTripIds.length === 0) return result;
 
-  result.push(tripId);
+  const newlyCompleted = [];
+  for (const tripId of candidateTripIds) {
+    // Két lekérdezés: az új `tripIds` tömbre (array-contains, egy állomás
+    // több túrának is megállója lehet) ÉS a régi egyszeres `tripId` mezőre
+    // (amíg a migráció, scripts/migrate-station-trip-memberships.mjs, nem
+    // futott le mindenhol) – összefésülve, doksinkénti dedup-pal.
+    const [byArray, byLegacy] = await Promise.all([
+      db.collection('stations').where('tripIds', 'array-contains', tripId).get(),
+      db.collection('stations').where('tripId', '==', tripId).get(),
+    ]);
+    const tripStationDocs = new Map();
+    for (const d of [...byArray.docs, ...byLegacy.docs]) tripStationDocs.set(d.id, d);
+    if (tripStationDocs.size === 0) continue;
+
+    const allDone = [...tripStationDocs.keys()].every((id) =>
+      completedStations.includes(id),
+    );
+    if (allDone) newlyCompleted.push(tripId);
+  }
+
+  if (newlyCompleted.length === 0) return result;
+
+  result.push(...newlyCompleted);
   await db.collection('user_progress').doc(uid).update({
-    completedTripIds: FieldValue.arrayUnion(tripId),
+    completedTripIds: FieldValue.arrayUnion(...newlyCompleted),
     updatedAt: FieldValue.serverTimestamp(),
   });
   return result;

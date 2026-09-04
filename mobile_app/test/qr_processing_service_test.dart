@@ -265,6 +265,45 @@ void main() {
           .get();
       expect(progress.data()!['completedTripIds'] ?? [], isEmpty);
     });
+
+    test(
+      'egy állomás két túrának is megállója (tripIds) – a beolvasása mindkét túrát lezárhatja',
+      () async {
+        await firestore.collection('user_progress').doc(uid).set({
+          'name': 'Teszt Elek',
+          'totalPoints': 10,
+          'completedStations': ['rovid1', 'hosszu1'],
+          'completedEvents': <String>[],
+          'completedTripIds': <String>[],
+        });
+        await firestore.collection('stations').doc('rovid1').set({
+          'name': 'Rövid-1',
+          'tripIds': ['rovid'],
+        });
+        await firestore.collection('stations').doc('kozos').set({
+          'name': 'Közös',
+          'qrCode': 'KOZOS',
+          'tripIds': ['rovid', 'hosszu'],
+        });
+        await firestore.collection('stations').doc('hosszu1').set({
+          'name': 'Hosszú-1',
+          'tripIds': ['hosszu'],
+        });
+        await firestore.collection('stations').doc('hosszu2').set({
+          'name': 'Hosszú-2',
+          'tripIds': ['hosszu'],
+        });
+
+        await QrProcessingService.processByCode(uid: uid, code: 'KOZOS');
+
+        final progress = await firestore
+            .collection('user_progress')
+            .doc(uid)
+            .get();
+        // A rövid túra (rovid1 + kozos) kész, a hosszú (még hosszu2 hiányzik) nem.
+        expect(progress.data()!['completedTripIds'], ['rovid']);
+      },
+    );
   });
 
   group('top_n jutalom (legacy út)', () {

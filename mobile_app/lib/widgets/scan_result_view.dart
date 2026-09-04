@@ -186,6 +186,29 @@ class _UnlockedAchievements extends StatelessWidget {
                             a['description'].toString(),
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
+                        if ((a['rewardInfo']?.toString() ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.card_giftcard_rounded,
+                                size: 13,
+                                color: Color(0xFF8A5A00),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Jutalom jár érte – részletek a Fiókom > Achievementek alatt',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.brown.shade700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

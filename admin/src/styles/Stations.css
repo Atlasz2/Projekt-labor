@@ -176,6 +176,13 @@
 /* Unassigned station badge */
 .trip-badge.unassigned { background: #fbf1de; color: #b0760f; }
 
+/* Multi-trip membership checkboxes in the station editor */
+.trip-membership-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 12px; background: white; }
+.trip-membership-item { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #2b2720; cursor: pointer; }
+.trip-membership-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #5b6f4c; }
+html.dark .trip-membership-list { background: var(--admin-surface); border-color: var(--admin-border); }
+html.dark .trip-membership-item { color: var(--admin-text); }
+
 /* ---- Dark mode: search + filter controls ---- */
 html.dark .search-input,
 html.dark .trip-filter-select {

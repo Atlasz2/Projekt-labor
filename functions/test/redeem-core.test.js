@@ -233,6 +233,56 @@ test('túra-teljesítés: hiányzó állomásnál nem íródik completedTripIds'
   assert.deepEqual(db.read(`user_progress/${uid}`).completedTripIds ?? [], []);
 });
 
+test('túra-teljesítés: egy állomás két túrának is megállója (tripIds) – mindkét túra befejeződhet', async () => {
+  db.seed(`user_progress/${uid}`, {
+    name: 'Teszt Elek',
+    totalPoints: 10,
+    completedStations: ['rovid1', 'hosszu1'],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  // A "kozos" állomás mindkét túrának (rövid és hosszú) is megállója.
+  db.seed('stations/rovid1', { name: 'Rövid-1', tripIds: ['rovid'] });
+  db.seed('stations/kozos', {
+    name: 'Közös',
+    qrCode: 'KOZOS',
+    tripIds: ['rovid', 'hosszu'],
+  });
+  db.seed('stations/hosszu1', { name: 'Hosszú-1', tripIds: ['hosszu'] });
+  db.seed('stations/hosszu2', { name: 'Hosszú-2', tripIds: ['hosszu'] });
+
+  const result = await redeem('KOZOS');
+
+  // A rövid túra (rovid1 + kozos) ezzel kész, a hosszú (hosszu1+hosszu2+kozos) még nem.
+  assert.deepEqual(db.read(`user_progress/${uid}`).completedTripIds, ['rovid']);
+  assert.equal(result.found, true);
+});
+
+test('túra-teljesítés: a közös állomás mindkét túrát lezárhatja, ha épp az utolsó mindkettőn', async () => {
+  db.seed(`user_progress/${uid}`, {
+    name: 'Teszt Elek',
+    totalPoints: 10,
+    completedStations: ['rovid1', 'hosszu1', 'hosszu2'],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  db.seed('stations/rovid1', { name: 'Rövid-1', tripIds: ['rovid'] });
+  db.seed('stations/kozos', {
+    name: 'Közös',
+    qrCode: 'KOZOS2',
+    tripIds: ['rovid', 'hosszu'],
+  });
+  db.seed('stations/hosszu1', { name: 'Hosszú-1', tripIds: ['hosszu'] });
+  db.seed('stations/hosszu2', { name: 'Hosszú-2', tripIds: ['hosszu'] });
+
+  await redeem('KOZOS2');
+
+  const tripIds = db.read(`user_progress/${uid}`).completedTripIds;
+  assert.equal(tripIds.length, 2);
+  assert.ok(tripIds.includes('rovid'));
+  assert.ok(tripIds.includes('hosszu'));
+});
+
 test('top_n jutalom: a friss pontszámmal top 2-be kerülve feloldódik', async () => {
   db.seed('stations/st1', { name: 'Kinizsi vár', qrCode: 'VAR-001', points: 50 });
   // A top_n a település SAJÁT ranglistáján értékelődik ki.

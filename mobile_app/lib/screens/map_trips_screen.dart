@@ -17,6 +17,7 @@ import '../widgets/station_detail_sheet.dart';
 import 'full_screen_map_screen.dart';
 import 'trip_navigation_screen.dart';
 import '../utils/project_filter.dart';
+import '../utils/station_trips.dart';
 
 class MapTripsScreen extends StatefulWidget {
   const MapTripsScreen({super.key});
@@ -77,30 +78,22 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     return LatLng(lat, lng);
   }
 
-  int _stationOrder(Map<String, dynamic> station) {
-    final value = station['orderIndex'];
-    if (value is num) return value.toInt();
-    return 1 << 20;
-  }
-
   String _stationName(Map<String, dynamic> station) {
     return station['name']?.toString() ?? 'Állomás';
   }
 
-
+  /// Egy állomás sorrend-indexe a megadott túrán belül (null tripId esetén,
+  /// amikor nincs kiválasztott túra, csak névre rendezünk – az egyes
+  /// állomások eltérő túrákhoz tartozó sorrendje itt nem összevethető).
   List<Map<String, dynamic>> _tripStationsFor(String? tripId) {
     final items =
-        (tripId == null
-                ? _stations
-                : _stations.where((s) => s['tripId'] == tripId).toList())
+        (tripId == null ? _stations : stationsForTrip(_stations, tripId))
             .where((s) => _stationPoint(s) != null)
             .toList();
 
-    items.sort((a, b) {
-      final orderCompare = _stationOrder(a).compareTo(_stationOrder(b));
-      if (orderCompare != 0) return orderCompare;
-      return _stationName(a).compareTo(_stationName(b));
-    });
+    if (tripId == null) {
+      items.sort((a, b) => _stationName(a).compareTo(_stationName(b)));
+    }
     return items;
   }
 
@@ -405,7 +398,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
   Future<void> _refreshSelectedTripMap() async {
     final tripId = _selectedTripId;
     final visibleStations = _tripStationsFor(tripId);
-    final markers = _buildMarkers(visibleStations);
+    final markers = _buildMarkers(visibleStations, tripId);
 
     if (tripId == null) {
       if (!mounted) return;
@@ -535,13 +528,17 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     _fitRouteOrStations(routePoints, visibleStations);
   }
 
-  Set<Marker> _buildMarkers(List<Map<String, dynamic>> visibleStations) {
+  Set<Marker> _buildMarkers(
+    List<Map<String, dynamic>> visibleStations,
+    String? tripId,
+  ) {
     return Set<Marker>.from(
       visibleStations.map((s) {
         final done = _completedIds.contains(s['id'] as String);
         final point = _stationPoint(s)!;
-        final order = _stationOrder(s);
-        final orderText = order == (1 << 20) ? '?' : '${order + 1}.';
+        final orderText = tripId == null
+            ? '?'
+            : '${stationOrderIndexForTrip(s, tripId) + 1}.';
         return Marker(
           markerId: MarkerId(s['id'] as String),
           position: point,

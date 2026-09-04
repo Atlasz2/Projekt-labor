@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   GoogleMap,
   Marker,
@@ -17,19 +17,27 @@ import {
 } from "../utils/routeService";
 import { useProject } from "../context/ProjectContext";
 import { filterByProject } from "../utils/projects";
+import { stationTripIds, stationsForTrip } from "../utils/stationTrips";
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: "100vh", width: "100%" };
 
+// Jól elkülöníthető, telített színek (kerülve az egymás mellett hasonló
+// árnyalatokat), hogy több túraútvonal is egyértelműen megkülönböztethető
+// legyen egyszerre a térképen.
 const TRIP_COLORS = [
-  "#FF6B6B",
-  "#4ECDC4",
-  "#45B7D1",
-  "#FFA07A",
-  "#98D8C8",
-  "#F7DC6F",
-  "#BB8FCE",
-  "#85C1E2",
+  "#E6194B", // piros
+  "#3CB44B", // zöld
+  "#4363D8", // kék
+  "#F58231", // narancs
+  "#911EB4", // lila
+  "#008080", // sötétcián
+  "#F032E6", // magenta
+  "#9A6324", // barna
+  "#800000", // bordó
+  "#000075", // sötétkék
+  "#808000", // olajzöld
+  "#E91E9C", // pink
 ];
 
 const getStationCoords = (station) => {
@@ -55,10 +63,25 @@ function Map() {
   const [error, setError] = useState(null);
   const [center, setCenter] = useState(DEFAULT_CENTER);
   const [selectedStation, setSelectedStation] = useState(null);
+  const [selectedTripId, setSelectedTripId] = useState(null);
+  const mapRef = useRef(null);
 
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
   });
+  const handleMapLoad = useCallback((mapInstance) => {
+    mapRef.current = mapInstance;
+  }, []);
+  // FIGYELEM: ebben a komponensben a `Map` név magát a komponenst jelenti,
+  // ezért NEM használható a beépített `new Map()` (lásd fetchData lentebb is)
+  // – sima objektumot használunk túra-azonosító -> név lookupként.
+  const tripNameById = useMemo(
+    () =>
+      Object.fromEntries(
+        trips.map((trip) => [trip.id, trip.name || "Ismeretlen túra"]),
+      ),
+    [trips],
+  );
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -98,9 +121,7 @@ function Map() {
       // használunk túra-azonosító szerint.
       const stationsByTrip = {};
       for (const trip of tripsData) {
-        stationsByTrip[trip.id] = stationsWithCoords
-          .filter((st) => st.tripId === trip.id)
-          .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+        stationsByTrip[trip.id] = stationsForTrip(stationsWithCoords, trip.id);
       }
 
       const storedRoutes = {};
@@ -167,6 +188,32 @@ function Map() {
     return () => clearTimeout(timer);
   }, [fetchData]);
 
+  // Jelmagyarázatra kattintva a térkép ráközelít/ráugrik az adott túra
+  // útvonalára (vagy állomásaira, ha még nincs mentett/lekért útvonal), és
+  // az útvonal vonala kiemelten (vastagabban) jelenik meg. Újra kattintva
+  // az adott túrára a kiemelés törlődik.
+  const handleSelectTrip = useCallback(
+    (tripId) => {
+      setSelectedTripId((prev) => (prev === tripId ? null : tripId));
+
+      const route = routeData[tripId];
+      const points =
+        route?.coords?.length > 1
+          ? route.coords.map(([lat, lng]) => ({ lat, lng }))
+          : stationsForTrip(stations, tripId).map((s) => ({
+              lat: s._coords[0],
+              lng: s._coords[1],
+            }));
+
+      if (points.length === 0 || !mapRef.current || !window.google) return;
+
+      const bounds = new window.google.maps.LatLngBounds();
+      points.forEach((p) => bounds.extend(p));
+      mapRef.current.fitBounds(bounds, 60);
+    },
+    [routeData, stations],
+  );
+
   if (loading) {
     return (
       <div className="map-page">
@@ -226,6 +273,7 @@ function Map() {
             mapContainerStyle={MAP_CONTAINER_STYLE}
             center={center}
             zoom={13}
+            onLoad={handleMapLoad}
             options={{
               streetViewControl: false,
               mapTypeControl: true,
@@ -240,6 +288,10 @@ function Map() {
 
               const color = TRIP_COLORS[idx % TRIP_COLORS.length];
               const path = route.coords.map(([lat, lng]) => ({ lat, lng }));
+              const isSelected = selectedTripId === trip.id;
+              // Ha ki van választva egy túra a jelmagyarázatban, a többi
+              // elhalványul, hogy a kiválasztott jól kiemelkedjen.
+              const isDimmed = selectedTripId != null && !isSelected;
 
               return (
                 <Polyline
@@ -247,9 +299,10 @@ function Map() {
                   path={path}
                   options={{
                     strokeColor: color,
-                    strokeOpacity: 0.85,
-                    strokeWeight: 4,
+                    strokeOpacity: isDimmed ? 0.25 : 0.9,
+                    strokeWeight: isSelected ? 7 : 4,
                     geodesic: true,
+                    zIndex: isSelected ? 999 : idx,
                   }}
                 />
               );
@@ -280,7 +333,14 @@ function Map() {
                     {selectedStation.description}
                   </p>
                   <em style={{ fontSize: "0.85em", color: "#666" }}>
-                    Állomás #{selectedStation.orderIndex || "?"}
+                    {(() => {
+                      const names = stationTripIds(selectedStation)
+                        .map((tid) => tripNameById[tid])
+                        .filter(Boolean);
+                      return names.length > 0
+                        ? `Túra: ${names.join(", ")}`
+                        : "Nincs túrához rendelve";
+                    })()}
                   </em>
                 </div>
               </InfoWindow>
@@ -295,11 +355,25 @@ function Map() {
               {trips.map((trip, idx) => {
                 const route = routeData[trip.id];
                 const color = TRIP_COLORS[idx % TRIP_COLORS.length];
-                const tripStationCount =
-                  stations.filter((s) => s.tripId === trip.id).length || 0;
+                const tripStationCount = stationsForTrip(stations, trip.id).length;
+                const isSelected = selectedTripId === trip.id;
 
                 return (
-                  <div key={trip.id} className="legend-item">
+                  <div
+                    key={trip.id}
+                    className={`legend-item${isSelected ? " legend-item-active" : ""}`}
+                    style={{ "--legend-accent": color }}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSelectTrip(trip.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleSelectTrip(trip.id);
+                      }
+                    }}
+                    title="Kattints: ráközelítés és kiemelés a térképen"
+                  >
                     <div
                       className="legend-color"
                       style={{ backgroundColor: color }}

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../firebaseConfig";
 import { useProject } from "../context/ProjectContext";
 import { filterByProject } from "../utils/projects";
+import { stationTripIds, stationsForTrip } from "../utils/stationTrips";
 import {
   collection,
   getDocs,
@@ -254,11 +255,10 @@ function Trips() {
     return () => clearTimeout(timer);
   }, [fetchData]);
 
-  const getTripsStations = (tripId) => {
-    return stations
-      .filter((s) => s.tripId === tripId)
-      .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
-  };
+  // Egy állomás több túrának is megállója lehet – a sorrend túránként külön
+  // van tárolva (tripOrder), ezért ugyanaz az állomás mindegyik saját
+  // listájában a saját helyén jelenik meg.
+  const getTripsStations = (tripId) => stationsForTrip(stations, tripId);
 
   const getMapCenter = (tripId) => {
     const tripStations = getTripsStations(tripId);
@@ -393,20 +393,21 @@ function Trips() {
     });
   };
 
-  const handleMoveStation = async (station, tripStations, idx, dir) => {
+  const handleMoveStation = async (station, tripStations, idx, dir, tripId) => {
     const swapWith = tripStations[idx + dir];
     if (!swapWith) return;
     try {
-      // First normalise every station in this trip to sequential orderIndex values
-      // so we always work with clean integers, not nulls
+      // Csak EZEN a túrán belüli sorrendet (tripOrder.<tripId>) normalizáljuk
+      // és cseréljük – egy megosztott állomás másik túrás sorrendjét nem
+      // érinti, mert az egy külön kulcs ugyanabban a map mezőben.
+      const field = `tripOrder.${tripId}`;
       const normUpdates = tripStations.map((s, i) =>
-        updateDoc(doc(db, "stations", s.id), { orderIndex: i })
+        updateDoc(doc(db, "stations", s.id), { [field]: i })
       );
       await Promise.all(normUpdates);
-      // Now swap the two target stations
       await Promise.all([
-        updateDoc(doc(db, "stations", station.id), { orderIndex: idx + dir }),
-        updateDoc(doc(db, "stations", swapWith.id), { orderIndex: idx }),
+        updateDoc(doc(db, "stations", station.id), { [field]: idx + dir }),
+        updateDoc(doc(db, "stations", swapWith.id), { [field]: idx }),
       ]);
       showMsg("Sorrend frissítve!", "success");
       await fetchData();
@@ -819,13 +820,13 @@ function Trips() {
                                     <button
                                       className="btn-order"
                                       disabled={idx === 0}
-                                      onClick={() => handleMoveStation(station, tripStations, idx, -1)}
+                                      onClick={() => handleMoveStation(station, tripStations, idx, -1, trip.id)}
                                       title="Feljebb"
                                     >▲</button>
                                     <button
                                       className="btn-order"
                                       disabled={idx === tripStations.length - 1}
-                                      onClick={() => handleMoveStation(station, tripStations, idx, 1)}
+                                      onClick={() => handleMoveStation(station, tripStations, idx, 1, trip.id)}
                                       title="Lejjebb"
                                     >▼</button>
                                   </div>
@@ -833,6 +834,17 @@ function Trips() {
                                   <div className="station-info">
                                     <strong>{station.name}</strong>
                                     <p>{station.description}</p>
+                                    {(() => {
+                                      const otherTripNames = stationTripIds(station)
+                                        .filter((tid) => tid !== trip.id)
+                                        .map((tid) => trips.find((t) => t.id === tid)?.name)
+                                        .filter(Boolean);
+                                      return otherTripNames.length > 0 ? (
+                                        <p className="station-shared-note">
+                                          🔗 Ezen a túrán is: {otherTripNames.join(", ")}
+                                        </p>
+                                      ) : null;
+                                    })()}
                                     <button
                                       type="button"
                                       className="btn-station-edit"

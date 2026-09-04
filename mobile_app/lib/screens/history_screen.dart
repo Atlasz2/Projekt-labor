@@ -17,7 +17,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<Map<String, dynamic>> _events = [];
   bool _isLoading = true;
   String? _error;
-  String _selectedPeriod = 'Összes';
 
   @override
   void initState() {
@@ -39,10 +38,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
           .toList();
     }
     return const [];
-  }
-
-  String _periodLabel(Map<String, dynamic> event) {
-    return _safeString(event['period']);
   }
 
   Future<void> _loadHistory() async {
@@ -95,19 +90,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final periods = _events
-        .map(_periodLabel)
-        .where((period) => period.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    final activePeriod = periods.contains(_selectedPeriod)
-        ? _selectedPeriod
-        : 'Összes';
-    final filteredEvents = activePeriod == 'Összes'
-        ? _events
-        : _events.where((event) => _periodLabel(event) == activePeriod).toList();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5EFE4),
       body: Stack(
@@ -207,96 +189,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 const SliverFillRemaining(
                   child: Center(child: Text('Nincs történeti adat.')),
                 )
-              else ...[
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.07),
-                            blurRadius: 16,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Idővonal és korszakok',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (periods.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.only(right: 8),
-                                    child: ChoiceChip(
-                                      label: const Text('Összes'),
-                                      selected: activePeriod == 'Összes',
-                                      onSelected: (_) {
-                                        setState(() => _selectedPeriod = 'Összes');
-                                      },
-                                    ),
-                                  ),
-                                  ...periods.map(
-                                    (period) => Padding(
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: ChoiceChip(
-                                        label: Text(period),
-                                        selected: activePeriod == period,
-                                        onSelected: (_) {
-                                          setState(() => _selectedPeriod = period);
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
+                  sliver: SliverList.builder(
+                    itemCount: _events.length,
+                    itemBuilder: (context, index) {
+                      return _TimelineEntry(
+                        event: _events[index],
+                        initiallyExpanded: index == 0,
+                      );
+                    },
                   ),
                 ),
-                if (filteredEvents.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                          'Ebben a korszakban nincs még megjeleníthető esemény.',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                    sliver: SliverList.builder(
-                      itemCount: filteredEvents.length,
-                      itemBuilder: (context, index) {
-                        return _TimelineEntry(
-                          event: filteredEvents[index],
-                          initiallyExpanded: index == 0,
-                        );
-                      },
-                    ),
-                  ),
-              ],
             ],
           ),
         ],

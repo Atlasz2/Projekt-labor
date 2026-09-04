@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,11 +10,16 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../services/location_service.dart';
 import '../widgets/station_detail_sheet.dart';
+import 'camera_screen.dart';
 
 /// Google Maps-szerű túranavigáció: élő GPS-pozíció, a kiválasztott túra
-/// útvonala, és a következő állomáshoz vezető irány + távolság. Az állomás
-/// "teljesítése" továbbra is a helyszíni QR-beolvasással történik — ez a
-/// képernyő az útvonalvezetésről (odatalálásról) szól.
+/// útvonala, és a következő állomáshoz vezető irány + távolság.
+///
+/// Az állomás "teljesítése" a helyszíni QR-beolvasással történik (pontot is
+/// csak az ad). A "Következő" gomb emiatt szándékosan NEM egy szabad
+/// lapozó: csak akkor engedélyezett, ha a felhasználó ténylegesen a
+/// célállomás közelébe ért (GPS), vagy a QR-beolvasás már valóban
+/// teljesítette azt — így a túra nem "gombnyomogatással" végigjátszható.
 class TripNavigationScreen extends StatefulWidget {
   const TripNavigationScreen({
     super.key,
@@ -24,9 +31,9 @@ class TripNavigationScreen extends StatefulWidget {
 
   final String tripName;
 
-  /// A túra állomásai sorrendben. Minden elem tartalmazza az `id`, `name`,
-  /// koordináta- és `orderIndex` mezőket (ugyanaz a szerkezet, mint a
-  /// térkép képernyőn).
+  /// A túra állomásai sorrendben — a hívó (térkép képernyő) már ehhez a
+  /// túrához szűrve és a `tripOrder`-je szerint rendezve adja át (lásd
+  /// `station_trips.dart`), ezért itt csak a sorrendet kell tartani.
   final List<Map<String, dynamic>> stations;
 
   /// Az állomásokat összekötő útvonal pontjai (a turistaút polyline-ja).
@@ -181,6 +188,45 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
         _targetIndex = next;
       }
     });
+  }
+
+  /// Megnyitja a QR-beolvasót, hogy a felhasználó ténylegesen teljesítse a
+  /// célállomást (pontot is ez ad). Visszatéréskor a szerverről frissítjük a
+  /// valós teljesítést, és csak akkor lépünk tovább, ha az ténylegesen
+  /// megtörtént — így ez a képernyő nem kerülhető meg puszta kattintással.
+  Future<void> _scanAtStation() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CameraScreen()),
+    );
+    if (!mounted) return;
+    await _refreshCompletionFromServer();
+  }
+
+  Future<void> _refreshCompletionFromServer() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('user_progress')
+          .doc(uid)
+          .get();
+      final completed = Set<String>.from(
+        (doc.data()?['completedStations'] as List?) ?? const [],
+      );
+      if (!mounted) return;
+      setState(() {
+        _reachedIds.addAll(completed);
+        final next = _firstUnreachedIndex();
+        _arrivalAnnounced = false;
+        if (next == null) {
+          _allDone = true;
+        } else {
+          _targetIndex = next;
+        }
+      });
+    } catch (_) {
+      // Nincs hálózat: a helyi állapot marad, legközelebb újrapróbáljuk.
+    }
   }
 
   void _recenter() {
@@ -528,6 +574,20 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          if (!_allDone)
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _scanAtStation,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('QR beolvasása – állomás teljesítése'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -552,12 +612,19 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: FilledButton.icon(
-                  onPressed: _allDone ? null : _advanceTarget,
+                child: OutlinedButton.icon(
+                  // Szándékosan NEM szabadon kattintható: csak akkor
+                  // engedélyezett, ha a GPS ténylegesen a célállomás
+                  // közelébe (30 m) ért — a pontot ettől függetlenül
+                  // csak a QR-beolvasás adja.
+                  onPressed: (_allDone || !_arrivalAnnounced)
+                      ? null
+                      : _advanceTarget,
                   icon: const Icon(Icons.skip_next),
-                  label: const Text('Következő'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E7D32),
+                  label: const Text('Tovább (helyszínen vagyok)'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2E7D32),
+                    side: const BorderSide(color: Color(0xFF2E7D32)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),

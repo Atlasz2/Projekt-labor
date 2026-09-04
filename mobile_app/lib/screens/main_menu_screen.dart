@@ -166,29 +166,42 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF7C3AED), Color(0xFFEC4899)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFFFFE1A8), Color(0xFFF7C948)],
                         ),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE8B93A), width: 1.2),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.pink.withValues(alpha: 0.35),
-                            blurRadius: 10,
+                            color: const Color(0xFFE8B93A).withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 3),
                           ),
                         ],
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.emoji_events, color: Colors.amberAccent),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.emoji_events_rounded, color: Color(0xFF8A5A00)),
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(_bannerTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                Text(_bannerSubtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                Text(_bannerTitle, style: const TextStyle(color: Color(0xFF5C3E00), fontWeight: FontWeight.w800)),
+                                Text(_bannerSubtitle, style: const TextStyle(color: Color(0xFF7A5200), fontSize: 12)),
                               ],
                             ),
                           ),

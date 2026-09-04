@@ -148,11 +148,25 @@
   border-radius: 8px;
   transition: all 0.2s ease;
   border: 1px solid transparent;
+  cursor: pointer;
 }
 
 .legend-item:hover {
   background: #e2e8f0;
   border-color: #3a4a2f;
+}
+
+.legend-item:focus-visible {
+  outline: 2px solid var(--legend-accent, #3a4a2f);
+  outline-offset: 2px;
+}
+
+/* Kiválasztott túra a jelmagyarázatban – a saját színével kiemelve, hogy
+   világos legyen, melyik útvonal van most kiemelve a térképen. */
+.legend-item-active {
+  background: color-mix(in srgb, var(--legend-accent) 12%, #f8f9fa);
+  border-color: var(--legend-accent);
+  box-shadow: 0 0 0 1px var(--legend-accent);
 }
 
 .legend-color {

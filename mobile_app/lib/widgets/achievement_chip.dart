@@ -9,39 +9,69 @@ class Achievement {
   final String iconEmoji;
   final String condition;
 
+  /// Mikor oldotta fel a felhasználó (null, ha még nincs feloldva, vagy az
+  /// időpont ismeretlen).
+  final DateTime? unlockedAt;
+
+  /// Ha nem üres, ehhez az achievementhez fizikai/kedvezmény jutalom jár,
+  /// amit a felhasználó fel tud mutatni (lásd `showAchievementDetailSheet`).
+  final String rewardInfo;
+
   const Achievement({
     required this.title,
     required this.description,
     required this.unlocked,
     required this.iconEmoji,
     required this.condition,
+    this.unlockedAt,
+    this.rewardInfo = '',
   });
+
+  bool get hasReward => rewardInfo.trim().isNotEmpty;
 }
 
-/// Egy achievement kártya-chipje a profil rácsában (feloldott/zárolt állapot).
+/// Egy achievement kártya-chipje a profil rácsában (feloldott/zárolt
+/// állapot). Feloldott achievementre rákoppintva a `onTap` a részleteket
+/// (mikor, mivel oldotta fel, jár-e érte jutalom) mutató lapot nyithatja meg.
 class AchievementChip extends StatelessWidget {
   final Achievement achievement;
+  final VoidCallback? onTap;
 
-  const AchievementChip({super.key, required this.achievement});
+  const AchievementChip({super.key, required this.achievement, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    // Feloldva: meleg arany-borostyán árnyalat (trófea-hangulat, nem a
+    // korábbi lila). Zárolva: semleges szürke.
     final bg = achievement.unlocked
-        ? const Color(0xFFE7F5EA)
+        ? const Color(0xFFFFF3D6)
         : const Color(0xFFF3F4F6);
-    // WCAG AA (4.5:1) kontraszt a chip halvány hátterén; a korábbi #166534
-    // a "Feltétel" badge-en épphogy alálőtte a küszöböt (4.47).
+    final borderColor = achievement.unlocked
+        ? const Color(0xFFE8B93A)
+        : const Color(0xFFD1D5DB);
+    // WCAG AA (4.5:1) kontraszt a chip halvány hátterén — a leírás-szöveg
+    // 0.84 alfával jelenik meg, ezért ott mérve is 4.5 fölött kell lennie
+    // (lásd test/accessibility_test.dart).
     final fg = achievement.unlocked
-        ? const Color(0xFF14532D)
+        ? const Color(0xFF6B4400)
         : const Color(0xFF6B7280);
 
-    return Container(
+    final card = Container(
       width: 178,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: fg.withValues(alpha: 0.16)),
+        border: Border.all(color: borderColor, width: achievement.unlocked ? 1.4 : 1),
+        boxShadow: achievement.unlocked
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFE8B93A).withValues(alpha: 0.22),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,8 +83,20 @@ class AchievementChip extends StatelessWidget {
                 style: TextStyle(fontSize: 18, color: fg),
               ),
               const Spacer(),
+              if (achievement.unlocked && achievement.hasReward)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: Icon(
+                    Icons.card_giftcard_rounded,
+                    size: 16,
+                    color: fg,
+                    semanticLabel: 'Jutalom jár érte',
+                  ),
+                ),
               Icon(
-                achievement.unlocked ? Icons.check_circle : Icons.lock_outline,
+                achievement.unlocked
+                    ? Icons.check_circle_rounded
+                    : Icons.lock_outline,
                 size: 18,
                 color: fg,
                 semanticLabel: achievement.unlocked ? 'Feloldva' : 'Zárolva',
@@ -85,7 +127,34 @@ class AchievementChip extends StatelessWidget {
               ),
             ),
           ],
+          if (achievement.unlocked && onTap != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              achievement.hasReward
+                  ? 'Koppints a részletekért →'
+                  : 'Koppints: mikor oldottad fel',
+              style: TextStyle(
+                fontSize: 10,
+                fontStyle: FontStyle.italic,
+                color: fg.withValues(alpha: 0.72),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+
+    // Az interaktív (Material/InkWell) csomagolást csak akkor tesszük rá, ha
+    // valóban van mire koppintani – zárolt achievementnél (vagy ha a hívó
+    // nem adott meg onTap-et) a sima kártyát adjuk vissza.
+    if (!achievement.unlocked || onTap == null) return card;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: card,
       ),
     );
   }

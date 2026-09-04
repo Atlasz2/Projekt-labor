@@ -32,7 +32,7 @@ const DEFAULTS = [
   { id: "local_legend", name: "Helyi legenda",  description: "Teljesíts egy teljes túrát",    icon: "👑", color: "#a855f7", conditionType: "trip_complete",    conditionValue: 1   },
 ];
 
-const EMPTY = { name: "", description: "", icon: "🏆", color: "#667EEA", conditionType: "station_count", conditionValue: 1 };
+const EMPTY = { name: "", description: "", icon: "🏆", color: "#667EEA", conditionType: "station_count", conditionValue: 1, rewardInfo: "" };
 const ICON_PRESETS = ["🏆","🥇","👣","🧭","🏃","🎉","👑","⭐","🔥","💎","🌟","🎯","🗺️","🏅","🎖️"];
 const COLOR_PRESETS = ["#22c55e","#3b82f6","#f97316","#ec4899","#a855f7","#667EEA","#06b6d4","#eab308","#ef4444","#14b8a6"];
 
@@ -86,6 +86,7 @@ export default function Achievements() {
       color: a.color || "#667EEA",
       conditionType: a.conditionType || "station_count",
       conditionValue: a.conditionValue ?? 1,
+      rewardInfo: a.rewardInfo || "",
     });
     setShowForm(true);
   };
@@ -102,6 +103,7 @@ export default function Achievements() {
         color: form.color || "#667EEA",
         conditionType: form.conditionType || "station_count",
         conditionValue: Number(form.conditionValue) || 1,
+        rewardInfo: form.rewardInfo.trim(),
         projectId: activeProjectId,
       };
       if (editing) {
@@ -166,6 +168,9 @@ export default function Achievements() {
               )}
               {a.conditionType === "manual" && (
                 <span className="ach-row-cond">Manuális (admin adja át)</span>
+              )}
+              {a.rewardInfo && (
+                <span className="ach-row-reward" title={a.rewardInfo}>🎁 Jutalom jár érte: {a.rewardInfo}</span>
               )}
             </div>
             <div className="ach-row-actions">
@@ -285,6 +290,22 @@ export default function Achievements() {
                   <div className="ach-preview">
                     <span className="ach-preview-icon" style={{ background: form.color }}>{form.icon}</span>
                     <span className="ach-preview-name">{form.name || "Jutalom neve"}</span>
+                  </div>
+                </section>
+
+                <section className="about-editor-section">
+                  <div className="about-editor-section-head">
+                    <span>4</span>
+                    <div><h3>Fizikai / kedvezmény jutalom</h3><p>Opcionális. Ha kitöltöd, a látogató a feloldás után ezt a szöveget felmutathatja a helyszínen (pl. recepción) igazolásként.</p></div>
+                  </div>
+                  <div className="field-group">
+                    <label>Jutalom leírása</label>
+                    <textarea
+                      rows={3}
+                      value={form.rewardInfo}
+                      onChange={(e) => setField("rewardInfo", e.target.value)}
+                      placeholder="pl. 10% kedvezmény egy fagylaltra a Fő téri cukrászdában"
+                    />
                   </div>
                 </section>
 

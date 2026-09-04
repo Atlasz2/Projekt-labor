@@ -613,6 +613,13 @@
   font-size: 1em;
 }
 
+.station-shared-note {
+  margin: 4px 0 0;
+  color: var(--admin-accent-deep, var(--admin-accent));
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
 .station-info p {
   margin: 0;
   color: var(--admin-text-muted);

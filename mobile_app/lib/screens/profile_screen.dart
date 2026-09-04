@@ -6,6 +6,7 @@ import '../services/leaderboard_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/profile_stats.dart';
 import '../widgets/achievement_chip.dart';
+import '../widgets/achievement_detail_sheet.dart';
 import '../widgets/data_rights_section.dart';
 import '../widgets/profile_skeleton.dart';
 import 'achievement_progress_screen.dart';
@@ -27,6 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<Map<String, dynamic>> _allUsers = [];
   List<Map<String, dynamic>> _achievementDefinitions = [];
   Set<String> _unlockedAchievementIds = <String>{};
+  Map<String, DateTime> _unlockedAt = <String, DateTime>{};
 
   bool _isLoading = true;
   String? _error;
@@ -198,11 +200,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .get();
 
       final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
+      final unlockedAt = <String, DateTime>{};
+      for (final d in unlockedSnap.docs) {
+        final ts = d.data()['unlockedAt'];
+        if (ts is Timestamp) unlockedAt[d.id] = ts.toDate();
+      }
 
       if (!mounted) return;
       setState(() {
         _achievementDefinitions = defs;
         _unlockedAchievementIds = unlockedIds;
+        _unlockedAt = unlockedAt;
       });
     } catch (e) {
       debugPrint('Jutalmak betöltése sikertelen: $e');
@@ -223,12 +231,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final conditionValue = safeInt(a['conditionValue']);
       final condition = conditionText(conditionType, conditionValue);
       final unlocked = _unlockedAchievementIds.contains(id);
+      final rewardInfo = (a['rewardInfo'] ?? '').toString();
       return Achievement(
         title: title,
         description: description,
         unlocked: unlocked,
         iconEmoji: icon,
         condition: condition,
+        unlockedAt: _unlockedAt[id],
+        rewardInfo: rewardInfo,
       );
     }).toList();
   }
@@ -479,7 +490,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           spacing: 10,
                           runSpacing: 10,
                           children: achievements
-                              .map((a) => AchievementChip(achievement: a))
+                              .map(
+                                (a) => AchievementChip(
+                                  achievement: a,
+                                  onTap: () => showAchievementDetailSheet(
+                                    context,
+                                    achievement: a,
+                                    holderName:
+                                        _currentUserData?['name']
+                                            ?.toString() ??
+                                        '',
+                                  ),
+                                ),
+                              )
                               .toList(),
                         ),
                       const SizedBox(height: 10),

@@ -145,6 +145,42 @@ test('hibás alakú mezők (nem tömb, null) nem dobnak, üresnek számítanak',
   assert.equal(byId.s1.completions, 1);
 });
 
+test('egy állomás két túrának is megállója (tripIds): mindkét túra tölcsérébe beleszámít', () => {
+  const sharedTrips = [
+    { id: 't1', name: 'Vár túra' },
+    { id: 't2', name: 'Tó túra' },
+  ];
+  const sharedStations = [
+    { id: 's1', name: 'Vár', tripIds: ['t1'] },
+    // A "Kápolna" mindkét túrának megállója.
+    { id: 's2', name: 'Kápolna', tripIds: ['t1', 't2'] },
+    { id: 's3', name: 'Tópart', tripIds: ['t2'] },
+  ];
+  const progressDocs = [
+    { completedStations: ['s1', 's2'] }, // t1 befejezve (s1+s2), t2 résztvevő (csak s2)
+    { completedStations: ['s2', 's3'] }, // t2 befejezve (s2+s3), t1 résztvevő (csak s2)
+  ];
+  const out = computeTripAnalytics({
+    trips: sharedTrips,
+    stations: sharedStations,
+    progressDocs,
+  });
+
+  const t1 = out.trips.find((t) => t.id === 't1');
+  const t2 = out.trips.find((t) => t.id === 't2');
+  assert.equal(t1.stationCount, 2);
+  assert.equal(t1.participants, 2);
+  assert.equal(t1.finishers, 1);
+  assert.equal(t2.stationCount, 2);
+  assert.equal(t2.participants, 2);
+  assert.equal(t2.finishers, 1);
+
+  const s2 = out.stations.find((s) => s.id === 's2');
+  assert.deepEqual(s2.tripIds, ['t1', 't2']);
+  assert.equal(s2.tripName, 'Vár túra, Tó túra');
+  assert.equal(s2.completions, 2);
+});
+
 test('túrák részvétel szerint csökkenő sorrendben', () => {
   const progressDocs = [
     { completedStations: ['s1'] },

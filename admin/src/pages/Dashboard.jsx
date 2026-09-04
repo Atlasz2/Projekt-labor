@@ -9,6 +9,7 @@ import {
 import StateCard from '../components/StateCard';
 import { useProject } from '../context/ProjectContext';
 import { docProjectId, DEFAULT_PROJECT_ID } from '../utils/projects';
+import { stationTripIds } from '../utils/stationTrips';
 import '../styles/Dashboard.css';
 
 const TREND_METRICS = [
@@ -265,7 +266,7 @@ function Dashboard() {
       const activeTrips = tripDocs.filter((t) => t.isActive === true).length;
       const usersTotal = scopeAll ? usersCount.data().count : trackedUsers;
       const avgPts = trackedUsers > 0 ? Math.round(totalPts / trackedUsers) : 0;
-      const assignedStations = stationDocs.filter((st) => st.tripId).length;
+      const assignedStations = stationDocs.filter((st) => stationTripIds(st).length > 0).length;
 
       setStats({
         trips: tripDocs.length,

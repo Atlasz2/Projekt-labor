@@ -531,7 +531,7 @@ export const tripAnalytics = onCall(
       // szöveges/tartalom-mezők nem kerülnek be.
       const [tripsSnap, stationsSnap, progressSnap] = await Promise.all([
         db.collection('trips').select('name', 'projectId').get(),
-        db.collection('stations').select('name', 'tripId', 'projectId').get(),
+        db.collection('stations').select('name', 'tripId', 'tripIds', 'projectId').get(),
         db
           .collection('user_progress')
           .select('completedStations', 'completedTripIds', 'completedStationsAt')

@@ -115,11 +115,13 @@ class FakeQuery {
   }
 
   where(field, op, value) {
-    if (op !== '==') throw new Error(`unsupported operator: ${op}`);
+    if (op !== '==' && op !== 'array-contains') {
+      throw new Error(`unsupported operator: ${op}`);
+    }
     return new FakeQuery(
       this.store,
       this.path,
-      [...this.filters, { field, value }],
+      [...this.filters, { field, op, value }],
       this.limitN,
       this.order,
     );
@@ -143,7 +145,14 @@ class FakeQuery {
       if (!path.startsWith(prefix)) continue;
       // Csak közvetlen gyerek dokumentumok (alkollekciók kizárva).
       if (path.slice(prefix.length).includes('/')) continue;
-      if (this.filters.every((f) => resolveFieldPath(data, f.field) === f.value)) {
+      const matches = this.filters.every((f) => {
+        const fieldValue = resolveFieldPath(data, f.field);
+        if (f.op === 'array-contains') {
+          return Array.isArray(fieldValue) && fieldValue.includes(f.value);
+        }
+        return fieldValue === f.value;
+      });
+      if (matches) {
         docs.push(new FakeDocSnapshot(path.slice(prefix.length), data));
       }
     }

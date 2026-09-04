@@ -2,7 +2,7 @@ import PropTypes from "prop-types";
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db, storage } from '../firebaseConfig';
-import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uploadImageWithFallback, fetchDataUrl } from '../utils/imageUpload';
 import { useProject } from '../context/ProjectContext';
@@ -18,6 +18,7 @@ import StateCard from '../components/StateCard';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
 import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
 import { assertQrCodeAvailable, syncQrMapping, removeQrMapping, QrCodeCollisionError } from '../utils/qrMapping';
+import { stationTripIds, buildTripOrderOnSave } from '../utils/stationTrips';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
 const MAP_CONTAINER_STYLE = { height: '220px', width: '100%' };
@@ -62,7 +63,7 @@ const EMPTY_FORM = {
   points: 10,
   photos: [],
   qrCode: '',
-  tripId: '',
+  tripIds: [],
   unlockContent: '',
   unlockContentImageUrl: '',
 };
@@ -120,7 +121,7 @@ export default function Stations() {
       points: station.points || 10,
       photos: normalizePhotosFromDoc(station),
       qrCode: station.qrCode || '',
-      tripId: station.tripId || '',
+      tripIds: stationTripIds(station),
       unlockContent: station.unlockContent || '',
       unlockContentImageUrl: station.unlockContentImageUrl || '',
     });
@@ -129,7 +130,7 @@ export default function Stations() {
 
   const handleAdd = (prefillTripId = '') => {
     setEditingId(null);
-    setFormData({ ...EMPTY_FORM, tripId: prefillTripId || '' });
+    setFormData({ ...EMPTY_FORM, tripIds: prefillTripId ? [prefillTripId] : [] });
     setShowModal(true);
   };
 
@@ -177,12 +178,17 @@ export default function Stations() {
     }
 
     const dupName = formData.name.trim().toLowerCase();
-    const dupTrip = formData.tripId || '';
-    const duplicate = stations.find((station) =>
-      station.id !== editingId
-      && station.name?.trim().toLowerCase() === dupName
-      && (station.tripId || '') === dupTrip
-    );
+    // Egy állomás több túrának is megállója lehet – ütközésnek azt tekintjük,
+    // ha ugyanaz a név ugyanabban a (legalább egy közös) túrában már létezik.
+    // A "nincs túrához rendelve" állomásokat egy üres '' pszeudo-túraként kezeljük.
+    const targetTripIds = formData.tripIds.length ? formData.tripIds : [''];
+    const duplicate = stations.find((station) => {
+      if (station.id === editingId) return false;
+      if (station.name?.trim().toLowerCase() !== dupName) return false;
+      const stationTrips = stationTripIds(station);
+      const compareTripIds = stationTrips.length ? stationTrips : [''];
+      return targetTripIds.some((tid) => compareTripIds.includes(tid));
+    });
 
     if (duplicate) {
       showMsg('Már létezik ilyen nevű állomás ebben a túrában!', 'warning');
@@ -190,6 +196,7 @@ export default function Stations() {
     }
 
     try {
+      const editingStation = editingId ? stations.find((s) => s.id === editingId) : null;
       const payload = {
         name: formData.name.trim(),
         latitude: Number(formData.latitude),
@@ -198,12 +205,25 @@ export default function Stations() {
         points: parseInt(formData.points, 10) || 10,
         ...buildPhotoFields(formData.photos),
         qrCode: formData.qrCode.trim() || '',
-        tripId: formData.tripId || '',
+        tripIds: formData.tripIds,
+        tripOrder: buildTripOrderOnSave({
+          station: editingStation,
+          allStations: stations,
+          selectedTripIds: formData.tripIds,
+        }),
         unlockContent: formData.unlockContent.trim(),
         unlockContentImageUrl: formData.unlockContentImageUrl || '',
         // White-label: az állomás az aktív településhez tartozik.
         projectId: activeProjectId,
       };
+      // A régi egyszeres tripId/orderIndex mezők eltávolítása, hogy ne
+      // éledjenek fel visszamenőleges kompatibilitásként egy jövőbeli
+      // olvasásnál. FieldValue.delete() csak update()-nél megengedett, új
+      // dokumentumnál (addDoc) nincs mit törölni.
+      if (editingId) {
+        payload.tripId = deleteField();
+        payload.orderIndex = deleteField();
+      }
 
       await assertQrCodeAvailable(db, {
         code: payload.qrCode,
@@ -280,7 +300,8 @@ export default function Stations() {
       docPdf.setFont('helvetica', 'normal');
       docPdf.setFontSize(12);
       docPdf.text(`Koordináta: ${station.latitude?.toFixed(5)}, ${station.longitude?.toFixed(5)}`, 20, 30);
-      docPdf.text(`Túra: ${getTripName(station.tripId) || 'Nincs'}`, 20, 38);
+      const tripNames = stationTripIds(station).map(getTripName).filter(Boolean);
+      docPdf.text(`Túra: ${tripNames.join(', ') || 'Nincs'}`, 20, 38);
 
       if (station.description) {
         const lines = docPdf.splitTextToSize(station.description, 170);
@@ -320,7 +341,7 @@ export default function Stations() {
         const station = stations.find((item) => item.id === editId);
         if (station) {
           handleEdit(station);
-          setTripFilter(station.tripId || 'all');
+          setTripFilter(stationTripIds(station)[0] || 'all');
         }
       } else if (addForTrip) {
         handleAdd(addForTrip);
@@ -335,17 +356,18 @@ export default function Stations() {
   }, [isLoading, stations, searchParams, paramsHandled]);
 
 
-  const unassignedCount = stations.filter((station) => !station.tripId).length;
+  const unassignedCount = stations.filter((station) => stationTripIds(station).length === 0).length;
 
   const filtered = stations.filter((station) => {
-    if (tripFilter === 'none' && station.tripId) return false;
-    if (tripFilter !== 'all' && tripFilter !== 'none' && station.tripId !== tripFilter) return false;
+    const tripIds = stationTripIds(station);
+    if (tripFilter === 'none' && tripIds.length > 0) return false;
+    if (tripFilter !== 'all' && tripFilter !== 'none' && !tripIds.includes(tripFilter)) return false;
 
     const query = search.toLowerCase();
     return !query
       || station.name?.toLowerCase().includes(query)
       || station.description?.toLowerCase().includes(query)
-      || getTripName(station.tripId)?.toLowerCase().includes(query);
+      || tripIds.some((tid) => getTripName(tid)?.toLowerCase().includes(query));
   });
 
   if (isLoading) {
@@ -409,7 +431,7 @@ export default function Stations() {
         <div className="stations-grid">
                 {filtered.map((station) => {
                   const qrValue = getQrValue(station);
-                  const tripName = getTripName(station.tripId);
+                  const tripNames = stationTripIds(station).map(getTripName).filter(Boolean);
                   const coverPhoto = normalizePhotosFromDoc(station)[0] || '';
 
                   return (
@@ -421,8 +443,8 @@ export default function Stations() {
                       <div className="station-body">
                         <div className="station-title">
                           <h3>{station.name}</h3>
-                          {tripName
-                            ? <span className="trip-badge">🗺️ {tripName}</span>
+                          {tripNames.length > 0
+                            ? tripNames.map((name) => <span key={name} className="trip-badge">🗺️ {name}</span>)
                             : <span className="trip-badge unassigned">🚩 Nincs túrához rendelve</span>}
                         </div>
                         <p className="station-desc">{station.description || 'Nincs leírás megadva.'}</p>
@@ -467,19 +489,38 @@ export default function Stations() {
                     <label>Állomás neve <span className="required">*</span></label>
                     <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="pl. Kinizsi vár kapuja" />
                   </div>
-                  <div className="field-row">
-                    <div className="field-group">
-                      <label>Pont érték</label>
-                      <input type="number" min="1" max="100" value={formData.points} onChange={(e) => setFormData({ ...formData, points: e.target.value })} />
-                      <span className="field-hint">Az állomás beolvasásával szerzett pontok</span>
-                    </div>
-                    <div className="field-group">
-                      <label>Túrához rendelés</label>
-                      <select value={formData.tripId || ''} onChange={(e) => setFormData({ ...formData, tripId: e.target.value })}>
-                        <option value="">— Nincs túrához rendelve —</option>
-                        {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.name || trip.id}</option>)}
-                      </select>
-                    </div>
+                  <div className="field-group">
+                    <label>Pont érték</label>
+                    <input type="number" min="1" max="100" value={formData.points} onChange={(e) => setFormData({ ...formData, points: e.target.value })} />
+                    <span className="field-hint">Az állomás beolvasásával szerzett pontok</span>
+                  </div>
+                  <div className="field-group">
+                    <label>Túrákhoz rendelés</label>
+                    {trips.length === 0 ? (
+                      <p className="field-hint">Még nincs túra létrehozva.</p>
+                    ) : (
+                      <div className="trip-membership-list">
+                        {trips.map((trip) => {
+                          const checked = formData.tripIds.includes(trip.id);
+                          return (
+                            <label key={trip.id} className="trip-membership-item">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => setFormData((prev) => ({
+                                  ...prev,
+                                  tripIds: e.target.checked
+                                    ? [...prev.tripIds, trip.id]
+                                    : prev.tripIds.filter((id) => id !== trip.id),
+                                }))}
+                              />
+                              {trip.name || trip.id}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <span className="field-hint">Egy állomás akár több túrának is megállója lehet (vagy egynek sem).</span>
                   </div>
                   <div className="field-group">
                     <label>QR kód (egyedi azonosító)</label>

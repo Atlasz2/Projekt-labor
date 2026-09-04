@@ -87,8 +87,8 @@ alapértelmezett projekt akkor is használható, ha nincs külön dokumentuma.
 | `radius` | number | Opcionális; a helyszín-ellenőrzés sugara méterben (alap: 150) |
 | `points` | number | A beolvasásért járó pont (alap: 10) |
 | `qrCode` | string | A kihelyezett QR-kód szövege |
-| `tripId` | string | Melyik túrához tartozik |
-| `orderIndex` | number | Sorrend a túrán belül |
+| `tripIds` | string[] | Mely túráknak megállója (**0, 1 vagy TÖBB** is lehet) |
+| `tripOrder` | map | `{ [tripId]: number }` — sorrend AZ ADOTT túrán belül, túránként külön |
 | `photos`, `photoUrls`, `imageUrl` | array/string | Képek (lásd lentebb) |
 | `unlockContent` | string | A teljesítés után feloldódó szöveg |
 | `unlockContentImageUrl` | string | A feloldott tartalom képe |
@@ -102,7 +102,11 @@ alapértelmezett projekt akkor is használható, ha nincs külön dokumentuma.
 > dokumentumokat okoztak. **Új képet mindig Storage-ba kell tölteni.**
 
 > **Megszűnt mezők:** `funFact`, `funFactImageUrl`, `extraInfo` — eltávolítva,
-> csak a feloldott tartalom maradt.
+> csak a feloldott tartalom maradt. A régi egyszeres `tripId`/`orderIndex`
+> mezőt a `tripIds`/`tripOrder` váltotta fel
+> (`functions/scripts/migrate-station-trip-memberships.mjs`); az olvasó kód
+> (mobil, admin, functions) visszamenőleg kompatibilis, ha a migráció még
+> nem futott le egy dokumentumon.
 
 ---
 
@@ -166,6 +170,7 @@ Közös alap: `name`, `description`, `type`, `photos`/`photoUrls`/`imageUrl`,
 | `icon`, `color` | string | Megjelenés |
 | `conditionType` | string | `station_count`, `event_count`, `qr_count`, `points_threshold`, `trip_complete`, `top_n`, `manual` |
 | `conditionValue` | number | A feltétel küszöbe (N) |
+| `rewardInfo` | string | Opcionális: fizikai/kedvezmény jutalom leírása. Ha nem üres, a mobil megjeleníti feloldáskor (felmutatható a helyszínen) |
 | `unlockedCount` | number | Hányan oldották fel (**csak szerver írja**) |
 | `projectId` | string | **Település** |
 

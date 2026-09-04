@@ -26,6 +26,7 @@ vi.mock("firebase/firestore", () => ({
   addDoc: vi.fn().mockResolvedValue({ id: "new1" }),
   updateDoc: vi.fn().mockResolvedValue(undefined),
   deleteDoc: vi.fn().mockResolvedValue(undefined),
+  deleteField: vi.fn(() => "DELETE_FIELD"),
   doc: vi.fn((_db, _col, id) => ({ _id: id })),
 }));
 
@@ -57,7 +58,7 @@ const makeStation = (overrides = {}) => ({
   points: 10,
   latitude: 47.06,
   longitude: 17.715,
-  tripId: "t1",
+  tripIds: ["t1"],
   photos: [],
   qrCode: "QR123",
   ...overrides,
@@ -169,8 +170,29 @@ describe("Stations", () => {
     renderStations(mkClient(), ["/stations?addForTrip=t1"]);
 
     expect(await screen.findByText("Új állomás")).toBeInTheDocument();
-    const modalSelect = document.querySelector(".station-editor-shell select");
-    expect(modalSelect.value).toBe("t1");
+    const checkbox = document.querySelector(".trip-membership-item input[type='checkbox']");
+    expect(checkbox.checked).toBe(true);
+  });
+
+  it("a state editor allows checking multiple trip memberships for one station", async () => {
+    setData(
+      [makeStation({ id: "s1", name: "Vár állomás", tripIds: ["t1"] })],
+      [
+        { id: "t1", name: "Rövid túra" },
+        { id: "t2", name: "Hosszú túra" },
+      ]
+    );
+    renderStations(mkClient(), ["/stations?edit=s1"]);
+
+    expect(await screen.findByText("Állomás szerkesztése")).toBeInTheDocument();
+    const checkboxes = document.querySelectorAll(".trip-membership-item input[type='checkbox']");
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0].checked).toBe(true); // t1 már tagság
+    expect(checkboxes[1].checked).toBe(false); // t2 még nem
+
+    await userEvent.click(checkboxes[1]);
+    expect(checkboxes[0].checked).toBe(true);
+    expect(checkboxes[1].checked).toBe(true);
   });
 
   it("?edit deep-link opens the editor prefilled for that station", async () => {
