@@ -68,7 +68,19 @@ async function assertDeveloper(db, request) {
 // a validáció, pontszámítás, jutalom-feloldás és leaderboard-írás itt fut
 // Admin SDK jogosultsággal. A Flutter oldal a
 // FirebaseFunctions.instanceFor(region: 'europe-west1') példányon hívja.
-export const redeemQr = onCall({ region: 'europe-west1' }, async (request) => {
+//
+// enforceAppCheck: ez a három callable (redeemQr, exportUserData,
+// deleteMyAccount) KIZÁRÓLAG a mobilappból hívott – az admin panel egyiket
+// sem használja (lásd tripAnalytics/hikingRoute/adminDeleteUser/inviteAdmin/
+// setUserBanned, amik admin-hívásúak, ezért NINCS rajtuk App Check
+// kikényszerítés: a webes admin nem küld App Check tokent). A mobil oldalon
+// az AppConfig.appCheckEnabled alapból be van kapcsolva (app_config.dart) –
+// enélkül a régi, App Check nélküli telepítések ezekre a hívásokra
+// 'unauthenticated' hibát kapnának, ezért ÚJ mobil build nélkül ez a
+// kikényszerítés NEM deployolható biztonságosan éles felhasználókra.
+export const redeemQr = onCall(
+  { region: 'europe-west1', enforceAppCheck: true },
+  async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
@@ -112,7 +124,10 @@ export const redeemQr = onCall({ region: 'europe-west1' }, async (request) => {
 
 // GDPR 20. cikk — adathordozhatóság: a hívó SAJÁT adatainak teljes exportja.
 // A kliens JSON-fájlként menti/megosztja a választ.
-export const exportUserData = onCall({ region: 'europe-west1' }, async (request) => {
+// enforceAppCheck: csak a mobilapp hívja (lásd a redeemQr fenti kommentjét).
+export const exportUserData = onCall(
+  { region: 'europe-west1', enforceAppCheck: true },
+  async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
@@ -129,7 +144,10 @@ export const exportUserData = onCall({ region: 'europe-west1' }, async (request)
 // GDPR 17. cikk — törléshez való jog: a hívó SAJÁT fiókjának és minden
 // kapcsolódó dokumentumának törlése (a hibabejelentések anonimizálásával),
 // legvégül az Auth-fiókkal együtt. A kliens ezután kijelentkezik.
-export const deleteMyAccount = onCall({ region: 'europe-west1' }, async (request) => {
+// enforceAppCheck: csak a mobilapp hívja (lásd a redeemQr fenti kommentjét).
+export const deleteMyAccount = onCall(
+  { region: 'europe-west1', enforceAppCheck: true },
+  async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');

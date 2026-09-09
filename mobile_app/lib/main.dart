@@ -30,11 +30,13 @@ Future<void> main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
-    // App Check – ALAPBÓL KIKAPCSOLVA (AppConfig.appCheckEnabled).
-    // Amíg a szerveroldali kikényszerítés nincs bekapcsolva, nincs haszna,
-    // viszont sideloadolt (App Distribution) buildnél a Play Integrity
-    // elhasalhat és lassíthatja a Firebase-hívásokat. Bekapcsolás:
-    //   flutter build apk --dart-define=APP_CHECK=true
+    // App Check – ALAPBÓL BEKAPCSOLVA (AppConfig.appCheckEnabled).
+    // A szerveroldali kikényszerítés (enforceAppCheck: true) él a
+    // mobil-only callable-ökön (redeemQr, exportUserData, deleteMyAccount –
+    // lásd functions/index.js), ezért ennek is be kell lennie kapcsolva.
+    // Kikapcsolás csak fejlesztéshez / sideloadolt debug buildhez, ahol a
+    // Play Integrity esetleg elhasal:
+    //   flutter build apk --dart-define=APP_CHECK=false
     if (AppConfig.appCheckEnabled) {
       try {
         await FirebaseAppCheck.instance.activate(

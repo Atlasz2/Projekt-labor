@@ -17,6 +17,11 @@ class Achievement {
   /// amit a felhasználó fel tud mutatni (lásd `showAchievementDetailSheet`).
   final String rewardInfo;
 
+  /// Mikor jelölte az admin/developer beváltottnak a jutalmat (null, ha még
+  /// nem váltották be, vagy nem jár hozzá jutalom). Ez akadályozza meg, hogy
+  /// ugyanazt a jutalmat többször is fel lehessen mutatni.
+  final DateTime? redeemedAt;
+
   const Achievement({
     required this.title,
     required this.description,
@@ -25,9 +30,11 @@ class Achievement {
     required this.condition,
     this.unlockedAt,
     this.rewardInfo = '',
+    this.redeemedAt,
   });
 
   bool get hasReward => rewardInfo.trim().isNotEmpty;
+  bool get isRedeemed => redeemedAt != null;
 }
 
 /// Egy achievement kártya-chipje a profil rácsában (feloldott/zárolt
@@ -87,10 +94,16 @@ class AchievementChip extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: Icon(
-                    Icons.card_giftcard_rounded,
+                    achievement.isRedeemed
+                        ? Icons.verified_rounded
+                        : Icons.card_giftcard_rounded,
                     size: 16,
-                    color: fg,
-                    semanticLabel: 'Jutalom jár érte',
+                    color: achievement.isRedeemed
+                        ? Colors.green.shade700
+                        : fg,
+                    semanticLabel: achievement.isRedeemed
+                        ? 'Jutalom beváltva'
+                        : 'Jutalom jár érte',
                   ),
                 ),
               Icon(

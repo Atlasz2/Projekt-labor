@@ -28,11 +28,14 @@ class AppConfig {
   static const bool multiProject =
       bool.fromEnvironment('MULTI_PROJECT', defaultValue: false);
 
-  /// App Check bekapcsolása. ALAPBÓL KI: amíg a szerveroldali kikényszerítés
-  /// (enforcement) nincs bekapcsolva, az App Checknek nincs haszna, viszont
-  /// sideloadolt (App Distribution) buildnél a Play Integrity elhasalhat és
-  /// lassíthatja a Firebase-hívásokat. Bekapcsolás:
-  ///   flutter build apk --dart-define=APP_CHECK=true
+  /// App Check bekapcsolása. ALAPBÓL BE: a szerveroldali kikényszerítés
+  /// (enforceAppCheck: true) él a mobil-only callable-ökön (redeemQr,
+  /// exportUserData, deleteMyAccount – lásd functions/index.js), ezért ez
+  /// a build-nek is be kell kapcsolva lennie, különben ezek a hívások
+  /// 'unauthenticated' hibával elhasalnak. Kikapcsolás csak fejlesztéshez /
+  /// sideloadolt (App Distribution) debug buildhez, ahol a Play Integrity
+  /// esetleg elhasal:
+  ///   flutter build apk --dart-define=APP_CHECK=false
   static const bool appCheckEnabled =
-      bool.fromEnvironment('APP_CHECK', defaultValue: false);
+      bool.fromEnvironment('APP_CHECK', defaultValue: true);
 }

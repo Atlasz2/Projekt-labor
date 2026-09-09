@@ -20,11 +20,18 @@ vi.mock("../context/AdminAuthContext", () => ({
 }));
 
 vi.mock("firebase/firestore", () => ({
-  collection: vi.fn((_db, name) => name),
+  // A valós hívások néha több útvonal-szegmenst adnak át (pl. a leaderboard
+  // vagy egy felhasználó unlocked_achievements alkollekciója) – ezeket "/"-szel
+  // összefűzve adjuk vissza, hogy a teszt meg tudja különböztetni őket.
+  collection: vi.fn((_db, ...parts) => parts.join("/")),
   getDocs: vi.fn(),
+  doc: vi.fn((_db, ...parts) => ({ _path: parts.join("/") })),
+  setDoc: vi.fn().mockResolvedValue(undefined),
+  serverTimestamp: vi.fn(() => "SERVER_TS"),
+  deleteField: vi.fn(() => "DELETE_FIELD"),
 }));
 
-import { getDocs } from "firebase/firestore";
+import { deleteField, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
 
 const snap = (rows) => ({
   docs: rows.map((r) => ({ id: r.id, data: () => r.data })),
@@ -34,10 +41,10 @@ const snap = (rows) => ({
 // Route getDocs by collection name so users and user_progress get distinct data.
 // A rangsor a településenkénti ranglistából jön (mint a mobilappban), ezért a
 // haladás totalPoints értékéből építünk hozzá ranglista-bejegyzéseket.
-const setData = (users, progress = []) =>
+const setData = (users, progress = [], achievements = [], unlockedByUid = {}) =>
   getDocs.mockImplementation((col) => {
     if (col === "user_progress") return Promise.resolve(snap(progress));
-    if (col === "leaderboards") {
+    if (typeof col === "string" && col.startsWith("leaderboards/")) {
       return Promise.resolve(
         snap(
           progress.map((row) => ({
@@ -46,6 +53,11 @@ const setData = (users, progress = []) =>
           })),
         ),
       );
+    }
+    if (col === "achievements") return Promise.resolve(snap(achievements));
+    if (typeof col === "string" && col.endsWith("/unlocked_achievements")) {
+      const uid = col.split("/")[1];
+      return Promise.resolve(snap(unlockedByUid[uid] || []));
     }
     return Promise.resolve(snap(users));
   });
@@ -58,6 +70,16 @@ const userDoc = (id, overrides = {}) => ({
 const progressDoc = (id, overrides = {}) => ({
   id,
   data: { userId: id, email: `${id}@test.hu`, userName: id, totalPoints: 0, ...overrides },
+});
+
+const achievementDoc = (id, overrides = {}) => ({
+  id,
+  data: { name: id, icon: "🏆", rewardInfo: "", ...overrides },
+});
+
+const unlockedDoc = (id, overrides = {}) => ({
+  id,
+  data: { unlockedAt: "2026-01-01", ...overrides },
 });
 
 const renderUsers = () => render(<Users />);
@@ -147,5 +169,76 @@ describe("Users", () => {
 
     await userEvent.type(screen.getByPlaceholderText(/Keresés/), "zzzzz");
     await waitFor(() => expect(screen.getByText("Nincs találat")).toBeInTheDocument());
+  });
+
+  describe("jutalom-beváltás", () => {
+    const rewardAchievement = achievementDoc("explorer", {
+      name: "Felfedező",
+      icon: "🧭",
+      rewardInfo: "10% kedvezmény a cukrászdában",
+    });
+
+    it("nem jelenik meg a Jutalmak jelölő, ha a településnek nincs jutalommal járó achievementje", async () => {
+      setData(
+        [],
+        [progressDoc("anna", { userId: "anna", userName: "Anna", totalPoints: 10 })],
+        [achievementDoc("no_reward", { name: "Sima", rewardInfo: "" })],
+      );
+      renderUsers();
+      await waitFor(() => expect(screen.getByText("Anna")).toBeInTheDocument());
+      expect(screen.queryByText(/🎁 Jutalmak/)).not.toBeInTheDocument();
+    });
+
+    it("kinyitva megmutatja a felhasználó feloldott, jutalommal járó achievementjeit", async () => {
+      setData(
+        [],
+        [progressDoc("anna", { userId: "anna", userName: "Anna", totalPoints: 10 })],
+        [rewardAchievement],
+        { anna: [unlockedDoc("explorer")] },
+      );
+      renderUsers();
+      await waitFor(() => expect(screen.getByText("Anna")).toBeInTheDocument());
+
+      await waitFor(() => expect(screen.getByText(/🎁 Jutalmak/)).toBeInTheDocument());
+      await userEvent.click(screen.getByText(/🎁 Jutalmak/));
+      await waitFor(() =>
+        expect(screen.getByText("10% kedvezmény a cukrászdában")).toBeInTheDocument(),
+      );
+      expect(screen.getByText("Beváltottnak jelölés")).toBeInTheDocument();
+    });
+
+    it("beváltottnak jelölésre a redeemedAt/redeemedBy mezőt írja, majd visszavonható", async () => {
+      setData(
+        [],
+        [progressDoc("anna", { userId: "anna", userName: "Anna", totalPoints: 10 })],
+        [rewardAchievement],
+        { anna: [unlockedDoc("explorer")] },
+      );
+      renderUsers();
+      await waitFor(() => expect(screen.getByText("Anna")).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText(/🎁 Jutalmak/)).toBeInTheDocument());
+      await userEvent.click(screen.getByText(/🎁 Jutalmak/));
+      await waitFor(() => expect(screen.getByText("Beváltottnak jelölés")).toBeInTheDocument());
+
+      await userEvent.click(screen.getByText("Beváltottnak jelölés"));
+      await waitFor(() =>
+        expect(setDoc).toHaveBeenCalledWith(
+          expect.objectContaining({ _path: "user_progress/anna/unlocked_achievements/explorer" }),
+          { redeemedAt: serverTimestamp(), redeemedBy: "admin@test.hu" },
+          { merge: true },
+        ),
+      );
+      await waitFor(() => expect(screen.getByText(/✅ Beváltva/)).toBeInTheDocument());
+
+      await userEvent.click(screen.getByText(/✅ Beváltva/));
+      await waitFor(() =>
+        expect(setDoc).toHaveBeenLastCalledWith(
+          expect.objectContaining({ _path: "user_progress/anna/unlocked_achievements/explorer" }),
+          { redeemedAt: deleteField(), redeemedBy: deleteField() },
+          { merge: true },
+        ),
+      );
+      await waitFor(() => expect(screen.getByText("Beváltottnak jelölés")).toBeInTheDocument());
+    });
   });
 });

@@ -175,10 +175,12 @@ void showAchievementDetailSheet(
                           color: Color(0xFF8A5A00),
                         ),
                         const SizedBox(width: 8),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'Jutalom jár érte!',
-                            style: TextStyle(
+                            achievement.isRedeemed
+                                ? 'Jutalom beváltva'
+                                : 'Jutalom jár érte!',
+                            style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                               color: Color(0xFF8A5A00),
@@ -198,20 +200,43 @@ void showAchievementDetailSheet(
                     ),
                     const SizedBox(height: 14),
                     Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 12,
+                      ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: achievement.isRedeemed
+                            ? Colors.green.withValues(alpha: 0.16)
+                            : Colors.white.withValues(alpha: 0.6),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        'Mutasd fel ezt a képernyőt a helyszínen',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.brown.shade700,
-                        ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (achievement.isRedeemed) ...[
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 16,
+                              color: Colors.green.shade700,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Flexible(
+                            child: Text(
+                              achievement.isRedeemed
+                                  ? 'Beváltva${achievement.redeemedAt != null ? ' · ${_formatHun(achievement.redeemedAt!)}' : ''}'
+                                  : 'Mutasd fel ezt a képernyőt a helyszínen',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: achievement.isRedeemed
+                                    ? Colors.green.shade800
+                                    : Colors.brown.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

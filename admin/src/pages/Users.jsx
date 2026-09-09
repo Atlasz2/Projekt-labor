@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { db, functions } from "../firebaseConfig";
-import { collection, getDocs, doc, setDoc } from "firebase/firestore";
+import {
+  collection, deleteField, doc, getDocs, serverTimestamp, setDoc,
+} from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
@@ -9,7 +11,7 @@ import StateCard from "../components/StateCard";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import { useProject } from "../context/ProjectContext";
-import { DEFAULT_PROJECT_ID } from "../utils/projects";
+import { DEFAULT_PROJECT_ID, filterByProject } from "../utils/projects";
 import { buildCsv, downloadCsv } from "../utils/exportCsv";
 
 // Szerepkör olvasható neve. A 'developer' a platform-szintű (admin fölötti)
@@ -50,6 +52,13 @@ function Users() {
   const [inviteForm, setInviteForm] = useState({ email: "", name: "", projectId: "" });
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
+  // Jutalom-beváltás nyomon követése: melyik jutalmakhoz tartozik fizikai/
+  // kedvezmény jutalom (rewardInfo), és felhasználónként (lusta betöltéssel,
+  // csak kinyitáskor) melyiket váltották már be.
+  const [achievementDefs, setAchievementDefs] = useState([]);
+  const [expandedRewardsId, setExpandedRewardsId] = useState(null);
+  const [userRewards, setUserRewards] = useState({});
+  const [rewardsLoadingId, setRewardsLoadingId] = useState(null);
   async function fetchUsers() {
     try {
       setLoading(true);
@@ -199,6 +208,99 @@ function Users() {
     // Projektváltáskor újratöltünk (más település ranglistája/tartalma).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProjectId]);
+
+  // A jutalom-definíciók (rewardInfo) külön, könnyű lekérdezéssel – csak
+  // ezekre kell a per-felhasználó beváltás-állapot, a fő fetchUsers()-t
+  // ezért nem terheljük vele.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, "achievements"));
+        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        if (!cancelled) setAchievementDefs(filterByProject(all, activeProjectId));
+      } catch {
+        if (!cancelled) setAchievementDefs([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeProjectId]);
+
+  // Csak azok a jutalom-definíciók érdekesek itt, amelyekhez tényleg jár
+  // fizikai/kedvezmény jutalom (rewardInfo kitöltve).
+  const rewardAchievements = useMemo(
+    () => achievementDefs.filter((a) => (a.rewardInfo || "").trim()),
+    [achievementDefs],
+  );
+  const hasAnyRewards = rewardAchievements.length > 0;
+
+  // Egy felhasználó jutalom-panelének kinyitása/becsukása. Első kinyitáskor
+  // lekéri a feloldott achievementjeit, és összeveti a jutalommal járókkal.
+  const handleToggleRewardsPanel = async (user) => {
+    const uid = user.uid || user.id;
+    if (!uid) return;
+    if (expandedRewardsId === uid) {
+      setExpandedRewardsId(null);
+      return;
+    }
+    setExpandedRewardsId(uid);
+    if (userRewards[uid]) return; // már betöltve
+
+    setRewardsLoadingId(uid);
+    try {
+      const snap = await getDocs(
+        collection(db, "user_progress", uid, "unlocked_achievements")
+      );
+      const rewardIds = new Set(rewardAchievements.map((a) => a.id));
+      const rows = snap.docs
+        .filter((d) => rewardIds.has(d.id))
+        .map((d) => ({ id: d.id, ...d.data() }));
+      setUserRewards((prev) => ({ ...prev, [uid]: rows }));
+    } catch {
+      setSnack({ open: true, severity: "error", message: "Nem sikerült betölteni a jutalmakat." });
+    } finally {
+      setRewardsLoadingId(null);
+    }
+  };
+
+  // Beváltottnak / vissza nem váltottnak jelölés – admin (saját település) és
+  // developer is megteheti, ugyanúgy, ahogy a jutalmak (Achievements oldal)
+  // szerkesztését is. A cél: egy fizikai/kedvezmény jutalmat ne lehessen
+  // többször felmutatni.
+  const handleToggleRedeemed = async (uid, achievementId, currentlyRedeemed) => {
+    try {
+      await setDoc(
+        doc(db, "user_progress", uid, "unlocked_achievements", achievementId),
+        currentlyRedeemed
+          ? { redeemedAt: deleteField(), redeemedBy: deleteField() }
+          : { redeemedAt: serverTimestamp(), redeemedBy: userEmail || null },
+        { merge: true }
+      );
+      setUserRewards((prev) => ({
+        ...prev,
+        [uid]: (prev[uid] || []).map((r) =>
+          r.id === achievementId
+            ? {
+                ...r,
+                redeemedAt: currentlyRedeemed ? null : new Date(),
+                redeemedBy: currentlyRedeemed ? null : userEmail || null,
+              }
+            : r
+        ),
+      }));
+      setSnack({
+        open: true,
+        severity: "success",
+        message: currentlyRedeemed ? "Beváltás visszavonva." : "Jutalom beváltottnak jelölve.",
+      });
+    } catch (err) {
+      setSnack({
+        open: true,
+        severity: "error",
+        message: `Nem sikerült a jelölés: ${err.message || err}`,
+      });
+    }
+  };
 
   const handleExportCsv = () => {
     const columns = [
@@ -546,9 +648,11 @@ function Users() {
 
                 {pagedUsers.map((user, localIndex) => {
                   const index = pageStart + localIndex;
+                  const uid = user.uid || user.id;
+                  const rewardsExpanded = hasAnyRewards && expandedRewardsId === uid;
                   return (
+                    <React.Fragment key={user.id || user.userId}>
                     <div
-                      key={user.id || user.userId}
                       className={`user-row${index < 3 ? " top" : ""}${isDeveloper ? " with-actions" : ""}`}
                     >
                       <div className="rank-col">
@@ -561,6 +665,16 @@ function Users() {
                           {user.banned && <span className="banned-pill">kitiltva</span>}
                         </strong>
                         <small>{user.email || "Nincs email"}</small>
+                        {hasAnyRewards && (
+                          <button
+                            type="button"
+                            className="user-rewards-toggle"
+                            onClick={() => handleToggleRewardsPanel(user)}
+                            title="Feloldott jutalmak és beváltás-állapot"
+                          >
+                            🎁 Jutalmak {rewardsExpanded ? "▲" : "▼"}
+                          </button>
+                        )}
                       </div>
 
                       <div className="role-col">
@@ -663,6 +777,44 @@ function Users() {
                         );
                       })()}
                     </div>
+
+                    {rewardsExpanded && (
+                      <div className="user-rewards-panel">
+                        {rewardsLoadingId === uid ? (
+                          <p className="user-rewards-empty">Betöltés...</p>
+                        ) : (userRewards[uid] || []).length === 0 ? (
+                          <p className="user-rewards-empty">
+                            Nincs jutalommal járó feloldott achievementje.
+                          </p>
+                        ) : (
+                          <ul className="user-rewards-list">
+                            {userRewards[uid].map((r) => {
+                              const def = rewardAchievements.find((a) => a.id === r.id);
+                              const redeemed = !!r.redeemedAt;
+                              return (
+                                <li key={r.id} className="user-rewards-item">
+                                  <span className="user-rewards-icon">{def?.icon || "🎁"}</span>
+                                  <div className="user-rewards-info">
+                                    <strong>{def?.name || r.id}</strong>
+                                    <span className="user-rewards-desc">{def?.rewardInfo}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className={`user-rewards-btn${redeemed ? " redeemed" : ""}`}
+                                    onClick={() => handleToggleRedeemed(uid, r.id, redeemed)}
+                                  >
+                                    {redeemed
+                                      ? `✅ Beváltva ${formatDate(r.redeemedAt)}`
+                                      : "Beváltottnak jelölés"}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </div>

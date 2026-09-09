@@ -29,6 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<Map<String, dynamic>> _achievementDefinitions = [];
   Set<String> _unlockedAchievementIds = <String>{};
   Map<String, DateTime> _unlockedAt = <String, DateTime>{};
+  Map<String, DateTime> _redeemedAt = <String, DateTime>{};
 
   bool _isLoading = true;
   String? _error;
@@ -201,9 +202,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
       final unlockedAt = <String, DateTime>{};
+      final redeemedAt = <String, DateTime>{};
       for (final d in unlockedSnap.docs) {
-        final ts = d.data()['unlockedAt'];
+        final data = d.data();
+        final ts = data['unlockedAt'];
         if (ts is Timestamp) unlockedAt[d.id] = ts.toDate();
+        // Az admin/developer jelöli be a beváltott (fizikai/kedvezmény)
+        // jutalmakat, hogy ugyanaz ne legyen többször felmutatható.
+        final redeemedTs = data['redeemedAt'];
+        if (redeemedTs is Timestamp) redeemedAt[d.id] = redeemedTs.toDate();
       }
 
       if (!mounted) return;
@@ -211,6 +218,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _achievementDefinitions = defs;
         _unlockedAchievementIds = unlockedIds;
         _unlockedAt = unlockedAt;
+        _redeemedAt = redeemedAt;
       });
     } catch (e) {
       debugPrint('Jutalmak betöltése sikertelen: $e');
@@ -240,6 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         condition: condition,
         unlockedAt: _unlockedAt[id],
         rewardInfo: rewardInfo,
+        redeemedAt: _redeemedAt[id],
       );
     }).toList();
   }
