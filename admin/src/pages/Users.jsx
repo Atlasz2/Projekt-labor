@@ -906,19 +906,21 @@ function Users() {
             <div className="invite-actions">
               <button
                 type="button"
-                className="btn-primary"
-                disabled={inviteBusy || !inviteForm.email.trim()}
-                onClick={handleInvite}
-              >
-                {inviteBusy ? "Meghívás..." : "Meghívás"}
-              </button>
-              <button
-                type="button"
                 className="btn-secondary"
                 onClick={() => setInviteOpen(false)}
               >
                 {inviteLink ? "Bezárás" : "Mégse"}
               </button>
+              {!inviteLink && (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={inviteBusy || !inviteForm.email.trim()}
+                  onClick={handleInvite}
+                >
+                  {inviteBusy ? "Meghívás..." : "Meghívás"}
+                </button>
+              )}
             </div>
           </div>
         </div>

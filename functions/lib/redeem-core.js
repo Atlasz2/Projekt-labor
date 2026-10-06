@@ -202,6 +202,8 @@ async function checkAchievements({ db, FieldValue, uid, counts, projectId }) {
   for (const doc of achSnap.docs) {
     if (alreadyUnlocked.has(doc.id)) continue;
     const ach = doc.data();
+    // Más település jutalma itt nem oldódhat fel (white-label).
+    if (projectOf(ach) !== projectId) continue;
     const type = String(ach.conditionType ?? '');
     const target = Number(ach.conditionValue) || 1;
 
@@ -259,6 +261,43 @@ async function checkAchievements({ db, FieldValue, uid, counts, projectId }) {
   }
 
   return newlyUnlocked;
+}
+
+const arrayLength = (value) => (Array.isArray(value) ? value.length : 0);
+
+/**
+ * A jutalmak utólagos egyeztetése (reconcile) a hívó tárolt haladása alapján.
+ *
+ * Egy jutalom beolvasás nélkül is teljesülhet: utólag létrehozott jutalom,
+ * top_n rangváltozás más felhasználók miatt, vagy egy korábban elbukott
+ * feloldás. A kliens ezt korábban maga írta az unlocked_achievements
+ * alkollekcióba; a szerveroldali változat miatt ez az írás a kliens elől
+ * lezárható (lásd firestore.rules).
+ */
+export async function reconcileAchievementsCore({ db, FieldValue, uid, projectId }) {
+  const snap = await db.collection('user_progress').doc(uid).get();
+  if (!snap.exists) return { newAchievements: [] };
+
+  const data = snap.data() ?? {};
+  const counts = {
+    stations: arrayLength(data.completedStations),
+    events: arrayLength(data.completedEvents),
+    trips: arrayLength(data.completedTripIds),
+    points: Number(data.totalPoints) || 0,
+  };
+  const project =
+    typeof projectId === 'string' && projectId.trim() !== ''
+      ? projectId.trim()
+      : DEFAULT_PROJECT_ID;
+
+  const newAchievements = await checkAchievements({
+    db,
+    FieldValue,
+    uid,
+    counts,
+    projectId: project,
+  });
+  return { newAchievements };
 }
 
 /** A projektenkénti ranglista bejegyzésének útvonala. Alkollekció, hogy a

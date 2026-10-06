@@ -1,20 +1,24 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
-/// A jutalom-feloldás közös logikája. Egy adott haladás alapján eldönti, mely
-/// jutalmak teljesültek, és feloldja azokat, amelyek még nincsenek feloldva.
+import '../config/app_config.dart';
+import 'qr_processing_service.dart';
+
+/// A jutalom-feltételek kiértékelése (a felületi előrehaladás-kijelzéshez) és
+/// a feloldások szerveroldali egyeztetése.
 ///
-/// A QR-beolvasás (qr_processing_service) csak a beolvasás pillanatában
-/// ellenőriz; ez a "reconcile" ugyanazt a logikát futtatja képernyő-
-/// betöltéskor is, így egy jutalom akkor is feloldódik, ha a feltétel nem friss
-/// beolvasással teljesült (pl. utólag létrehozott jutalom, top-N rangváltozás,
-/// vagy egy korábban elbukott feloldás).
+/// A QR-beolvasás a beolvasás pillanatában ellenőriz; egy jutalom azonban
+/// beolvasás nélkül is teljesülhet (utólag létrehozott jutalom, top-N
+/// rangváltozás). Ezt a `reconcileAchievements` Cloud Function egyezteti –
+/// a feloldást a szerver írja, a kliens az unlocked_achievements
+/// alkollekciót nem írhatja (lásd firestore.rules).
 class AchievementService {
-  /// Tesztekben lecserélhető; élesben az alapértelmezett példány.
-  static FirebaseFirestore firestore = FirebaseFirestore.instance;
-
   const AchievementService._();
 
-  /// Kiszámolja, teljesült-e egy jutalom feltétele a megadott haladással.
+  /// Tesztekben lecserélhető; élesben a reconcileAchievements függvényt hívja.
+  static Future<List<Map<String, dynamic>>> Function()? reconcileOverride;
+
+  /// Teljesült-e egy jutalom feltétele a megadott haladással.
   /// A `rank` a ranglistán elfoglalt hely (1-alapú); 0, ha nem ismert.
   static bool isConditionMet({
     required String type,
@@ -44,70 +48,25 @@ class AchievementService {
     }
   }
 
-  /// A már betöltött jutalmak és haladás alapján feloldja a teljesített, de még
-  /// fel nem oldott jutalmakat. A hívó adja az adatokat (nincs dupla lekérdezés).
-  /// Visszaadja az újonnan feloldott jutalmakat (bannerhez/értesítéshez).
-  static Future<List<Map<String, dynamic>>> reconcileFromStats({
-    required String uid,
-    required List<Map<String, dynamic>> achievements,
-    required Set<String> alreadyUnlocked,
-    required int stations,
-    required int events,
-    required int points,
-    required int trips,
-    required int rank,
-  }) async {
-    final newlyUnlocked = <Map<String, dynamic>>[];
-    final batch = firestore.batch();
+  /// A teljesült, de még fel nem oldott jutalmak feloldása a szerveren.
+  /// Az újonnan feloldott jutalmakat adja vissza. Hiba esetén üres listát ad:
+  /// az egyeztetés nem blokkolhatja a képernyő betöltését.
+  static Future<List<Map<String, dynamic>>> reconcile() async {
+    try {
+      final override = reconcileOverride;
+      if (override != null) return await override();
 
-    for (final ach in achievements) {
-      final id = (ach['id'] ?? '').toString();
-      if (id.isEmpty || alreadyUnlocked.contains(id)) continue;
-
-      final type = ach['conditionType']?.toString() ?? '';
-      final rawTarget = (ach['conditionValue'] as num?)?.toInt() ?? 1;
-      final target = rawTarget <= 0 ? 1 : rawTarget;
-
-      final met = isConditionMet(
-        type: type,
-        target: target,
-        stations: stations,
-        events: events,
-        points: points,
-        trips: trips,
-        rank: rank,
-      );
-      if (!met) continue;
-
-      batch.set(
-        firestore
-            .collection('user_progress')
-            .doc(uid)
-            .collection('unlocked_achievements')
-            .doc(id),
-        {'unlockedAt': FieldValue.serverTimestamp()},
-      );
-      newlyUnlocked.add(Map<String, dynamic>.from(ach));
+      final response =
+          await FirebaseFunctions.instanceFor(region: 'europe-west1')
+              .httpsCallable('reconcileAchievements')
+              .call<dynamic>({'projectId': AppConfig.projectId});
+      final data = QrProcessingService.stringKeyedMap(response.data);
+      return ((data['newAchievements'] as List?) ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    } catch (e) {
+      debugPrint('Jutalom-egyeztetés kihagyva: $e');
+      return const [];
     }
-
-    if (newlyUnlocked.isEmpty) return const [];
-
-    // Egy banner a főmenüben (a qr_processing ugyanezt a mezőt használja).
-    final first = newlyUnlocked.first;
-    batch.set(
-      firestore.collection('user_progress').doc(uid),
-      {
-        'pendingAchievementBanner': {
-          'title': first['name']?.toString() ?? 'Jutalom feloldva!',
-          'subtitle': newlyUnlocked.length == 1
-              ? (first['description']?.toString() ?? '')
-              : '${newlyUnlocked.length} új jutalom feloldva!',
-        },
-      },
-      SetOptions(merge: true),
-    );
-
-    await batch.commit();
-    return newlyUnlocked;
   }
 }

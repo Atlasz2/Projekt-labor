@@ -5,6 +5,7 @@ import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/project_filter.dart';
+import '../utils/venue_info.dart';
 
 class AccommodationScreen extends StatefulWidget {
   const AccommodationScreen({super.key});
@@ -13,7 +14,8 @@ class AccommodationScreen extends StatefulWidget {
   State<AccommodationScreen> createState() => _AccommodationScreenState();
 }
 
-class _AccommodationScreenState extends State<AccommodationScreen> with SingleTickerProviderStateMixin {
+class _AccommodationScreenState extends State<AccommodationScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -43,17 +45,29 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
     return value.toString().trim().isEmpty ? fallback : value.toString().trim();
   }
 
-  Future<void> _launchUrl(String url) async {
-    final raw = url.startsWith('http') ? url : 'https://$url';
-    final uri = Uri.tryParse(raw);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  /// Külső alkalmazás (böngésző, tárcsázó) megnyitása; ha nem sikerül,
+  /// a felhasználó visszajelzést kap.
+  Future<void> _open(
+    Uri uri, {
+    LaunchMode mode = LaunchMode.platformDefault,
+  }) async {
+    var opened = false;
+    try {
+      opened = await launchUrl(uri, mode: mode);
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A hivatkozás nem nyitható meg ezen az eszközön.'),
+        ),
+      );
+    }
   }
 
-  Future<void> _launchPhone(String phone) async {
-    final uri = Uri.parse('tel:$phone');
-    await launchUrl(uri);
-  }
+  Future<void> _launchPhone(String phone) =>
+      _open(Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^\d+]'), '')));
 
   void _openImageViewer(List<String> photos, int initialIndex) {
     if (photos.isEmpty) return;
@@ -73,7 +87,11 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                   child: OfflineImage.network(
                     photos[index],
                     fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 64,
+                    ),
                   ),
                 ),
               ),
@@ -97,11 +115,13 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
     if (photos.isEmpty) {
       return Container(
         height: height,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [Color(0xFF667EEA), Color(0xFF764BA2)]),
-        ),
+        color: const Color(0xFFE7E0CF),
         child: const Center(
-          child: Icon(Icons.photo_library_outlined, size: 58, color: Colors.white38),
+          child: Icon(
+            Icons.photo_library_outlined,
+            size: 52,
+            color: Color(0xFF8A8270),
+          ),
         ),
       );
     }
@@ -123,7 +143,6 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                   child: const Icon(Icons.broken_image_outlined),
                 ),
               ),
-
             ],
           ),
         ),
@@ -131,55 +150,55 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
     );
   }
 
-  Widget _priceBlock(Map<String, dynamic> item) {
-    final pricing = (item['pricing'] is Map) ? Map<String, dynamic>.from(item['pricing'] as Map) : <String, dynamic>{};
-    final perPerson = (pricing['per_person'] is Map) ? (pricing['per_person']['price'] ?? item['pricePerPerson'] ?? 0) : (item['pricePerPerson'] ?? 0);
-    final perApartment = (pricing['per_apartment'] is Map) ? (pricing['per_apartment']['price'] ?? item['pricePerNight'] ?? 0) : (item['pricePerNight'] ?? 0);
-    final maxPersons = (pricing['per_apartment'] is Map) ? (pricing['per_apartment']['max_persons'] ?? item['capacity'] ?? 0) : (item['capacity'] ?? 0);
+  /// A kártya és a részletező lap tömör adatsorai (csak a kitöltött mezők).
+  List<({IconData icon, String text})> _facts(
+    Map<String, dynamic> item, {
+    required bool isRestaurant,
+  }) {
+    final facts = <({IconData icon, String text})>[];
+    void add(IconData icon, String label, String value) {
+      if (value.isNotEmpty) facts.add((icon: icon, text: '$label: $value'));
+    }
 
-    return Row(
+    if (isRestaurant) {
+      add(Icons.restaurant_menu_outlined, 'Konyha', _safe(item['cuisine']));
+      add(Icons.payments_outlined, 'Árszint', priceLabel(item['priceRange']));
+    } else {
+      add(
+        Icons.payments_outlined,
+        'Ár / éj',
+        priceLabel(item['pricePerNight']),
+      );
+      add(Icons.group_outlined, 'Kapacitás', capacityLabel(item['capacity']));
+    }
+    return facts;
+  }
+
+  Widget _factList(List<({IconData icon, String text})> facts) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFF4F7FF), borderRadius: BorderRadius.circular(14)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Per fo', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-                const SizedBox(height: 6),
-                Text('$perPerson Ft', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              ],
-            ),
+        for (final f in facts)
+          Chip(
+            avatar: Icon(f.icon, size: 18),
+            label: Text(f.text),
+            visualDensity: VisualDensity.compact,
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFFFFF3E8), borderRadius: BorderRadius.circular(14)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Per apartman', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-                const SizedBox(height: 6),
-                Text('$perApartment Ft', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                const SizedBox(height: 6),
-                Text('max $maxPersons fo', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
 
   void _showDetails(Map<String, dynamic> item, {required bool isRestaurant}) {
     final photos = photoListFromDoc(item);
-    final website = _safe(item['website']);
+    final website = websiteUri(item['website']);
     final phone = _safe(item['phone']);
     final name = _safe(item['name'], fallback: 'Ismeretlen');
-    final type = _safe(item['type']);
+    final type = venueTypeLabel(
+      _safe(item['type']),
+      isRestaurant: isRestaurant,
+    );
+    final facts = _facts(item, isRestaurant: isRestaurant);
     final desc = _safe(item['description']);
     final address = _safe(item['address']);
 
@@ -187,7 +206,9 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) {
         return DraggableScrollableSheet(
           initialChildSize: 0.72,
@@ -206,13 +227,21 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         if (type.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Chip(label: Text(type)),
                         ],
-                        const SizedBox(height: 16),
-                        if (!isRestaurant) _priceBlock(item),
+                        if (facts.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _factList(facts),
+                        ],
                         if (address.isNotEmpty) ...[
                           const SizedBox(height: 16),
                           Row(
@@ -225,7 +254,13 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                         ],
                         if (desc.isNotEmpty) ...[
                           const SizedBox(height: 16),
-                          Text(desc, style: TextStyle(color: Colors.grey.shade700, height: 1.55)),
+                          Text(
+                            desc,
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              height: 1.55,
+                            ),
+                          ),
                         ],
                         const SizedBox(height: 18),
                         Wrap(
@@ -238,11 +273,14 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                                 icon: const Icon(Icons.phone_outlined),
                                 label: Text(phone),
                               ),
-                            if (website.isNotEmpty)
-                              FilledButton.icon(
-                                onPressed: () => _launchUrl(website),
-                                icon: const Icon(Icons.language_outlined),
-                                label: const Text('Weboldal'),
+                            if (website != null)
+                              FilledButton.tonalIcon(
+                                onPressed: () => _open(
+                                  website,
+                                  mode: LaunchMode.externalApplication,
+                                ),
+                                icon: const Icon(Icons.open_in_new_rounded),
+                                label: const Text('Weboldal megnyitása'),
                               ),
                           ],
                         ),
@@ -266,7 +304,11 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Hiba: ${snapshot.error}'));
+          return const Center(
+            child: Text(
+              'Az adatok betöltése nem sikerült. Ellenőrizd a kapcsolatot.',
+            ),
+          );
         }
 
         // Csak ennek a településnek a szállásai / vendéglátóhelyei.
@@ -274,10 +316,16 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
             .where((d) => inActiveProject(d.data() as Map<String, dynamic>?))
             .toList();
         if (docs.isEmpty) {
-          return Center(child: Text(isRestaurant ? 'Nincsenek éttermek.' : 'Nincsenek szállások.'));
+          return Center(
+            child: Text(
+              isRestaurant ? 'Nincsenek éttermek.' : 'Nincsenek szállások.',
+            ),
+          );
         }
 
-        final items = docs.map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>}).toList();
+        final items = docs
+            .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
+            .toList();
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
@@ -285,8 +333,13 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
           itemBuilder: (_, index) {
             final item = items[index];
             final photos = photoListFromDoc(item);
-            final type = _safe(item['type']);
+            final type = venueTypeLabel(
+              _safe(item['type']),
+              isRestaurant: isRestaurant,
+            );
             final address = _safe(item['address']);
+            final facts = _facts(item, isRestaurant: isRestaurant);
+            final hasWebsite = websiteUri(item['website']) != null;
 
             return Card(
               margin: const EdgeInsets.only(bottom: 14),
@@ -302,10 +355,19 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_safe(item['name'], fallback: 'Ismeretlen'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                          Text(
+                            _safe(item['name'], fallback: 'Ismeretlen'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                            ),
+                          ),
                           if (type.isNotEmpty) ...[
                             const SizedBox(height: 4),
-                            Text(type, style: TextStyle(color: Colors.grey.shade600)),
+                            Text(
+                              type,
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
                           ],
                           // A cím a listában is látszik – enélkül a felhasználó
                           // nem tudja, hol van a hely.
@@ -332,15 +394,46 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
                               ],
                             ),
                           ],
-                          const SizedBox(height: 10),
-                          if (!isRestaurant) _priceBlock(item),
+                          if (facts.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            _factList(facts),
+                          ],
                           const SizedBox(height: 10),
                           Text(
-                            _safe(item['description'], fallback: 'Erintsd meg a reszletekhez.'),
+                            _safe(
+                              item['description'],
+                              fallback: 'Érintsd meg a részletekhez.',
+                            ),
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: Colors.grey.shade700, height: 1.45),
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              height: 1.45,
+                            ),
                           ),
+                          if (hasWebsite) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.language_outlined,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Weboldal a részleteknél',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -361,7 +454,10 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
         title: const Text('Szállás és étterem'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Szállások'), Tab(text: 'Éttermek')],
+          tabs: const [
+            Tab(text: 'Szállások'),
+            Tab(text: 'Éttermek'),
+          ],
         ),
       ),
       body: TabBarView(
@@ -374,5 +470,3 @@ class _AccommodationScreenState extends State<AccommodationScreen> with SingleTi
     );
   }
 }
-
-

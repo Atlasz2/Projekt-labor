@@ -5,7 +5,7 @@ export default function PhotoGrid({ photos, uploading, feedback, onUpload, onRem
   return (
     <div className="editor-upload-box">
       <label>
-        Kepek <span className="upload-count">{photos.length}/6</span>
+        Képek <span className="upload-count">{photos.length}/6</span>
       </label>
       <div className="photo-grid">
         {photos.map((url, index) => (
@@ -14,7 +14,7 @@ export default function PhotoGrid({ photos, uploading, feedback, onUpload, onRem
             <button type="button" className="photo-remove" onClick={() => onRemove(index)}>
               x
             </button>
-            {index === 0 && <span className="thumb-badge">Boritokep</span>}
+            {index === 0 && <span className="thumb-badge">Borítókép</span>}
           </div>
         ))}
         {photos.length < 6 && (
@@ -28,7 +28,7 @@ export default function PhotoGrid({ photos, uploading, feedback, onUpload, onRem
                 event.target.value = "";
               }}
             />
-            {uploading ? "Feltoltes..." : "+ Kep"}
+            {uploading ? "Feltöltés..." : "+ Kép"}
           </label>
         )}
       </div>

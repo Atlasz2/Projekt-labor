@@ -104,39 +104,6 @@
   margin-top: 12px;
 }
 
-.btn-edit,
-.btn-delete {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: background 0.15s, transform 0.1s;
-}
-
-.btn-edit {
-  background: #eef2e6;
-  color: #5b6f4c;
-  border: 1px solid rgba(37, 99, 235, 0.2);
-}
-
-.btn-edit:hover {
-  background: #e4ecd7;
-  transform: translateY(-1px);
-}
-
-.btn-delete {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid rgba(220, 38, 38, 0.2);
-}
-
-.btn-delete:hover {
-  background: #fee2e2;
-  transform: translateY(-1px);
-}
-
 .no-data {
   text-align: center;
   color: #94a3b8;
@@ -262,10 +229,6 @@
   line-height: 1.5;
 }
 
-.about-editor-actions {
-  margin-top: 4px;
-}
-
 /* Generikus görgethető törzs a szerkesztő-modalokhoz (Achievements, …). */
 .about-editor-body {
   padding: 24px 32px 32px;
@@ -283,7 +246,13 @@
 .field-group input, .field-group textarea, .field-group select { padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; font-size: 14px; color: #2b2720; background: #fafafa; transition: border-color .2s; }
 .field-group input:focus, .field-group textarea:focus, .field-group select:focus { outline: none; border-color: #5b6f4c; background: white; box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.field-hint { font-size: 11px; color: #94a3b8; margin: 0; }
+.field-hint { font-size: 12px; color: #94a3b8; margin: 2px 0 0; line-height: 1.4; }
+/* Egymást követő mezők között egységes térköz (korábban a súgószöveg
+   szinte hozzáért a következő címkéhez). */
+.field-group + .field-group,
+.field-group + .field-row,
+.field-row + .field-group,
+.field-row + .field-row { margin-top: 14px; }
 .required { color: #991b1b; }
 
 .about-editor-preview-panel {

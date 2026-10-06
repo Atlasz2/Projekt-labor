@@ -93,7 +93,7 @@ jobs:
         run: npm --prefix functions ci
 
       - name: Install rules-test deps
-        run: npm --prefix firestore-tests install
+        run: npm --prefix firestore-tests ci
 
       - name: Rules + redeem-core emulator tests
         run: npx firebase-tools emulators:exec --only firestore --project demo-nagyvazsony "npm --prefix firestore-tests test"
@@ -112,7 +112,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.32.x"
+          flutter-version: "3.38.3"
           channel: stable
           cache: true
 

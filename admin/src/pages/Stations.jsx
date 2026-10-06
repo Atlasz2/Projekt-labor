@@ -16,7 +16,8 @@ import '../styles/About.css';
 import ConfirmDialog from '../components/ConfirmDialog';
 import StateCard from '../components/StateCard';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
-import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
+import { getQrValue, qrDataUrl } from '../utils/qrHelpers';
+import QrImage from '../components/QrImage';
 import { assertQrCodeAvailable, syncQrMapping, removeQrMapping, QrCodeCollisionError } from '../utils/qrMapping';
 import { stationTripIds, buildTripOrderOnSave } from '../utils/stationTrips';
 
@@ -292,7 +293,7 @@ export default function Stations() {
     try {
       const docPdf = new jsPDF({ unit: 'mm', format: 'a4' });
       const qrValue = getQrValue(station);
-      const qrData = await fetchDataUrl(getQrImageUrl(qrValue, 220));
+      const qrData = await qrDataUrl(qrValue, 440);
 
       docPdf.setFont('helvetica', 'bold');
       docPdf.setFontSize(18);
@@ -431,7 +432,11 @@ export default function Stations() {
         <div className="stations-grid">
                 {filtered.map((station) => {
                   const qrValue = getQrValue(station);
-                  const tripNames = stationTripIds(station).map(getTripName).filter(Boolean);
+                  // A kulcs a túra azonosítója (két ismeretlen túra neve azonos lenne),
+                  // és amíg a túrák nem töltődtek be, nem mutatunk „Ismeretlen túrát”.
+                  const tripChips = trips.length
+                    ? stationTripIds(station).map((tid) => ({ id: tid, name: getTripName(tid) }))
+                    : [];
                   const coverPhoto = normalizePhotosFromDoc(station)[0] || '';
 
                   return (
@@ -443,9 +448,9 @@ export default function Stations() {
                       <div className="station-body">
                         <div className="station-title">
                           <h3>{station.name}</h3>
-                          {tripNames.length > 0
-                            ? tripNames.map((name) => <span key={name} className="trip-badge">🗺️ {name}</span>)
-                            : <span className="trip-badge unassigned">🚩 Nincs túrához rendelve</span>}
+                          {tripChips.length > 0
+                            ? tripChips.map((trip) => <span key={trip.id} className="trip-badge">🗺️ {trip.name}</span>)
+                            : trips.length > 0 && <span className="trip-badge unassigned">🚩 Nincs túrához rendelve</span>}
                         </div>
                         <p className="station-desc">{station.description || 'Nincs leírás megadva.'}</p>
                         <div className="station-qr">
@@ -453,7 +458,7 @@ export default function Stations() {
                             <span className="qr-label">QR: {qrValue.substring(0, 16)}{qrValue.length > 16 ? '…' : ''}</span>
                             <button className="qr-print" type="button" onClick={() => handleDownloadPdf(station)}>🖨️ Nyomtatás</button>
                           </div>
-                          <img src={getQrImageUrl(qrValue)} alt={`QR ${station.name}`} />
+                          <QrImage value={qrValue} alt={`QR ${station.name}`} />
                         </div>
                         <div className="station-actions">
                           <button onClick={() => handleEdit(station)} className="btn-edit">✏️ Szerkesztés</button>
@@ -614,8 +619,8 @@ export default function Stations() {
                 </section>
 
                 <div className="form-actions about-editor-actions">
-                  <button onClick={handleSave} className="btn-primary">💾 Mentés</button>
                   <button onClick={() => setShowModal(false)} className="btn-secondary" type="button">Mégse</button>
+                  <button onClick={handleSave} className="btn-primary" type="button">Mentés</button>
                 </div>
               </div>
             </div>

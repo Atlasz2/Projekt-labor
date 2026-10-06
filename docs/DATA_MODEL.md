@@ -296,8 +296,11 @@ Dokumentum-azonosító: a normalizált (kisbetűs, szóköz-tömörített) név.
 4. **Tenant-izoláció**: az admin csak a saját települése tartalmát írhatja; a
    developer mindet.
 5. **Szerep-emelés tiltva**: a `role` mezőt csak developer állíthatja.
-6. **App Check**: a kliensek App Check tokent küldenek (a kikényszerítés a Play
-   Store-os kiadás után kapcsolható be).
+6. **App Check**: a mobilból hívott függvények (`redeemQr`,
+   `reconcileAchievements`, `exportUserData`, `deleteMyAccount`) csak érvényes
+   App Check-tokennel fogadnak hívást.
+7. **Jutalmak**: az `unlocked_achievements` alkollekciót csak a szerver és admin
+   írja; a kliens a feloldást a `reconcileAchievements` függvénytől kéri.
 
 Részletek: `docs/SERVER_VALIDATION.md`, `docs/SZAKDOLGOZAT_BIZTONSAG.md`.
 
@@ -307,7 +310,9 @@ Részletek: `docs/SERVER_VALIDATION.md`, `docs/SZAKDOLGOZAT_BIZTONSAG.md`.
 
 | Függvény | Jogosultság | Feladat |
 |---|---|---|
-| `redeemQr` | bejelentkezett | QR-jóváírás (validáció + pont + jutalom + ranglista) |
+| `redeemQr` | bejelentkezett (App Check) | QR-jóváírás (validáció + pont + jutalom + ranglista) |
+| `reconcileAchievements` | bejelentkezett (App Check) | Utólag teljesült jutalmak feloldása (a kliens nem írhatja) |
+| `renameMe` | saját (App Check) | Névmódosítás: foglalás, profil, haladás, ranglisták, visszaállítási jelszó |
 | `exportUserData` | saját | GDPR 20. cikk — adatexport |
 | `deleteMyAccount` | saját | GDPR 17. cikk — saját fiók törlése |
 | `adminDeleteUser` | developer | Másik felhasználó teljes törlése |

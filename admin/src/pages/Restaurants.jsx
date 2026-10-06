@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { storage } from '../firebaseConfig';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
 import { safeString } from '../utils/safeString';
+import { normalizeWebsite, websiteLabel } from '../utils/website';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePhotoManager } from '../hooks/usePhotoManager';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -16,6 +17,17 @@ const EMPTY_FORM = {
   cuisine:     '',
   priceRange:  '',
   description: '',
+  website:     '',
+  phone:         '',
+};
+
+const TYPE_LABELS = {
+  hungarian: 'Magyar konyha',
+  fish: 'Halételek',
+  cafe: 'Kávézó',
+  pizzeria: 'Pizzéria',
+  icecream: 'Fagylaltozó',
+  bar: 'Bár',
 };
 
 const mapRestaurant = (docSnap) => {
@@ -29,6 +41,8 @@ const mapRestaurant = (docSnap) => {
     cuisine:     safeString(d.cuisine),
     priceRange:  safeString(d.priceRange),
     description: safeString(d.description),
+    website:       safeString(d.website),
+    phone:         safeString(d.phone),
     photos:      normalized,
     imageUrl:    normalized[0] || '',
   };
@@ -75,6 +89,8 @@ function Restaurants() {
         cuisine:     item.cuisine     || '',
         priceRange:  item.priceRange  || '',
         description: item.description || '',
+        website:       item.website       || '',
+        phone:         item.phone         || '',
       });
       resetPhotos(item.photos || (item.imageUrl ? [item.imageUrl] : []));
     } else {
@@ -100,6 +116,11 @@ function Restaurants() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMutateError(null);
+    const website = normalizeWebsite(formData.website);
+    if (website === null) {
+      setMutateError('A weboldal címe érvénytelen (pl. www.pelda.hu).');
+      return;
+    }
     const cleanData = {
       name:        safeString(formData.name),
       address:     safeString(formData.address),
@@ -107,6 +128,8 @@ function Restaurants() {
       cuisine:     safeString(formData.cuisine),
       priceRange:  safeString(formData.priceRange),
       description: safeString(formData.description),
+      website,
+      phone:         safeString(formData.phone),
       ...buildPhotoFields(photos),
     };
     try {
@@ -194,7 +217,7 @@ function Restaurants() {
                 <p className="editor-kicker">Vendéglátóhely szerkesztő</p>
                 <h2>{editingId ? 'Vendéglátóhely frissítése' : 'Új vendéglátóhely'}</h2>
               </div>
-              <button className="editor-close" onClick={closeEditor}>x</button>
+              <button type="button" className="editor-close" onClick={closeEditor} aria-label="Bezárás" title="Bezárás">×</button>
             </div>
 
             <form onSubmit={handleSubmit} className="editor-grid">
@@ -233,6 +256,27 @@ function Restaurants() {
                 <div className="editor-field">
                   <label>Konyha típusa</label>
                   <input type="text" value={formData.cuisine} onChange={setField('cuisine')} />
+                </div>
+                <div className="editor-row">
+                  <div className="editor-field">
+                    <label>Telefon</label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={setField('phone')}
+                      placeholder="pl. +36 88 123 456"
+                    />
+                  </div>
+                  <div className="editor-field">
+                    <label>Weboldal</label>
+                    <input
+                      type="text"
+                      inputMode="url"
+                      value={formData.website}
+                      onChange={setField('website')}
+                      placeholder="pl. www.pelda.hu"
+                    />
+                  </div>
                 </div>
                 <div className="editor-field">
                   <label>Leírás</label>
@@ -283,10 +327,17 @@ function Restaurants() {
               <img src={rest.imageUrl} alt={rest.name} loading="lazy" className="content-cover" />
             )}
             {rest.address     && <p><strong>Cím:</strong> {rest.address}</p>}
-            {rest.type        && <p><strong>Kategória:</strong> {rest.type}</p>}
+            {rest.type        && <p><strong>Kategória:</strong> {TYPE_LABELS[rest.type] || rest.type}</p>}
             {rest.cuisine     && <p><strong>Konyha:</strong> {rest.cuisine}</p>}
             {rest.priceRange  && <p><strong>Árszint:</strong> {rest.priceRange}</p>}
             {rest.description && <p>{rest.description}</p>}
+            {rest.phone && <p><strong>Telefon:</strong> {rest.phone}</p>}
+            {rest.website && (
+              <p>
+                <strong>Weboldal:</strong>{' '}
+                <a href={rest.website} className="card-link" target="_blank" rel="noopener noreferrer">{websiteLabel(rest.website)}</a>
+              </p>
+            )}
             <div className="card-actions">
               <button className="btn-edit"   onClick={() => openEditor(rest)}>Szerkesztés</button>
               <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: rest.id })}>Törlés</button>

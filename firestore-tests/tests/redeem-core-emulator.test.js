@@ -9,7 +9,11 @@ import assert from 'node:assert/strict';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
-import { redeemQrCore, qrMappingDocId } from '../../functions/lib/redeem-core.js';
+import {
+  redeemQrCore,
+  reconcileAchievementsCore,
+  qrMappingDocId,
+} from '../../functions/lib/redeem-core.js';
 
 const PROJECT = 'demo-redeem-core';
 const uid = 'user-1';
@@ -163,4 +167,34 @@ test('helyszín-ellenőrzés valós Firestore-on: távoli pozíció elutasítva,
   const ok = await redeem('VAR-001', { lat: 47.0601, lng: 17.7151 });
   assert.equal(ok.updatedPoints, 25);
   assert.equal((await db.doc(`user_progress/${uid}`).get()).data().totalPoints, 25);
+});
+
+test('reconcile valós Firestore-on: utólag létrehozott jutalom feloldódik, idegen településé nem', async () => {
+  await db.doc(`user_progress/${uid}`).set({
+    totalPoints: 30,
+    completedStations: ['st1', 'st2'],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  await db.doc('achievements/ket-allomas').set({
+    name: 'Két állomás',
+    conditionType: 'station_count',
+    conditionValue: 2,
+  });
+  await db.doc('achievements/idegen').set({
+    name: 'Más falu',
+    conditionType: 'station_count',
+    conditionValue: 1,
+    projectId: 'mencshely',
+  });
+
+  const first = await reconcileAchievementsCore({ db, FieldValue, uid, projectId: 'nagyvazsony' });
+  assert.deepEqual(first.newAchievements.map((a) => a.id), ['ket-allomas']);
+  assert.equal((await db.doc('achievements/ket-allomas').get()).data().unlockedCount, 1);
+  assert.equal((await db.doc(`user_progress/${uid}/unlocked_achievements/idegen`).get()).exists, false);
+
+  // Ismételt egyeztetés nem old fel újra, és nem növeli a számlálót.
+  const second = await reconcileAchievementsCore({ db, FieldValue, uid, projectId: 'nagyvazsony' });
+  assert.equal(second.newAchievements.length, 0);
+  assert.equal((await db.doc('achievements/ket-allomas').get()).data().unlockedCount, 1);
 });

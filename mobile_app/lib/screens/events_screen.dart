@@ -245,7 +245,6 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 
-
   Widget _buildSkeletonCard() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -256,10 +255,7 @@ class _EventsScreenState extends State<EventsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                height: 180,
-                color: Colors.grey.shade200,
-              ),
+              Container(height: 180, color: Colors.grey.shade200),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -334,6 +330,7 @@ class _EventsScreenState extends State<EventsScreen> {
       ],
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -344,7 +341,15 @@ class _EventsScreenState extends State<EventsScreen> {
             return _buildEventsSkeleton(context);
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Hiba: ${snapshot.error}'));
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'A rendezvények betöltése nem sikerült. Ellenőrizd a kapcsolatot.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
           }
 
           // Csak ennek a településnek a rendezvényei.

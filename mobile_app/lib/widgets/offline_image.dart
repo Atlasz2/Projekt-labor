@@ -14,6 +14,7 @@ class OfflineImage extends StatefulWidget {
     this.width,
     this.height,
     this.errorBuilder,
+    this.decodeScale = 1.0,
   });
 
   final String imageUrl;
@@ -21,6 +22,10 @@ class OfflineImage extends StatefulWidget {
   final double? width;
   final double? height;
   final ImageErrorWidgetBuilder? errorBuilder;
+
+  /// A megjelenítési méret szorzója a dekódoláshoz (pl. nagyítható nézetben
+  /// 2.0, hogy a kép nagyításkor is éles maradjon).
+  final double decodeScale;
 
   @override
   State<OfflineImage> createState() => _OfflineImageState();
@@ -43,7 +48,10 @@ class _OfflineImageState extends State<OfflineImage> {
     } catch (_) {
       final commaIndex = url.indexOf(',');
       if (commaIndex == -1) return null;
-      final payload = url.substring(commaIndex + 1).replaceAll('\n', '').replaceAll('\r', '');
+      final payload = url
+          .substring(commaIndex + 1)
+          .replaceAll('\n', '')
+          .replaceAll('\r', '');
       try {
         return Uint8List.fromList(base64Decode(payload));
       } catch (_) {
@@ -82,49 +90,71 @@ class _OfflineImageState extends State<OfflineImage> {
 
     if (kIsWeb) return;
 
+    // Egy közben érkezett képcsere (didUpdateWidget) után a régi, lassabb
+    // betöltés eredménye nem írhatja felül az újat.
+    bool stillCurrent() => mounted && url == _normalizedUrl;
+
     final cached = await OfflineImageService.getCachedFile(url);
     if (cached != null) {
-      if (!mounted) return;
-      setState(() => _cachedFile = cached);
+      if (stillCurrent()) setState(() => _cachedFile = cached);
       return;
     }
 
     final downloaded = await OfflineImageService.cacheImage(url);
-    if (!mounted || downloaded == null) return;
-    setState(() => _cachedFile = downloaded);
+    if (downloaded != null && stillCurrent()) {
+      setState(() => _cachedFile = downloaded);
+    }
+  }
+
+  /// A dekódolási szélesség fizikai pixelben: a kép csak akkora felbontásban
+  /// kerül a memóriába, amekkorában megjelenik (egy 12 MP-es fotó teljes
+  /// felbontásban ~48 MB lenne). Ismeretlen méretnél a képernyőszélesség.
+  int _decodeWidth(BuildContext context, BoxConstraints constraints) {
+    final media = MediaQuery.of(context);
+    final logical =
+        widget.width ??
+        (constraints.hasBoundedWidth ? constraints.maxWidth : media.size.width);
+    return (logical * media.devicePixelRatio * widget.decodeScale)
+        .round()
+        .clamp(1, 4096);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_inlineBytes != null) {
-      return Image.memory(
-        _inlineBytes!,
-        fit: widget.fit,
-        width: widget.width,
-        height: widget.height,
-        errorBuilder: widget.errorBuilder,
-      );
-    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cacheWidth = _decodeWidth(context, constraints);
+        if (_inlineBytes != null) {
+          return Image.memory(
+            _inlineBytes!,
+            fit: widget.fit,
+            width: widget.width,
+            height: widget.height,
+            cacheWidth: cacheWidth,
+            errorBuilder: widget.errorBuilder,
+          );
+        }
 
-    if (_cachedFile != null) {
-      return Image.file(
-        _cachedFile!,
-        fit: widget.fit,
-        width: widget.width,
-        height: widget.height,
-        errorBuilder: widget.errorBuilder,
-      );
-    }
+        if (_cachedFile != null) {
+          return Image.file(
+            _cachedFile!,
+            fit: widget.fit,
+            width: widget.width,
+            height: widget.height,
+            cacheWidth: cacheWidth,
+            errorBuilder: widget.errorBuilder,
+          );
+        }
 
-    return Image.network(
-      _normalizedUrl,
-      fit: widget.fit,
-      width: widget.width,
-      height: widget.height,
-      errorBuilder: widget.errorBuilder,
+        return Image.network(
+          _normalizedUrl,
+          fit: widget.fit,
+          width: widget.width,
+          height: widget.height,
+          cacheWidth: cacheWidth,
+          errorBuilder: widget.errorBuilder,
+        );
+      },
     );
   }
 }
-
-
-

@@ -13,6 +13,13 @@ const USER_PROGRESS_SUBCOLLECTIONS = [
   'unlocked_achievements',
 ];
 
+/** A felhasználó bejegyzései a településenkénti ranglistákon
+ *  (leaderboards/{projectId}/entries/{uid}). */
+export async function projectLeaderboardEntries(db, uid) {
+  const snap = await db.collectionGroup('entries').where('uid', '==', uid).get();
+  return snap.docs.filter((d) => d.ref.path.startsWith('leaderboards/'));
+}
+
 function snapToObject(snap) {
   return snap.exists ? snap.data() : null;
 }
@@ -43,6 +50,8 @@ export async function collectUserData({ db, uid }) {
     subcollections[name] = await readSubcollection(db, uid, name);
   }
 
+  const projectEntries = await projectLeaderboardEntries(db, uid);
+
   const [usernamesSnap, bugReportsSnap] = await Promise.all([
     db.collection('usernames').where('uid', '==', uid).get(),
     db.collection('bug_reports').where('reported_by.user_id', '==', uid).get(),
@@ -55,6 +64,10 @@ export async function collectUserData({ db, uid }) {
     progress: snapToObject(progressSnap),
     progressDetails: subcollections,
     leaderboardEntry: snapToObject(leaderboardSnap),
+    projectLeaderboardEntries: projectEntries.map((d) => ({
+      path: d.ref.path,
+      ...d.data(),
+    })),
     reservedUsernames: usernamesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     bugReports: bugReportsSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
   };
@@ -99,6 +112,12 @@ export async function deleteUserData({ db, uid, deleteAuthUser }) {
   ]) {
     batch.delete(db.collection(coll).doc(id));
     deleted.push(`${coll}/${id}`);
+  }
+
+  // 2/b. településenkénti ranglista-bejegyzések
+  for (const d of await projectLeaderboardEntries(db, uid)) {
+    batch.delete(d.ref);
+    deleted.push(d.ref.path);
   }
 
   // 3. foglalt felhasználónevek

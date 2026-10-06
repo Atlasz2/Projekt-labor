@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../services/account_service.dart';
 import '../services/leaderboard_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/profile_stats.dart';
@@ -11,7 +12,6 @@ import '../widgets/data_rights_section.dart';
 import '../widgets/profile_skeleton.dart';
 import 'achievement_progress_screen.dart';
 import '../utils/project_filter.dart';
-import '../config/app_config.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -102,49 +102,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs túra',
       };
 
-      // The public leaderboard is already kept fresh when points change (QR
-      // scan / name setup), so don't block the profile render on this write.
-      unawaited(
-        LeaderboardService.syncEntry(
-          uid: currentUid,
-          displayName: current['name']?.toString(),
-          points: safeInt(current['points']),
-          completedStationsCount: safeInt(current['completedStations']),
-          completedEventsCount: safeInt(current['completedEvents']),
-        ).catchError((Object e) => debugPrint('Leaderboard sync skipped: $e')),
-      );
-
-      // Top list + rank count run together; if the leaderboard is slow or
-      // unavailable, still show the profile (just without the ranking).
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> leaderboardDocs =
-          const [];
-      int? higherCount;
+      // A dobogó (top 3) és a saját helyezés együtt fut; ha a ranglista lassú
+      // vagy nem elérhető, a profil akkor is megjelenik (rangsor nélkül).
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> podiumDocs = const [];
+      var userRank = 0;
       try {
-        final leaderboardResults = await Future.wait<Object>([
-          // A település SAJÁT ranglistája (nem keverednek a falvak játékosai).
-          _firestore
-              .collection('leaderboards')
-              .doc(AppConfig.projectId)
-              .collection('entries')
-              .orderBy('points', descending: true)
-              .limit(50)
-              .get(),
-          _firestore
-              .collection('leaderboards')
-              .doc(AppConfig.projectId)
-              .collection('entries')
-              .where('points', isGreaterThan: safeInt(current['points']))
-              .count()
-              .get(),
+        final leaderboard = await Future.wait<Object>([
+          LeaderboardService.top(3),
+          LeaderboardService.rankOf(currentUid),
         ]).timeout(const Duration(seconds: 10));
-        leaderboardDocs =
-            (leaderboardResults[0] as QuerySnapshot<Map<String, dynamic>>).docs;
-        higherCount = (leaderboardResults[1] as AggregateQuerySnapshot).count;
+        podiumDocs =
+            leaderboard[0] as List<QueryDocumentSnapshot<Map<String, dynamic>>>;
+        userRank = leaderboard[1] as int;
       } catch (_) {
-        // Leaderboard slow/unavailable — keep the profile usable without it.
+        // A ranglista nem elérhető — a profil enélkül is használható.
       }
 
-      final users = leaderboardDocs.map((doc) {
+      final users = podiumDocs.map((doc) {
         final data = doc.data();
         return <String, dynamic>{
           'id': doc.id,
@@ -152,20 +126,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'completedStations': safeInt(data['completedStationsCount']),
           'completedEvents': safeInt(data['completedEventsCount']),
           'points': safeInt(data['points']),
-          'currentTrip': doc.id == currentUid
-              ? current['currentTrip']
-              : 'Nincs túra',
         };
       }).toList();
-
-      if (!users.any((item) => item['id'] == currentUid)) {
-        users.add(Map<String, dynamic>.from(current));
-      }
-
-      users.sort(
-        (a, b) => safeInt(b['points']).compareTo(safeInt(a['points'])),
-      );
-      final userRank = higherCount == null ? 0 : higherCount + 1;
 
       if (!mounted) return;
       setState(() {
@@ -177,7 +139,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Hiba az adatok betöltésekor: $e';
+        _error =
+            'A profil betöltése nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.';
         _isLoading = false;
       });
     }
@@ -190,9 +153,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final achSnap = await _firestore.collection('achievements').get();
       // Csak ennek a településnek a jutalmai.
-      final defs = whereActiveProject(achSnap.docs)
-          .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
-          .toList();
+      final defs = whereActiveProject(
+        achSnap.docs,
+      ).map((d) => <String, dynamic>{'id': d.id, ...d.data()}).toList();
 
       final unlockedSnap = await _firestore
           .collection('user_progress')
@@ -259,15 +222,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<({Map<String, dynamic> user, int rank, bool afterGap})>
   _leaderboardRows() {
     final rows = <({Map<String, dynamic> user, int rank, bool afterGap})>[];
-    final top = _allUsers.take(3).toList();
-    for (var i = 0; i < top.length; i++) {
-      rows.add((user: top[i], rank: i + 1, afterGap: false));
+    for (var i = 0; i < _allUsers.length; i++) {
+      rows.add((user: _allUsers[i], rank: i + 1, afterGap: false));
     }
 
-    final myId = _currentUserData?['id'];
-    final myIndex = _allUsers.indexWhere((u) => u['id'] == myId);
-    if (myIndex >= 3) {
-      rows.add((user: _allUsers[myIndex], rank: myIndex + 1, afterGap: true));
+    // Ha a felhasználó a dobogón kívül van, a saját sora a valós helyezéssel.
+    final current = _currentUserData;
+    if (current != null && _userRank > _allUsers.length) {
+      rows.add((user: current, rank: _userRank, afterGap: true));
     }
     return rows;
   }
@@ -349,7 +311,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final currentPoints = safeInt(_currentUserData?['points']);
     final stationCount = safeCount(_currentUserData?['completedStations']);
     final eventCount = safeCount(_currentUserData?['completedEvents']);
-    final rewardTarget = nextPointTarget(currentPoints, _achievementDefinitions);
+    final rewardTarget = nextPointTarget(
+      currentPoints,
+      _achievementDefinitions,
+    );
     final progressToReward = rewardTarget > 0
         ? (currentPoints / rewardTarget).clamp(0.0, 1.0)
         : 1.0;
@@ -506,8 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     context,
                                     achievement: a,
                                     holderName:
-                                        _currentUserData?['name']
-                                            ?.toString() ??
+                                        _currentUserData?['name']?.toString() ??
                                         '',
                                   ),
                                 ),
@@ -551,13 +515,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// A megjelenített név módosítása (a ranglistán és a profilon is).
+  Future<void> _renameDialog() async {
+    final controller = TextEditingController(
+      text: _currentUserData?['name']?.toString() ?? '',
+    );
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Név módosítása'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Új név',
+            helperText: 'Ez a név jelenik meg a ranglistán.',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Mentés'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    final current = _currentUserData?['name']?.toString() ?? '';
+    if (newName == null || newName.isEmpty || newName == current) return;
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final saved = await AccountService.rename(newName);
+      if (!mounted) return;
+      setState(() {
+        _currentUserData = {...?_currentUserData, 'name': saved};
+      });
+      messenger.showSnackBar(
+        const SnackBar(content: Text('A nevedet módosítottuk.')),
+      );
+      unawaited(_loadUserData());
+    } on RenameRejectedException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      debugPrint('Névmódosítás sikertelen: $e');
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'A név módosítása nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.',
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildProfileHeader() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue.shade400, Colors.blue.shade700],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6E8460), Color(0xFF46583B)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -568,16 +595,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const CircleAvatar(
             radius: 42,
             backgroundColor: Colors.white,
-            child: Icon(Icons.person, size: 48, color: Colors.blue),
+            child: Icon(Icons.person, size: 48, color: Color(0xFF46583B)),
           ),
           const SizedBox(height: 12),
-          Text(
-            _currentUserData?['name']?.toString() ?? 'Felhasználó',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  _currentUserData?['name']?.toString() ?? 'Felhasználó',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _renameDialog,
+                tooltip: 'Név módosítása',
+                icon: const Icon(Icons.edit_outlined, color: Colors.white),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(

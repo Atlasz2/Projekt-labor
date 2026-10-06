@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getQrValue, getQrImageUrl } from "./qrHelpers";
+import { getQrValue, qrDataUrl } from "./qrHelpers";
 
 describe("getQrValue", () => {
   it("returns qrCode when present", () => {
@@ -15,20 +15,17 @@ describe("getQrValue", () => {
   });
 });
 
-describe("getQrImageUrl", () => {
-  it("encodes the qr value in the url", () => {
-    const url = getQrImageUrl("hello world", 200);
-    expect(url).toContain("hello%20world");
-    expect(url).toContain("200x200");
+describe("qrDataUrl", () => {
+  it("helyben PNG data URL-t állít elő (nincs külső hívás)", async () => {
+    const url = await qrDataUrl("VAR-001", 200);
+    expect(url.startsWith("data:image/png;base64,")).toBe(true);
   });
 
-  it("uses default size 140 when not specified", () => {
-    const url = getQrImageUrl("val");
-    expect(url).toContain("140x140");
+  it("különböző értékekhez különböző kódot ad", async () => {
+    expect(await qrDataUrl("A-1")).not.toBe(await qrDataUrl("B-2"));
   });
 
-  it("handles empty value gracefully", () => {
-    const url = getQrImageUrl("");
-    expect(url).toContain("data=");
+  it("üres értékre hibával tér vissza (a QrImage ezt üres helyként jeleníti meg)", async () => {
+    await expect(qrDataUrl("")).rejects.toThrow();
   });
 });

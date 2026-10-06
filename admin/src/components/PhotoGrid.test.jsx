@@ -21,7 +21,7 @@ describe("PhotoGrid", () => {
     expect(document.querySelectorAll("img")).toHaveLength(2);
   });
 
-  it("marks the first image as cover (Boritokep)", () => {
+  it("marks the first image as cover (Borítókép)", () => {
     render(
       <PhotoGrid
         photos={["a.jpg", "b.jpg"]}
@@ -31,7 +31,7 @@ describe("PhotoGrid", () => {
         onRemove={vi.fn()}
       />
     );
-    expect(screen.getByText("Boritokep")).toBeInTheDocument();
+    expect(screen.getByText("Borítókép")).toBeInTheDocument();
   });
 
   it("hides add button when 6 photos are present", () => {
@@ -45,7 +45,7 @@ describe("PhotoGrid", () => {
         onRemove={vi.fn()}
       />
     );
-    expect(screen.queryByText("+ Kep")).not.toBeInTheDocument();
+    expect(screen.queryByText("+ Kép")).not.toBeInTheDocument();
   });
 
   it("shows upload button when fewer than 6 photos", () => {
@@ -58,7 +58,7 @@ describe("PhotoGrid", () => {
         onRemove={vi.fn()}
       />
     );
-    expect(screen.getByText("+ Kep")).toBeInTheDocument();
+    expect(screen.getByText("+ Kép")).toBeInTheDocument();
   });
 
   it("shows uploading text while uploading", () => {
@@ -71,7 +71,7 @@ describe("PhotoGrid", () => {
         onRemove={vi.fn()}
       />
     );
-    expect(screen.getByText("Feltoltes...")).toBeInTheDocument();
+    expect(screen.getByText("Feltöltés...")).toBeInTheDocument();
   });
 
   it("shows feedback message when type is not idle", () => {

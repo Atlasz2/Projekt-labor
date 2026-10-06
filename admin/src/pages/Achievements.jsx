@@ -70,11 +70,14 @@ export default function Achievements() {
       // nézi, hogy a fix doc-id-k projektenként ne ütközzenek.
       setAchievements(list.filter((a) => docProjectId(a) === activeProjectId));
     } catch {
-      showMsg("Hiba az adatok betoltésekor");
+      showMsg("Hiba az adatok betöltésekor");
     } finally { setLoading(false); }
   }, [showMsg, activeProjectId]);
 
-  useEffect(() => { setTimeout(() => void loadAll(), 0); }, [loadAll]);
+  useEffect(() => {
+    const timer = setTimeout(() => void loadAll(), 0);
+    return () => clearTimeout(timer);
+  }, [loadAll]);
 
   const openCreate = () => { setEditing(null); setForm(EMPTY); setShowForm(true); };
   const openEdit = (a) => {
@@ -312,10 +315,10 @@ export default function Achievements() {
                 {saveError && <div className="ach-save-error">{saveError}</div>}
 
                 <div className="form-actions about-editor-actions">
-                  <button className="btn-primary" onClick={handleSave} disabled={saving || !form.name.trim()} type="button">
-                    {saving ? "Mentés..." : editing ? "💾 Mentés" : "💾 Hozzáadás"}
-                  </button>
                   <button className="btn-secondary" onClick={() => setShowForm(false)} type="button">Mégse</button>
+                  <button className="btn-primary" onClick={handleSave} disabled={saving || !form.name.trim()} type="button">
+                    {saving ? "Mentés..." : editing ? "Mentés" : "Hozzáadás"}
+                  </button>
                 </div>
               </div>
             </div>

@@ -191,8 +191,6 @@ html.dark .users-header { background: #0a1628 !important; }
 html.dark .users-stats .stat-card { background: var(--admin-surface); border-color: var(--admin-border); }
 /* Timeline dark */
 html.dark .timeline-year { background: rgba(37,99,235,0.18); border-color: rgba(37,99,235,0.3); }
-html.dark .btn-edit { background: rgba(37,99,235,0.15); color: #b7c89b; border-color: rgba(37,99,235,0.3); }
-html.dark .btn-delete { background: rgba(220,38,38,0.12); color: #fca5a5; border-color: rgba(220,38,38,0.25); }
 /* BugReports dark */
 html.dark .MuiCard-root { background: var(--admin-surface) !important; }
 html.dark .MuiPaper-root { background: var(--admin-surface) !important; }
@@ -265,7 +263,6 @@ html.dark .form-note {
   border-left-color: #5b6f4c;
   color: var(--admin-text-muted);
 }
-html.dark .btn-cancel { background: var(--admin-bg-soft); color: var(--admin-text); }
 
 /* ── Trip cards ───────────────────────────────────────────────── */
 html.dark .trip-card {
@@ -328,9 +325,6 @@ html.dark .field-group textarea:focus,
 html.dark .field-group select:focus { background: var(--admin-bg-soft); }
 html.dark .field-hint      { color: var(--admin-text-muted); }
 html.dark .btn-nav         { background: var(--admin-bg-soft); color: var(--admin-text); }
-html.dark .btn-cancel      { background: var(--admin-bg-soft); color: var(--admin-text); }
-html.dark .btn-edit        { background: rgba(37,99,235,0.15); color: #b7c89b; }
-html.dark .btn-delete      { background: rgba(220,38,38,0.12); color: #fca5a5; }
 html.dark .unlock-info-box { background: rgba(37,99,235,0.1); border-color: rgba(37,99,235,0.3); }
 html.dark .unlock-info-box strong { color: #b7c89b; }
 html.dark .unlock-info-box p      { color: var(--admin-text-muted); }
@@ -401,13 +395,18 @@ html.dark .message.error   { background: rgba(220,38,38,0.12); color: #fca5a5; b
 
 /* Gombsorokban a gombok egy vonalban, azonos méretben álljanak: a
    .btn-primary alap margója itt zavaró lenne. */
+/* Egységes gombsor minden szerkesztőben: jobbra igazítva, „Mégse” balra,
+   az elsődleges művelet jobbra (a megszokott párbeszédablak-minta). */
 .form-actions,
 .editor-actions,
 .about-editor-actions,
 .invite-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 
 .form-actions .btn-primary,
@@ -421,3 +420,199 @@ html.dark .message.error   { background: rgba(220,38,38,0.12); color: #fca5a5; b
   margin-bottom: 0;
   line-height: 1.2;
 }
+
+/* ================================================================
+   KÖZÖS KOMPONENSEK – minden oldalon azonos megjelenés (korábban
+   oldalanként, csak bizonyos lapokon betöltött CSS-ben voltak).
+   ================================================================ */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  padding: 10px 20px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: var(--r-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-secondary:hover {
+  background: var(--admin-bg-soft);
+  border-color: var(--admin-accent);
+}
+
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--admin-accent);
+  outline-offset: 2px;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Képfeltöltés (PhotoGrid és az állomásszerkesztő) */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.upload-count {
+  color: var(--admin-text-muted);
+  font-size: 0.9em;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.photo-thumb {
+  position: relative;
+  min-height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  background: var(--admin-bg-soft);
+}
+
+.photo-thumb img {
+  display: block;
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.thumb-badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.photo-add-btn {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--admin-accent);
+  border-radius: 12px;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  padding: 12px;
+  transition: background 0.15s;
+}
+
+.photo-add-btn input {
+  display: none;
+}
+
+.photo-add-btn:hover {
+  background: var(--admin-bg-soft);
+}
+
+@media (max-width: 768px) {
+  .photo-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Kártyák Szerkesztés / Törlés gombjai – egyetlen definíció minden oldalra. */
+.btn-edit,
+.btn-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.btn-edit {
+  background: #eef2e6;
+  color: #46583b;
+  border: 1px solid #cfd9bf;
+}
+
+.btn-edit:hover {
+  background: #e2ead4;
+  border-color: var(--admin-accent);
+}
+
+.btn-delete {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #f5c6c6;
+}
+
+.btn-delete:hover {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+
+html.dark .btn-edit {
+  background: rgba(183, 200, 155, 0.12);
+  color: #c9d8ae;
+  border-color: rgba(183, 200, 155, 0.3);
+}
+
+html.dark .btn-delete {
+  background: rgba(220, 38, 38, 0.12);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+/* Külső hivatkozás a kártyákon (pl. szállás weboldala) */
+.card-link {
+  color: var(--admin-accent);
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.card-link:hover { text-decoration: underline; }
+
+html.dark .card-link { color: #c9d8ae; }
+
+/* Űrlapmezők közötti egységes térköz (minden szerkesztőben). */
+.form-group + .form-group,
+.form-group + .form-row,
+.form-row + .form-group,
+.form-row + .form-row { margin-top: 14px; }

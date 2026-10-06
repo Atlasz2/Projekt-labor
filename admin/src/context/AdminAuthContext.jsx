@@ -28,7 +28,7 @@ export function AdminAuthProvider({ children }) {
       // A 'developer' az admin fölötti szint (több település kezelése), ezért
       // ugyanúgy beléphet, mint az admin.
       if (role !== "admin" && role !== "developer") {
-        sessionStorage.setItem("admin_access_error", "Ehhez a fiokhhoz nincs admin jogosultsag.");
+        sessionStorage.setItem("admin_access_error", "Ehhez a fiókhoz nincs admin jogosultság.");
         await signOut(auth);
         setIsLoggedIn(false);
         setUserRole("user");

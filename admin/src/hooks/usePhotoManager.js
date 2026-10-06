@@ -29,17 +29,17 @@ export function usePhotoManager({ storage, folder }) {
   const upload = async (file) => {
     if (!file) return;
     if (photos.length >= MAX_PHOTOS) {
-      setUploadFeedback({ type: 'error', text: 'Maximum 6 kep toltheto fel.' });
+      setUploadFeedback({ type: 'error', text: 'Legfeljebb 6 kép tölthető fel.' });
       return;
     }
     try {
-      setUploadFeedback({ type: 'info', text: `Feltoltes: ${file.name}` });
+      setUploadFeedback({ type: 'info', text: `Feltöltés: ${file.name}` });
       setUploading(true);
       const result = await uploadImageWithFallback({ file, storage, folder });
       setPhotos((prev) => [...prev, result.url]);
       setUploadFeedback({ type: 'success', text: result.message });
     } catch (err) {
-      setUploadFeedback({ type: 'error', text: err?.message || 'Kep feltoltese sikertelen' });
+      setUploadFeedback({ type: 'error', text: err?.message || 'A kép feltöltése sikertelen.' });
     } finally {
       setUploading(false);
     }

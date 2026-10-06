@@ -86,52 +86,36 @@ service cloud.firestore {
       allow write: if isDeveloper();
     }
 
-    // Validates a user's self-write to their own progress document:
-    // - totalPoints can only increase (no direct point reduction)
-    // - completedStations can only grow (no removing completed stations)
-    function isValidProgressUpdate() {
-      let incoming = request.resource.data;
-      let existing = resource.data;
-      let pointsOk = !incoming.keys().hasAny(['totalPoints'])
-        || incoming.totalPoints >= (existing.get('totalPoints', 0));
-      let stationsOk = !incoming.keys().hasAny(['completedStations'])
-        || incoming.completedStations.hasAll(existing.get('completedStations', []));
-      return pointsOk && stationsOk;
+    // Saját haladás-dokumentum. A pontot és a teljesített listákat KIZÁRÓLAG
+    // a szerver (redeemQr / reconcileAchievements, Admin SDK) írja – a kliens
+    // csak nullázott állapotban hozhatja létre (regisztráció), és egyetlen
+    // mezőt módosíthat: a jutalom-értesítés nyugtázását.
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isZeroedProgress(data) {
+      return (!data.keys().hasAny(['totalPoints']) || data.totalPoints == 0)
+        && (!data.keys().hasAny(['completedStations']) || data.completedStations.size() == 0)
+        && (!data.keys().hasAny(['completedEvents']) || data.completedEvents.size() == 0)
+        && (!data.keys().hasAny(['completedTripIds']) || data.completedTripIds.size() == 0);
     }
 
     match /user_progress/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-
-      // Admin: unrestricted write
+      allow read: if isOwner(userId) || isAdmin();
       allow write: if isAdmin();
 
-      // User: can only write to their own doc, with monotonic constraints.
-      // Create is restricted to zeroed counters so a fresh doc cannot start
-      // with fabricated points or completed items.
-      allow create: if isSignedIn() && request.auth.uid == userId
-        && (!request.resource.data.keys().hasAny(['totalPoints'])
-            || request.resource.data.totalPoints == 0)
-        && (!request.resource.data.keys().hasAny(['completedStations'])
-            || request.resource.data.completedStations.size() == 0)
-        && (!request.resource.data.keys().hasAny(['completedEvents'])
-            || request.resource.data.completedEvents.size() == 0)
-        && (!request.resource.data.keys().hasAny(['completedTripIds'])
-            || request.resource.data.completedTripIds.size() == 0);
-      allow update: if isSignedIn() && request.auth.uid == userId && isValidProgressUpdate();
+      allow create: if isOwner(userId) && isZeroedProgress(request.resource.data);
 
-      match /completed_stations/{stationId} {
-        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      }
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['pendingAchievementBanner']);
 
-      match /completed_events/{eventId} {
-        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      }
-
-      match /unlocked_achievements/{achievementId} {
-        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Az alkollekciókat is csak a szerver / admin írja (a jutalom
+      // önfeloldása így nem lehetséges).
+      match /{subcollection}/{docId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();
       }
     }
 
@@ -267,13 +251,31 @@ service cloud.firestore {
     }
 
     match /bug_reports/{reportId} {
-      allow create: if isSignedIn();
+      // Bejelentés csak a saját nevében, korlátos szöveggel (spam / idegen
+      // nevében tett bejelentés ellen).
+      allow create: if isSignedIn()
+        && request.resource.data.reported_by.user_id == request.auth.uid
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 4000;
       // Admins read everything; a signed-in user may read their own reports
       // so the in-app "previous reports" history works (query is filtered by
       // reported_by.user_id == request.auth.uid).
       allow read: if isAdmin()
         || (isSignedIn() && resource.data.reported_by.user_id == request.auth.uid);
       allow update, delete: if isAdmin();
+
+      // A beküldő a saját bejelentését visszavonhatja (törölheti), és amíg
+      // nincs lezárva, a leírását javíthatja – más mezőt (státusz, admin
+      // válasz, beküldő) nem módosíthat.
+      allow delete: if isSignedIn()
+        && resource.data.reported_by.user_id == request.auth.uid;
+      allow update: if isSignedIn()
+        && resource.data.reported_by.user_id == request.auth.uid
+        && !(resource.data.get('status', 'open') in ['closed', 'fixed', 'resolved'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['description', 'updated_at', 'updated_at_text', 'updated_at_ms'])
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 4000;
     }
 
     // Daily analytics snapshots written by the admin dashboard (one doc per day).

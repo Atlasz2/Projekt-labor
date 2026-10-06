@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -25,10 +26,22 @@ class OfflineTilesService {
     return dir;
   }
 
-  static Future<String> get tileTemplatePath async {
+  /// A letöltött csempéket a térképre rajzoló réteg. Csak offline állapotban
+  /// kerül a térképre ([overlaysFor]), online a Google saját térképe látszik.
+  static final gmaps.TileOverlay _offlineOverlay = gmaps.TileOverlay(
+    tileOverlayId: const gmaps.TileOverlayId('offline_tiles'),
+    tileProvider: _LocalTileProvider(),
+    zIndex: 0,
+  );
+
+  /// A térkép `tileOverlays` paramétere az aktuális hálózati állapothoz.
+  static Set<gmaps.TileOverlay> overlaysFor({required bool online}) =>
+      online ? const <gmaps.TileOverlay>{} : {_offlineOverlay};
+
+  static Future<File> _tileFile(int z, int x, int y) async {
     final dir = await _rootDir;
     final sep = Platform.pathSeparator;
-    return '${dir.path}$sep{z}$sep{x}$sep{y}.png';
+    return File('${dir.path}$sep$z$sep$x$sep$y.png');
   }
 
   static Future<bool> hasOfflineTiles() async {
@@ -221,5 +234,24 @@ class OfflineTilesService {
             2.0 *
             n)
         .floor();
+  }
+}
+
+/// A letöltött CARTO-csempéket a helyi fájlrendszerből adja a Google Maps
+/// nézetnek. Hiányzó csempénél üres csempét ad (a térkép ott a saját
+/// gyorsítótárát vagy üres hátteret mutat).
+class _LocalTileProvider implements gmaps.TileProvider {
+  static const int _tileSize = 256;
+
+  @override
+  Future<gmaps.Tile> getTile(int x, int y, int? zoom) async {
+    if (zoom == null) return gmaps.TileProvider.noTile;
+    try {
+      final file = await OfflineTilesService._tileFile(zoom, x, y);
+      if (!await file.exists()) return gmaps.TileProvider.noTile;
+      return gmaps.Tile(_tileSize, _tileSize, await file.readAsBytes());
+    } catch (_) {
+      return gmaps.TileProvider.noTile;
+    }
   }
 }

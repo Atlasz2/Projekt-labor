@@ -17,6 +17,7 @@ import '../widgets/station_detail_sheet.dart';
 import 'full_screen_map_screen.dart';
 import 'trip_navigation_screen.dart';
 import '../utils/project_filter.dart';
+import '../services/offline_sync_service.dart';
 import '../utils/station_trips.dart';
 
 class MapTripsScreen extends StatefulWidget {
@@ -96,7 +97,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     }
     return items;
   }
-
 
   int _completedPrefixCount(List<Map<String, dynamic>> visibleStations) {
     var count = 0;
@@ -187,7 +187,10 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.save_outlined, color: Color(0xFF2E7D32)),
+              leading: const Icon(
+                Icons.save_outlined,
+                color: Color(0xFF2E7D32),
+              ),
               title: const Text('Helytakarékos'),
               subtitle: const Text('Kisebb méret, utcaszintű részletesség'),
               onTap: () => Navigator.pop(sheetContext, 17),
@@ -425,8 +428,9 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
 
     final persistedRoute = LocalCache.getRoute(tripId);
     if (persistedRoute != null) {
-      final persistedPoints =
-          HikingRouteService.decodeStoredRoute(persistedRoute['points']);
+      final persistedPoints = HikingRouteService.decodeStoredRoute(
+        persistedRoute['points'],
+      );
       final persistedMetrics = persistedRoute['metrics'];
       if (persistedPoints.length >= 2) {
         _routeCache[tripId] = persistedPoints;
@@ -728,7 +732,6 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     );
   }
 
-
   Widget _buildMapSkeleton(BuildContext context) {
     final grey = Colors.grey.shade200;
     return Column(
@@ -742,12 +745,15 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
             child: Row(
               children: List.generate(
                 4,
-(i) => Padding(
+                (i) => Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: Container(
                     width: 90,
                     height: 36,
-                    decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(20)),
+                    decoration: BoxDecoration(
+                      color: grey,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                   ),
                 ),
               ),
@@ -776,7 +782,10 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                 child: Container(
                   margin: const EdgeInsets.only(right: 8),
                   height: 48,
-                  decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                    color: grey,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ),
@@ -794,7 +803,10 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Container(
                 height: 52,
-                decoration: BoxDecoration(color: grey, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                  color: grey,
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
@@ -803,6 +815,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       ],
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -910,9 +923,7 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
                         color: tripHasOfflineTiles ? Colors.green : null,
                       ),
                       label: Text(
-                        _downloadingTiles
-                            ? 'Letöltés...'
-                            : 'Offline térkép',
+                        _downloadingTiles ? 'Letöltés...' : 'Offline térkép',
                       ),
                     ),
                   ),
@@ -943,39 +954,45 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
               Expanded(
                 child: Stack(
                   children: [
-                    GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: center,
-                        zoom: 13,
+                    ValueListenableBuilder<bool>(
+                      valueListenable: OfflineSyncService().onlineNotifier,
+                      builder: (context, online, _) => GoogleMap(
+                        tileOverlays: OfflineTilesService.overlaysFor(
+                          online: online,
+                        ),
+                        initialCameraPosition: CameraPosition(
+                          target: center,
+                          zoom: 13,
+                        ),
+                        markers: _markers,
+                        polylines: _polylines,
+                        zoomControlsEnabled: true,
+                        zoomGesturesEnabled: true,
+                        scrollGesturesEnabled: true,
+                        rotateGesturesEnabled: true,
+                        tiltGesturesEnabled: true,
+                        // Claim the gesture immediately so pan/zoom feel native
+                        // instead of fighting the surrounding scroll views.
+                        gestureRecognizers:
+                            <Factory<OneSequenceGestureRecognizer>>{
+                              Factory<OneSequenceGestureRecognizer>(
+                                EagerGestureRecognizer.new,
+                              ),
+                            },
+                        onMapCreated: (controller) {
+                          _mapController = controller;
+                          _fitRouteOrStations(
+                            _selectedTripId == null
+                                ? const []
+                                : (_routeCache[_selectedTripId!] ?? const []),
+                            tripStations,
+                          );
+                        },
+                        myLocationButtonEnabled: true,
+                        myLocationEnabled: true,
+                        mapToolbarEnabled: false,
+                        compassEnabled: true,
                       ),
-                      markers: _markers,
-                      polylines: _polylines,
-                      zoomControlsEnabled: true,
-                      zoomGesturesEnabled: true,
-                      scrollGesturesEnabled: true,
-                      rotateGesturesEnabled: true,
-                      tiltGesturesEnabled: true,
-                      // Claim the gesture immediately so pan/zoom feel native
-                      // instead of fighting the surrounding scroll views.
-                      gestureRecognizers:
-                          <Factory<OneSequenceGestureRecognizer>>{
-                            Factory<OneSequenceGestureRecognizer>(
-                              EagerGestureRecognizer.new,
-                            ),
-                          },
-                      onMapCreated: (controller) {
-                        _mapController = controller;
-                        _fitRouteOrStations(
-                          _selectedTripId == null
-                              ? const []
-                              : (_routeCache[_selectedTripId!] ?? const []),
-                          tripStations,
-                        );
-                      },
-                      myLocationButtonEnabled: true,
-                      myLocationEnabled: true,
-                      mapToolbarEnabled: false,
-                      compassEnabled: true,
                     ),
                     Positioned(
                       top: 10,

@@ -120,3 +120,18 @@ test('deleteUserData: üres fiókra sem dob hibát', async () => {
   const result = await deleteUserData({ db, uid, deleteAuthUser: async () => {} });
   assert.equal(result.anonymizedBugReports, 0);
 });
+
+test('a települési ranglista-bejegyzés is exportálódik és törlődik', async () => {
+  const db = new FakeFirestore();
+  db.seed('users/u1', { name: 'Anna' });
+  db.seed('leaderboards/nagyvazsony/entries/u1', { uid: 'u1', displayName: 'Anna', points: 10 });
+  db.seed('leaderboards/nagyvazsony/entries/u2', { uid: 'u2', displayName: 'Béla', points: 5 });
+
+  const exported = await collectUserData({ db, uid: 'u1' });
+  assert.equal(exported.projectLeaderboardEntries.length, 1);
+  assert.equal(exported.projectLeaderboardEntries[0].displayName, 'Anna');
+
+  await deleteUserData({ db, uid: 'u1' });
+  assert.equal(db.read('leaderboards/nagyvazsony/entries/u1'), undefined);
+  assert.ok(db.read('leaderboards/nagyvazsony/entries/u2'), 'idegen bejegyzés érintetlen');
+});

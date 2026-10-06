@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import '../services/offline_tiles_service.dart';
+import '../services/offline_sync_service.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 /// Distraction-free full-screen map for hikers: same markers/route as the
@@ -65,31 +67,35 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: widget.initialPosition,
-              zoom: 14,
-            ),
-            markers: widget.markers,
-            polylines: widget.polylines,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomControlsEnabled: true,
-            zoomGesturesEnabled: true,
-            scrollGesturesEnabled: true,
-            rotateGesturesEnabled: true,
-            tiltGesturesEnabled: true,
-            mapToolbarEnabled: false,
-            compassEnabled: true,
-            gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-              Factory<OneSequenceGestureRecognizer>(
-                EagerGestureRecognizer.new,
+          ValueListenableBuilder<bool>(
+            valueListenable: OfflineSyncService().onlineNotifier,
+            builder: (context, online, _) => GoogleMap(
+              tileOverlays: OfflineTilesService.overlaysFor(online: online),
+              initialCameraPosition: CameraPosition(
+                target: widget.initialPosition,
+                zoom: 14,
               ),
-            },
-            onMapCreated: (controller) {
-              _controller = controller;
-              _fitToContent();
-            },
+              markers: widget.markers,
+              polylines: widget.polylines,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              zoomControlsEnabled: true,
+              zoomGesturesEnabled: true,
+              scrollGesturesEnabled: true,
+              rotateGesturesEnabled: true,
+              tiltGesturesEnabled: true,
+              mapToolbarEnabled: false,
+              compassEnabled: true,
+              gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                Factory<OneSequenceGestureRecognizer>(
+                  EagerGestureRecognizer.new,
+                ),
+              },
+              onMapCreated: (controller) {
+                _controller = controller;
+                _fitToContent();
+              },
+            ),
           ),
           SafeArea(
             child: Padding(

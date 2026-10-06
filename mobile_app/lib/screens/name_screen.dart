@@ -61,17 +61,20 @@ class _NameScreenState extends State<NameScreen> {
       final normalizedName = _normalizeDisplayName(displayName);
       final usernameRef = firestore.collection('usernames').doc(normalizedName);
       final currentUser = FirebaseAuth.instance.currentUser;
-      final user = currentUser ?? (await FirebaseAuth.instance.signInAnonymously()).user;
+      final user =
+          currentUser ?? (await FirebaseAuth.instance.signInAnonymously()).user;
       if (user == null) {
         throw Exception('Nem sikerült bejelentkezni.');
       }
 
+      final progressRef = firestore.collection('user_progress').doc(user.uid);
       await firestore.runTransaction((transaction) async {
         final reservedName = await transaction.get(usernameRef);
+        final existingProgress = await transaction.get(progressRef);
         if (reservedName.exists) {
           final reservedUid = reservedName.data()?['uid']?.toString();
           if (reservedUid != user.uid) {
-            throw Exception('Ez a név már foglalt. Válassz másikat.');
+            throw const _NameTakenException();
           }
         }
 
@@ -87,43 +90,23 @@ class _NameScreenState extends State<NameScreen> {
           'name': displayName,
           'email': email.isEmpty ? null : email,
           'createdAt': FieldValue.serverTimestamp(),
-          'points': 0,
-          'completedTrips': 0,
-          'visitedStations': <String>[],
-          'achievements': <String>[],
         }, SetOptions(merge: true));
 
-        transaction.set(
-          firestore.collection('user_progress').doc(user.uid),
-          {
+        // A haladás-dokumentumot csak nullázva, és csak ha még nincs, hozza
+        // létre a kliens – a pontokat ezután kizárólag a szerver írja.
+        if (!existingProgress.exists) {
+          transaction.set(progressRef, {
             'name': displayName,
             'email': email,
             'completedStations': <String>[],
             'completedEvents': <String>[],
             'completedTripIds': <String>[],
             'totalPoints': 0,
-            'currentTrip': 'Nincs túra',
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+          });
+        }
       });
-
-      // The public_leaderboard security rule requires the user_progress doc to
-      // already exist with a matching points value. Inside a transaction the
-      // rules see the pre-transaction state (so user_progress doesn't exist yet),
-      // which fails. Writing it after the transaction commits satisfies the rule.
-      await firestore.collection('public_leaderboard').doc(user.uid).set(
-        {
-          'displayName': displayName,
-          'points': 0,
-          'completedStationsCount': 0,
-          'completedEventsCount': 0,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
 
       // Ha megadott emailt (és még nincs email-fiókkal összekötve), a
       // fiókot email+jelszó hitelesítővel is összekötjük, hogy másik eszközön
@@ -165,27 +148,49 @@ class _NameScreenState extends State<NameScreen> {
           ),
         );
       }
-    } on FirebaseAuthException catch (e) {
+    } on _NameTakenException {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Hiba: ${e.message}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ez a név már foglalt. Válassz másikat.'),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Regisztráció – hitelesítési hiba: ${e.code}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'A bejelentkezés nem sikerült. Ellenőrizd az internetkapcsolatot, és próbáld újra.',
+            ),
+          ),
+        );
       }
     } on FirebaseException catch (e) {
       if (!mounted) return;
       final code = e.code.toLowerCase();
       var message = 'Váratlan hiba történt.';
       if (code.contains('permission-denied') || code.contains('insufficient')) {
-        message = 'Nincs jogosultság a profil létrehozásához. Ellenőrizd a hálózatot és próbáld újra.';
+        message =
+            'Nincs jogosultság a profil létrehozásához. Ellenőrizd a hálózatot és próbáld újra.';
       } else if (code.contains('unavailable') || code.contains('network')) {
-        message = 'Nincs kapcsolat a Firebase szolgáltatással. Ellenőrizd az internetet.';
+        message =
+            'Nincs kapcsolat a Firebase szolgáltatással. Ellenőrizd az internetet.';
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
+      debugPrint('Regisztráció sikertelen: $e');
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Váratlan hiba: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Váratlan hiba történt. Próbáld újra egy kicsit később.',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -272,10 +277,8 @@ class _NameScreenState extends State<NameScreen> {
               onPressed: _isLoading
                   ? null
                   : () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const LoginScreen(),
-                        ),
-                      ),
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    ),
               icon: const Icon(Icons.devices, size: 18),
               label: const Text('Van már fiókom (másik eszközön)'),
             ),
@@ -286,9 +289,8 @@ class _NameScreenState extends State<NameScreen> {
   }
 }
 
-
-
-
-
-
-
+/// A választott név már egy másik fiókhoz tartozik (a regisztrációs
+/// tranzakció dobja, a felület barátságos üzenetet mutat).
+class _NameTakenException implements Exception {
+  const _NameTakenException();
+}

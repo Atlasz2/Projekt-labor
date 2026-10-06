@@ -308,43 +308,25 @@
   border-radius: 4px;
 }
 
-.form-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 30px;
-}
-
-.btn-submit,
-.btn-cancel {
-  flex: 1;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1em;
+.btn-submit {
+  padding: 10px 20px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-submit {
-  background: linear-gradient(135deg, #059669 0%, #166534 100%);
-  color: white;
+  background: var(--admin-accent);
+  color: #fff;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .btn-submit:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+  background: var(--admin-accent-deep);
+  transform: translateY(-1px);
+  box-shadow: var(--admin-shadow);
 }
 
-.btn-cancel {
-  background: var(--admin-bg-soft);
-  color: var(--admin-text);
-  border: 1px solid var(--admin-border);
-}
 
-.btn-cancel:hover {
-  background: var(--admin-surface-muted);
-}
 
 /* ========== Empty State ========== */
 .empty-state {
@@ -673,38 +655,6 @@
   padding: 15px 25px;
   background: var(--admin-surface-muted);
   border-top: 1px solid var(--admin-border);
-}
-
-.btn-edit,
-.btn-delete {
-  flex: 1;
-  padding: 10px 15px;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-edit {
-  background: #3a4a2f;
-  color: white;
-}
-
-.btn-edit:hover {
-  background: #5b6f4c;
-  transform: translateY(-2px);
-}
-
-.btn-delete {
-  background: #dc2626;
-  color: white;
-}
-
-.btn-delete:hover {
-  background: #991b1b;
-  transform: translateY(-2px);
 }
 
 /* ========== No Data ========== */

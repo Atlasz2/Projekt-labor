@@ -1,69 +1,51 @@
 # Projekt állapot
 
-Nagyvázsonyi turisztikai QR-pontgyűjtő rendszer — szakdolgozati projekt.
-A technológiai stack, az adatmodell és az architektúra részletes leírása a [README.md](README.md)-ben található; ez a fájl csak a készültségi állapotot követi.
+Nagyvázsonyi turisztikai QR-pontgyűjtő rendszer — szakdolgozati projekt. Az
+architektúra és a használat leírása a [README.md](README.md)-ben található; ez a
+fájl a készültségi állapotot követi.
 
-## Elkészült funkciók
-
-### Admin panel (React 19 + Vite + MUI + TanStack Query)
-- Firebase Auth bejelentkezés, admin-jogosultság ellenőrzéssel
-- CRUD felületek: állomások (térkép + QR PDF export), túrák, események, szállások, éttermek, jutalmak, Nagyvázsony-történet
-- Felhasználók és jogosultságok kezelése, CSV-export
-- Hibabejelentések (mobil appból érkező) kezelőfelülete
-- Dashboard statisztikákkal, napi snapshot mentéssel (`stats_daily`)
-- Dark mode (localStorage-perzisztált, MUI témával szinkronban)
+## Elkészült
 
 ### Mobilapp (Flutter)
-- Firebase Auth + játékosprofil (felhasználónév-foglalás tranzakcióval)
-- QR-beolvasás (mobile_scanner): állomás- ÉS esemény-QR-ek, tranzakciós
-  pontjóváírás (párhuzamos feldolgozás nem duplázhat), jutalom-feloldás
-- Offline működés: Firestore cache, Hive, offline QR-várólista szinkronnal,
-  offline térképcsempék és képek
-- Interaktív térkép a túraútvonalakkal, esemény- és szálláslisták
-- Ranglista (`public_leaderboard`), profil, beolvasási előzmények
-- Crashlytics + Performance monitoring
-- Push értesítések (FCM): feliratkozás az esemény-topicra, a szerver új
-  esemény létrehozásakor küld (notifyOnNewEvent Cloud Function)
-- Natív splash screen (flutter_native_splash) és launcher ikonok
+- Anonim fiók névvel, egyedi névfoglalás tranzakcióval; opcionális e-mailes
+  visszaállítás másik eszközön.
+- QR-beolvasás állomásra és rendezvényre; a jóváírás kizárólag a szerveren
+  (`redeemQr`), GPS-pozícióval és a kiadás településével.
+- Offline működés: Firestore- és Hive-gyorsítótár, offline QR-sor hibaosztályozással,
+  offline térképcsempék (helyi csempeszolgáltató), offline képek.
+- Térkép, túranavigáció, gyalogos útvonal (Valhalla → OSRM → egyenes).
+- Jutalmak (szerveroldali egyeztetéssel), települési ranglista, profil, előzmények.
+- Rendezvények, szállás és vendéglátás, a település története, kapcsolat,
+  hibabejelentés (offline is, valódi verziószámmal).
+- Push-értesítés új rendezvényről (FCM topic), GDPR-adatexport és fióktörlés.
+- App Check, Crashlytics, Performance Monitoring, akadálymentesítés.
 
-### Backend / biztonság
-- **Szerveroldali QR-validáció**: redeemQr Cloud Function (Node 22) — a
-  kliens csak a nyers kódot küldi, a jóváírás Admin SDK-val fut; privát
-  `qr_codes` leképező kollekció ütközésvédelemmel, admin oldali automatikus
-  karbantartással és backfill szkripttel (deploy: Blaze-csomag szükséges,
-  részletek: docs/SERVER_VALIDATION.md)
-- **GPS helyszín-ellenőrzés**: a QR beolvasáskor a kliens rögzíti a pozíciót,
-  a szerver az állomás koordinátáihoz méri (Haversine, állomásonkénti `radius`
-  vagy alap 150 m); túl messziről nincs pont. Offline sorban a pozíció is
-  tárolódik. A lefényképezett QR távoli beolvasása ellen véd.
-- **GDPR adatjogok**: exportUserData (a felhasználó összes adata JSON-ban) és
-  deleteMyAccount (fiók + minden kapcsolódó dokumentum törlése, hibabejelentések
-  anonimizálásával, Auth-fiókkal együtt) Cloud Functionök; a mobil profil
-  „Adataim és adatvédelem" szekciója hívja (export+megosztás, törlés
-  megerősítéssel)
-- Firestore security rules: szerepkör-alapú admin-ellenőrzés (UID-elsődleges),
-  felhasználó csak saját progress-dokumentumát írhatja, monoton pontszabály,
-  leaderboard-pontszám kereszt-ellenőrzése a `user_progress` ellen
-- Storage rules: publikus olvasás, csak admin írás
+### Adminisztrációs felület (React)
+- Szerepkör-alapú belépés (admin / developer), white-label településkezelés.
+- CRUD: túrák, állomások (térkép, helyben generált QR, PDF), rendezvények,
+  szállások, vendéglátóhelyek, jutalmak, történet, elérhetőségek.
+- Áttekintő napi pillanatképekkel, szerveroldali analitika, felhasználókezelés
+  (meghívás, kitiltás, törlés), hibabejelentések, CSV-export, sötét mód.
 
-## Tesztek, minőség
+### Backend és biztonság
+- 12 Cloud Function (lásd README).
+- Lezárt Firestore-szabályok: pontot, teljesített listát és feloldott jutalmat
+  kliens nem írhat; tenant-izoláció; szerepkör-emelés tiltva; privát `qr_codes`.
+
+## Tesztek és minőség
 
 | Ellenőrzés | Állapot |
 |---|---|
-| Admin: Vitest (116 teszt, 14 fájl) | Zöld |
-| Mobil: flutter test (59 teszt, fake_cloud_firestore-ral) | Zöld |
-| Mobil: flutter analyze | Hibamentes |
-| Cloud Functions: node --test (37 teszt, in-memory Firestore-stub) | Zöld |
-| Firestore rules + redeem-core + GDPR emulátor ellen (31 teszt, támadási forgatókönyvek) | Zöld |
-| CI: GitHub Actions (admin + functions + rules-emulátor + Flutter) | Bekötve |
+| Admin: Vitest (161 teszt, 22 fájl) | zöld |
+| Cloud Functions: node:test (88 teszt) | zöld |
+| Szabályok + integráció Firestore-emulátor ellen (40 teszt) | zöld |
+| Mobil: flutter test (101 teszt) | zöld |
+| ESLint (0 figyelmeztetés), flutter analyze | hibamentes |
+| npm audit (admin, functions, tesztek) | 0 sebezhetőség |
+| CI: GitHub Actions (admin + functions + rules-emulátor + Flutter) | bekötve |
 
-A biztonsági architektúra szakdolgozatba emelhető leírása:
-[docs/SZAKDOLGOZAT_BIZTONSAG.md](docs/SZAKDOLGOZAT_BIZTONSAG.md).
+## Ismert korlátok
 
-## Ismert hiányosságok, korlátok
-
-- **Szerveroldali validáció deploy**: a redeemQr Cloud Function kódja és
-  tesztjei készek, de a deploy Blaze-csomagot igényel; addig az app a
-  legacy kliensoldali úton működik. A végső rules-lockdown lépései:
-  docs/SERVER_VALIDATION.md.
-- Admin email-értesítők: nem implementált.
+- A helyszín-ellenőrzés a pozíció hiányát átengedi, a pozíció hamisítható.
+- A mobilfiók visszaállítási jelszava a névből képződik (tudatos egyszerűsítés).
+- Admin e-mail-értesítések: nem implementált.

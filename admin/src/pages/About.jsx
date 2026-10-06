@@ -322,11 +322,11 @@ function About() {
                 </section>
 
                 <div className="form-actions about-editor-actions">
-                  <button className="btn-primary" type="submit">
-                    {editingId ? "Frissítés" : "Hozzáadás"}
-                  </button>
                   <button className="btn-secondary" onClick={resetEditor} type="button">
                     Mégse
+                  </button>
+                  <button className="btn-primary" type="submit">
+                    {editingId ? "Frissítés" : "Hozzáadás"}
                   </button>
                 </div>
               </form>

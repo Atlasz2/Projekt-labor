@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { logger } from 'firebase-functions/v2';
@@ -6,9 +7,10 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 
-import { redeemQrCore } from './lib/redeem-core.js';
+import { redeemQrCore, reconcileAchievementsCore } from './lib/redeem-core.js';
 import { buildEventNotification } from './lib/notification-builder.js';
 import { collectUserData, deleteUserData } from './lib/gdpr-core.js';
+import { InvalidNameError, NameTakenError, renameUserCore } from './lib/profile-core.js';
 import { computeTripAnalytics } from './lib/analytics-core.js';
 import {
   buildValhallaPayload,
@@ -117,10 +119,76 @@ export const redeemQr = onCall(
       projectId,
     });
   } catch (err) {
-    console.error('redeemQr failed', { uid, code, err });
+    logger.error('redeemQr failed', { uid, code, err });
     throw new HttpsError('internal', 'A jóváírás nem sikerült, próbáld újra.');
   }
 });
+
+// A hívó jutalmainak utólagos egyeztetése (a jutalmak képernyő betöltésekor).
+// A feloldást a szerver írja, így az unlocked_achievements alkollekció a
+// kliens elől lezárható. enforceAppCheck: csak a mobilapp hívja.
+export const reconcileAchievements = onCall(
+  { region: 'europe-west1', enforceAppCheck: true },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
+    }
+    const projectId =
+      typeof request.data?.projectId === 'string' ? request.data.projectId : '';
+
+    try {
+      return await reconcileAchievementsCore({
+        db: getFirestore(),
+        FieldValue,
+        uid,
+        projectId,
+      });
+    } catch (err) {
+      logger.error('reconcileAchievements failed', { uid, err });
+      throw new HttpsError('internal', 'A jutalmak frissítése nem sikerült.');
+    }
+  },
+);
+
+// A játékos nevének módosítása (névfoglalás, profil, haladás, ranglisták).
+// A ranglistát csak a szerver írhatja, ezért a módosítás itt fut. E-mailhez
+// kötött fióknál a névből képzett visszaállítási jelszó is frissül, hogy a
+// másik eszközös belépés az új névvel működjön.
+// enforceAppCheck: csak a mobilapp hívja.
+export const renameMe = onCall(
+  { region: 'europe-west1', enforceAppCheck: true },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
+    }
+    const auth = getAuth();
+    try {
+      return await renameUserCore({
+        db: getFirestore(),
+        FieldValue,
+        uid,
+        name: request.data?.name,
+        updatePassword: async (password) => {
+          const user = await auth.getUser(uid);
+          if (user.providerData.some((p) => p.providerId === 'password')) {
+            await auth.updateUser(uid, { password });
+          }
+        },
+      });
+    } catch (err) {
+      if (err instanceof NameTakenError) {
+        throw new HttpsError('already-exists', err.message);
+      }
+      if (err instanceof InvalidNameError) {
+        throw new HttpsError('invalid-argument', err.message);
+      }
+      logger.error('renameMe failed', { uid, err });
+      throw new HttpsError('internal', 'A név módosítása nem sikerült.');
+    }
+  },
+);
 
 // GDPR 20. cikk — adathordozhatóság: a hívó SAJÁT adatainak teljes exportja.
 // A kliens JSON-fájlként menti/megosztja a választ.
@@ -343,7 +411,7 @@ export const inviteAdmin = onCall({ region: 'europe-west1' }, async (request) =>
     } catch (err) {
       if (err?.code !== 'auth/user-not-found') throw err;
       // Ideiglenes, véletlen jelszó – a meghívott a linken állítja be a sajátját.
-      const temporary = `Inv-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+      const temporary = `Inv-${randomBytes(24).toString('base64url')}`;
       uid = (await auth.createUser({ email, password: temporary, displayName: name })).uid;
       created = true;
     }

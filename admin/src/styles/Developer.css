@@ -170,3 +170,41 @@
 @media (max-width: 640px) {
   .developer-header { flex-direction: column; }
 }
+
+/* Település sor: választó + Átnevezés / Törlés */
+.project-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.project-row .project-item {
+  flex: 1 1 260px;
+}
+
+.project-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.project-rename {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.project-rename input {
+  flex: 1 1 220px;
+  padding: 9px 12px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 10px;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font-size: 0.9rem;
+}
+
+.project-rename .btn-primary {
+  margin-bottom: 0;
+}

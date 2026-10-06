@@ -1,4 +1,3 @@
-import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_app/services/achievement_service.dart';
 
@@ -83,107 +82,22 @@ void main() {
     });
   });
 
-  group('reconcileFromStats', () {
-    late FakeFirebaseFirestore firestore;
-    const uid = 'u1';
+  group('reconcile (szerveroldali egyeztetés)', () {
+    tearDown(() => AchievementService.reconcileOverride = null);
 
-    setUp(() {
-      firestore = FakeFirebaseFirestore();
-      AchievementService.firestore = firestore;
+    test('a szerver által feloldott jutalmakat adja vissza', () async {
+      AchievementService.reconcileOverride = () async => [
+            {'id': 'ket-allomas', 'name': 'Két állomás'},
+          ];
+      final newly = await AchievementService.reconcile();
+      expect(newly.single['id'], 'ket-allomas');
     });
 
-    test('feloldja a teljesített, de fel nem oldott jutalmat + bannert állít',
+    test('hiba esetén üres listát ad, nem dob (a képernyő betölthető marad)',
         () async {
-      final newly = await AchievementService.reconcileFromStats(
-        uid: uid,
-        achievements: [
-          {
-            'id': 'explorer',
-            'name': 'Felfedező',
-            'description': '3 állomás',
-            'conditionType': 'station_count',
-            'conditionValue': 3,
-          },
-        ],
-        alreadyUnlocked: <String>{},
-        stations: 3,
-        events: 0,
-        points: 0,
-        trips: 0,
-        rank: 0,
-      );
-
-      expect(newly.single['id'], 'explorer');
-      final doc = await firestore
-          .collection('user_progress')
-          .doc(uid)
-          .collection('unlocked_achievements')
-          .doc('explorer')
-          .get();
-      expect(doc.exists, isTrue);
-
-      final banner = (await firestore.collection('user_progress').doc(uid).get())
-          .data()!['pendingAchievementBanner'];
-      expect(banner['title'], 'Felfedező');
-    });
-
-    test('a már feloldottat nem oldja fel újra', () async {
-      final newly = await AchievementService.reconcileFromStats(
-        uid: uid,
-        achievements: [
-          {'id': 'explorer', 'conditionType': 'station_count', 'conditionValue': 3},
-        ],
-        alreadyUnlocked: {'explorer'},
-        stations: 5,
-        events: 0,
-        points: 0,
-        trips: 0,
-        rank: 0,
-      );
-      expect(newly, isEmpty);
-    });
-
-    test('a nem teljesítettet nem oldja fel', () async {
-      final newly = await AchievementService.reconcileFromStats(
-        uid: uid,
-        achievements: [
-          {'id': 'explorer', 'conditionType': 'station_count', 'conditionValue': 3},
-        ],
-        alreadyUnlocked: <String>{},
-        stations: 2,
-        events: 0,
-        points: 0,
-        trips: 0,
-        rank: 0,
-      );
-      expect(newly, isEmpty);
-      final doc = await firestore
-          .collection('user_progress')
-          .doc(uid)
-          .collection('unlocked_achievements')
-          .doc('explorer')
-          .get();
-      expect(doc.exists, isFalse);
-    });
-
-    test('több feloldásnál a banner az összesített üzenetet mutatja', () async {
-      final newly = await AchievementService.reconcileFromStats(
-        uid: uid,
-        achievements: [
-          {'id': 'a', 'name': 'A', 'conditionType': 'station_count', 'conditionValue': 1},
-          {'id': 'b', 'name': 'B', 'conditionType': 'points_threshold', 'conditionValue': 10},
-        ],
-        alreadyUnlocked: <String>{},
-        stations: 1,
-        events: 0,
-        points: 10,
-        trips: 0,
-        rank: 0,
-      );
-      expect(newly.length, 2);
-      final banner = (await firestore.collection('user_progress').doc(uid).get())
-          .data()!['pendingAchievementBanner'];
-      expect(banner['subtitle'], '2 új jutalom feloldva!');
+      AchievementService.reconcileOverride =
+          () async => throw Exception('unavailable');
+      expect(await AchievementService.reconcile(), isEmpty);
     });
   });
 }

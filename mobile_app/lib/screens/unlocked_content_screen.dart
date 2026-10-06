@@ -43,7 +43,10 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
   Future<Set<String>> _loadCompletedStationIds(String uid) async {
     final ids = <String>{};
 
-    final progressDoc = await _firestore.collection('user_progress').doc(uid).get();
+    final progressDoc = await _firestore
+        .collection('user_progress')
+        .doc(uid)
+        .get();
     final data = progressDoc.data();
     if (data != null) {
       ids.addAll(_idsFromDynamic(data['completedStations']));
@@ -90,7 +93,9 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
         final stationName = (data['name'] ?? 'Ismeretlen állomás').toString();
 
         final extra = (data['unlockContent'] ?? '').toString().trim();
-        final unlockImage = (data['unlockContentImageUrl'] ?? '').toString().trim();
+        final unlockImage = (data['unlockContentImageUrl'] ?? '')
+            .toString()
+            .trim();
         if (extra.isNotEmpty) {
           unlocked.add({
             'id': '${doc.id}_unlock',
@@ -104,8 +109,9 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       }
 
       unlocked.sort((a, b) {
-        final byStation =
-            a['stationName'].toString().compareTo(b['stationName'].toString());
+        final byStation = a['stationName'].toString().compareTo(
+          b['stationName'].toString(),
+        );
         if (byStation != 0) return byStation;
         return a['title'].toString().compareTo(b['title'].toString());
       });
@@ -116,9 +122,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('Feloldott tartalmak betöltése sikertelen: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Hiba: $e';
+        _error =
+            'A feloldott tartalmak betöltése nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.';
         _isLoading = false;
       });
     }
@@ -225,9 +233,9 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF47563B).withValues(
-                                      alpha: 0.3,
-                                    ),
+                                    color: const Color(
+                                      0xFF47563B,
+                                    ).withValues(alpha: 0.3),
                                     blurRadius: 14,
                                     offset: const Offset(0, 6),
                                   ),
@@ -239,7 +247,9 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                                     width: 54,
                                     height: 54,
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.16),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.16,
+                                      ),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: const Icon(
@@ -251,7 +261,8 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                                   const SizedBox(width: 14),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           '${_unlockedItems.length} feloldott tartalom',

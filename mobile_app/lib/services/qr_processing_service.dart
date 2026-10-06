@@ -1,11 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
-import 'leaderboard_service.dart';
 import 'location_service.dart';
-import '../utils/project_filter.dart';
-import '../utils/station_trips.dart';
 import '../config/app_config.dart';
 
 /// A beolvasás pillanatában rögzített eszközpozíció.
@@ -40,41 +35,44 @@ class QrProcessResult {
   final int completedEventsCount;
 }
 
-/// Permanent failure: the scanned code maps to no existing station or event.
-/// Distinct from transient (network/Firestore) errors so the offline queue
-/// can drop poison codes instead of retrying them forever.
+/// Végleges hiba: a beolvasott kód egyetlen állomáshoz vagy eseményhez sem
+/// tartozik. Az offline várólista ezt eldobja (nem próbálja újra).
 class QrCodeNotFoundException implements Exception {
   const QrCodeNotFoundException(this.code);
 
   final String code;
 
   @override
-  String toString() => 'Ismeretlen QR kod: $code';
+  String toString() => 'Ismeretlen QR-kód: $code';
 }
 
-/// A beolvasott QR-kód egy MÁSIK településhez tartozik, ezért ebben a
+/// Végleges hiba: a kód egy MÁSIK településhez tartozik, ezért ebben a
 /// kiadásban nem írható jóvá (white-label védelem).
 class QrWrongProjectException implements Exception {
   const QrWrongProjectException();
 
   @override
-  String toString() =>
-      'QrWrongProjectException: a kód másik településhez tartozik';
+  String toString() => 'A QR-kód egy másik településhez tartozik.';
 }
 
-/// A szerveroldali jóváírás (redeemQr Cloud Function) nem elérhető — pl.
-/// még nincs deployolva. Ilyenkor a legacy kliensoldali útra váltunk.
-/// Tranziens hálózati hiba NEM ez: az továbbdobódik, hogy az offline
-/// várólista újrapróbálja.
+/// Átmeneti hiba: a szerveroldali jóváírás (redeemQr) nem érhető el. A pontot
+/// kizárólag a szerver írhatja (lásd firestore.rules), ezért ilyenkor nincs
+/// kliensoldali tartalék – az offline várólista később újrapróbálja.
 class QrServerUnavailableException implements Exception {
   const QrServerUnavailableException();
+
+  @override
+  String toString() =>
+      'A jóváírási szolgáltatás most nem érhető el, próbáld újra később.';
 }
 
-/// A beolvasott QR-kód a helyszínhez van kötve, de az eszköz túl messze van
-/// az állomástól — a jóváírás elmaradt. A UI a `distance`/`threshold` alapján
-/// kéri a felhasználót, hogy menjen közelebb.
+/// Végleges hiba (erre a beolvasásra): az eszköz túl messze van a helyhez
+/// kötött céltól, a jóváírás elmaradt.
 class QrOutOfRangeException implements Exception {
-  const QrOutOfRangeException({required this.distance, required this.threshold});
+  const QrOutOfRangeException({
+    required this.distance,
+    required this.threshold,
+  });
 
   /// Mért távolság az állomástól, méterben.
   final int distance;
@@ -88,101 +86,50 @@ class QrOutOfRangeException implements Exception {
 }
 
 /// A szerveroldali jóváírás hívása — tesztekben lecserélhető.
-typedef ServerRedeem = Future<Map<String, dynamic>> Function(
-  String code,
-  ScanLocation? location,
-);
+typedef ServerRedeem =
+    Future<Map<String, dynamic>> Function(String code, ScanLocation? location);
 
-class _ProgressOutcome {
-  const _ProgressOutcome({
-    required this.alreadyDone,
-    required this.updatedPoints,
-    required this.completedStations,
-    required this.completedEvents,
-    required this.progressData,
-  });
-
-  final bool alreadyDone;
-  final int updatedPoints;
-  final List<String> completedStations;
-  final List<String> completedEvents;
-  final Map<String, dynamic> progressData;
-}
-
+/// QR-beolvasás feldolgozása. A validáció, a pontszámítás, a jutalom-feloldás
+/// és a ranglista-írás a `redeemQr` Cloud Functionben fut (Admin SDK-val); a
+/// kliens csak a nyers kódot, a pozíciót és a kiadás települését küldi be.
 class QrProcessingService {
-  /// Tesztekben lecserélhető (fake_cloud_firestore); élesben az alapértelmezett.
-  static FirebaseFirestore firestore = FirebaseFirestore.instance;
+  const QrProcessingService._();
 
   /// Tesztekben lecserélhető; élesben a redeemQr Cloud Functiont hívja.
   static ServerRedeem? serverRedeemOverride;
 
-  /// Ha a függvény nem elérhető (nincs deployolva), az első hiba után erre a
-  /// futásra kikapcsoljuk a szerver-utat, és a legacy kliensoldali jóváírás fut.
-  static bool serverRedeemEnabled = true;
-
   static Future<QrProcessResult> processByCode({
-    required String uid,
     required String code,
     ScanLocation? location,
   }) async {
-    // Szerver-először: a validáció és jóváírás a redeemQr Cloud Functionben
-    // fut (lásd functions/ és docs/SERVER_VALIDATION.md). A legacy út addig
-    // marad, amíg a függvény minden környezetben deployolva nincs.
-    if (serverRedeemEnabled) {
-      try {
-        final payload =
-            await (serverRedeemOverride ?? _callRedeemFunction)(code, location);
-        if (payload['found'] == false) {
-          throw QrCodeNotFoundException(code);
-        }
-        if (payload['rejected'] == 'wrong_project') {
-          throw const QrWrongProjectException();
-        }
-        if (payload['rejected'] == 'out_of_range') {
-          throw QrOutOfRangeException(
-            distance: (payload['distance'] as num?)?.round() ?? 0,
-            threshold: (payload['threshold'] as num?)?.round() ??
-                kDefaultLocationRadiusM.round(),
-          );
-        }
-        return _resultFromServerPayload(payload);
-      } on QrServerUnavailableException {
-        serverRedeemEnabled = false;
-      }
-    }
+    final payload = await (serverRedeemOverride ?? _callRedeemFunction)(
+      code,
+      location,
+    );
 
-    final station = await _findByCode('stations', code);
-    if (station != null) {
-      _assertWithinRange(station, location);
-      return _applyProgress(
-        uid: uid,
-        kind: QrTargetKind.station,
-        targetId: station['id'] as String,
-        targetData: station,
+    if (payload['found'] == false) throw QrCodeNotFoundException(code);
+    if (payload['rejected'] == 'wrong_project') {
+      throw const QrWrongProjectException();
+    }
+    if (payload['rejected'] == 'out_of_range') {
+      throw QrOutOfRangeException(
+        distance: (payload['distance'] as num?)?.round() ?? 0,
+        threshold:
+            (payload['threshold'] as num?)?.round() ??
+            kDefaultLocationRadiusM.round(),
       );
     }
-
-    final event = await _findByCode('events', code);
-    if (event != null) {
-      _assertWithinRange(event, location);
-      return _applyProgress(
-        uid: uid,
-        kind: QrTargetKind.event,
-        targetId: event['id'] as String,
-        targetData: event,
-      );
-    }
-
-    throw QrCodeNotFoundException(code);
+    return _resultFromServerPayload(payload);
   }
 
   /// A cél koordinátája `(lat, lng)`, vagy null, ha nincs érvényes helye.
   static ScanLocation? _targetLatLng(Map<String, dynamic> data) {
     num? asNum(dynamic v) => v is num ? v : null;
     final loc = data['location'];
-    final lat = asNum(data['latitude']) ??
-        (loc is Map ? asNum(loc['latitude']) : null);
-    final lng = asNum(data['longitude']) ??
+    final lat =
+        asNum(data['latitude']) ?? (loc is Map ? asNum(loc['latitude']) : null);
+    final lng =
+        asNum(data['longitude']) ??
         (loc is Map ? asNum(loc['longitude']) : null);
     if (lat == null || lng == null) return null;
     if (lat == 0 && lng == 0) return null; // hiányzó koordináta jelzője
@@ -190,9 +137,9 @@ class QrProcessingService {
   }
 
   /// Kliensoldali helyszín-ellenőrzés — a szerveroldali checkLocation tükre.
-  /// Ha a cél helyhez kötött és a beküldött pozíció túl messze van, a
-  /// kiutasítás részleteit adja vissza; egyébként (rendben van, vagy nincs mit
-  /// ellenőrizni) null-t. A camera offline útja is ezt használja beolvasáskor.
+  /// Az offline beolvasás ezzel szűri ki a sorba állítás előtt azt, amit a
+  /// szerver úgyis elutasítana. Kiutasításnál a részleteket adja vissza,
+  /// egyébként (rendben van, vagy nincs mit ellenőrizni) null-t.
   static ({int distance, int threshold})? locationRejection(
     Map<String, dynamic> targetData,
     ScanLocation? location,
@@ -217,26 +164,13 @@ class QrProcessingService {
     return null;
   }
 
-  /// A legacy jóváírási út helyszín-kapuja: kiutasításnál dob.
-  static void _assertWithinRange(
-    Map<String, dynamic> targetData,
-    ScanLocation? location,
-  ) {
-    final rejection = locationRejection(targetData, location);
-    if (rejection != null) {
-      throw QrOutOfRangeException(
-        distance: rejection.distance,
-        threshold: rejection.threshold,
-      );
-    }
-  }
-
   static Future<Map<String, dynamic>> _callRedeemFunction(
     String code,
     ScanLocation? location,
   ) async {
-    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-        .httpsCallable('redeemQr');
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'europe-west1',
+    ).httpsCallable('redeemQr');
     try {
       final response = await callable.call<dynamic>({
         'code': code,
@@ -246,45 +180,47 @@ class QrProcessingService {
         if (location != null) 'lat': location.lat,
         if (location != null) 'lng': location.lng,
       });
-      return _stringKeyedMap(response.data);
+      return stringKeyedMap(response.data);
     } on FirebaseFunctionsException catch (e) {
-      // 'not-found'/'unimplemented': maga a függvény nem létezik (a szerver
-      // ismeretlen kódra nem hibát, hanem found:false-t ad) -> legacy út.
+      // 'not-found'/'unimplemented': maga a függvény nem létezik (ismeretlen
+      // kódra a szerver nem hibát, hanem found:false-t ad).
       if (e.code == 'not-found' || e.code == 'unimplemented') {
         throw const QrServerUnavailableException();
       }
-      // Minden más (unavailable, deadline-exceeded, internal, ...) tranziens:
-      // továbbdobjuk, a hívó/offline várólista kezeli.
+      // Minden más (unavailable, deadline-exceeded, internal, ...) átmeneti:
+      // továbbdobjuk, a hívó / az offline várólista kezeli.
       rethrow;
     }
   }
 
   /// A callable válaszában a beágyazott map-ek `Map<Object?, Object?>`-ként
   /// érkeznek — rekurzívan String-kulcsos map-ekké alakítjuk.
-  static Map<String, dynamic> _stringKeyedMap(dynamic value) {
+  static Map<String, dynamic> stringKeyedMap(dynamic value) {
     final map = value as Map;
     return map.map((key, v) {
       dynamic converted = v;
       if (v is Map) {
-        converted = _stringKeyedMap(v);
+        converted = stringKeyedMap(v);
       } else if (v is List) {
-        converted = v.map((e) => e is Map ? _stringKeyedMap(e) : e).toList();
+        converted = v.map((e) => e is Map ? stringKeyedMap(e) : e).toList();
       }
       return MapEntry(key.toString(), converted);
     });
   }
 
-  static QrProcessResult _resultFromServerPayload(Map<String, dynamic> payload) {
+  static QrProcessResult _resultFromServerPayload(
+    Map<String, dynamic> payload,
+  ) {
     final rawAchievements = (payload['newAchievements'] as List?) ?? const [];
     return QrProcessResult(
-      target: _stringKeyedMap(payload['target'] ?? const <String, dynamic>{}),
+      target: stringKeyedMap(payload['target'] ?? const <String, dynamic>{}),
       kind: payload['kind'] == 'event'
           ? QrTargetKind.event
           : QrTargetKind.station,
       alreadyDone: payload['alreadyDone'] == true,
       newAchievements: rawAchievements
           .whereType<Map>()
-          .map(_stringKeyedMap)
+          .map(stringKeyedMap)
           .toList(),
       updatedPoints: (payload['updatedPoints'] as num?)?.toInt() ?? 0,
       completedStationsCount:
@@ -292,316 +228,5 @@ class QrProcessingService {
       completedEventsCount:
           (payload['completedEventsCount'] as num?)?.toInt() ?? 0,
     );
-  }
-
-  static Future<Map<String, dynamic>?> _findByCode(
-    String collection,
-    String code,
-  ) async {
-    final snap = await firestore
-        .collection(collection)
-        .where('qrCode', isEqualTo: code)
-        .limit(1)
-        .get();
-
-    if (snap.docs.isNotEmpty) {
-      final d = snap.docs.first;
-      return <String, dynamic>{'id': d.id, ...d.data()};
-    }
-
-    // Doc-id fallback. A '/'-t tartalmazó kód nem lehet érvényes dokumentum-út,
-    // és a doc() hívás ArgumentError-t dobna rá.
-    if (!code.contains('/')) {
-      final byId = await firestore.collection(collection).doc(code).get();
-      if (byId.exists) {
-        return <String, dynamic>{'id': byId.id, ...byId.data()!};
-      }
-    }
-
-    return null;
-  }
-
-  static Future<QrProcessResult> _applyProgress({
-    required String uid,
-    required QrTargetKind kind,
-    required String targetId,
-    required Map<String, dynamic> targetData,
-  }) async {
-    final progressRef = firestore.collection('user_progress').doc(uid);
-    final listField = kind == QrTargetKind.station
-        ? 'completedStations'
-        : 'completedEvents';
-    final points = (targetData['points'] as num?)?.toInt() ?? 10;
-
-    // A security rules a user_progress létrehozását csak nullázott számlálókkal
-    // engedik, ezért az increment előtt biztosítjuk, hogy a doksi létezzen.
-    // (Normál esetben a regisztráció hozza létre; ez a legacy/edge eseteket fedi.)
-    final existing = await progressRef.get();
-    if (!existing.exists) {
-      await progressRef.set({
-        'totalPoints': 0,
-        'completedStations': <String>[],
-        'completedEvents': <String>[],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    // Atomi jóváírás: az olvasás és a feltételes írás egy tranzakcióban fut,
-    // így két párhuzamos feldolgozás (pl. élő beolvasás + offline szinkron)
-    // nem tudja ugyanazt a kódot kétszer jóváírni.
-    final outcome = await firestore.runTransaction<_ProgressOutcome>((
-      tx,
-    ) async {
-      final snap = await tx.get(progressRef);
-      final data = snap.data() ?? <String, dynamic>{};
-
-      final completedStations = List<String>.from(
-        data['completedStations'] ?? [],
-      );
-      final completedEvents = List<String>.from(data['completedEvents'] ?? []);
-      final currentPoints = (data['totalPoints'] as num?)?.toInt() ?? 0;
-
-      final completedList = kind == QrTargetKind.station
-          ? completedStations
-          : completedEvents;
-      final alreadyDone = completedList.contains(targetId);
-
-      if (!alreadyDone) {
-        completedList.add(targetId);
-        // update (nem set+merge): a doksi létezését fentebb garantáltuk, és
-        // így a transzformok a meglévő értékekre épülnek.
-        tx.update(progressRef, {
-          listField: FieldValue.arrayUnion([targetId]),
-          'totalPoints': FieldValue.increment(points),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      return _ProgressOutcome(
-        alreadyDone: alreadyDone,
-        updatedPoints: alreadyDone ? currentPoints : currentPoints + points,
-        completedStations: completedStations,
-        completedEvents: completedEvents,
-        progressData: data,
-      );
-    });
-
-    var completedTripIds = List<String>.from(
-      outcome.progressData['completedTripIds'] ?? [],
-    );
-
-    List<Map<String, dynamic>> newAchievements = const [];
-    if (!outcome.alreadyDone) {
-      completedTripIds = await _detectTripCompletion(
-        uid: uid,
-        kind: kind,
-        targetData: targetData,
-        completedStations: outcome.completedStations,
-        completedTripIds: completedTripIds,
-      );
-
-      // Előbb a leaderboard, hogy a top_n feltétel már a friss pontszámmal
-      // értékelődjön ki.
-      await LeaderboardService.syncEntry(
-        uid: uid,
-        points: outcome.updatedPoints,
-        completedStationsCount: outcome.completedStations.length,
-        completedEventsCount: outcome.completedEvents.length,
-        displayName: outcome.progressData['name']?.toString(),
-      );
-
-      newAchievements = await _checkAchievements(
-        uid: uid,
-        completedStations: outcome.completedStations,
-        completedEvents: outcome.completedEvents,
-        completedTripIds: completedTripIds,
-        totalPoints: outcome.updatedPoints,
-      );
-    }
-
-    return QrProcessResult(
-      target: targetData,
-      kind: kind,
-      alreadyDone: outcome.alreadyDone,
-      newAchievements: newAchievements,
-      updatedPoints: outcome.updatedPoints,
-      completedStationsCount: outcome.completedStations.length,
-      completedEventsCount: outcome.completedEvents.length,
-    );
-  }
-
-  /// Túra-teljesítés detektálása állomás-jóváírás után: a beolvasott
-  /// állomás TÖBB túrának is megállója lehet, ezért mindegyiket
-  /// megvizsgáljuk – ha valamelyiknek minden állomása megvan, az a túra
-  /// bekerül a completedTripIds-be. A bővített listát adja vissza.
-  static Future<List<String>> _detectTripCompletion({
-    required String uid,
-    required QrTargetKind kind,
-    required Map<String, dynamic> targetData,
-    required List<String> completedStations,
-    required List<String> completedTripIds,
-  }) async {
-    final result = List<String>.from(completedTripIds);
-    if (kind != QrTargetKind.station) return result;
-
-    final candidateTripIds = stationTripIds(
-      targetData,
-    ).where((id) => !result.contains(id)).toList();
-    if (candidateTripIds.isEmpty) return result;
-
-    try {
-      final newlyCompleted = <String>[];
-      for (final tripId in candidateTripIds) {
-        // Két lekérdezés: az új `tripIds` tömbre (arrayContains) ÉS a régi
-        // egyszeres `tripId` mezőre (amíg a migráció nem futott le
-        // mindenhol) – összefésülve, doksinkénti dedup-pal.
-        final byArray = await firestore
-            .collection('stations')
-            .where('tripIds', arrayContains: tripId)
-            .get();
-        final byLegacy = await firestore
-            .collection('stations')
-            .where('tripId', isEqualTo: tripId)
-            .get();
-        final tripStationIds = <String>{
-          ...byArray.docs.map((d) => d.id),
-          ...byLegacy.docs.map((d) => d.id),
-        };
-        if (tripStationIds.isEmpty) continue;
-
-        final allDone = tripStationIds.every(completedStations.contains);
-        if (allDone) newlyCompleted.add(tripId);
-      }
-
-      if (newlyCompleted.isEmpty) return result;
-
-      result.addAll(newlyCompleted);
-      await firestore.collection('user_progress').doc(uid).update({
-        'completedTripIds': FieldValue.arrayUnion(newlyCompleted),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e, stack) {
-      // A túra-detektálás hibája nem blokkolja a beolvasást.
-      try {
-        await FirebaseCrashlytics.instance.recordError(
-          e,
-          stack,
-          reason: 'trip completion detection failed',
-        );
-      } catch (_) {
-        // Crashlytics nem elérhető (pl. tesztfuttatásban).
-      }
-      return List<String>.from(completedTripIds);
-    }
-    return result;
-  }
-
-  static Future<List<Map<String, dynamic>>> _checkAchievements({
-    required String uid,
-    required List<String> completedStations,
-    required List<String> completedEvents,
-    required List<String> completedTripIds,
-    required int totalPoints,
-  }) async {
-    try {
-      final results = await Future.wait([
-        firestore.collection('achievements').get(),
-        firestore
-            .collection('user_progress')
-            .doc(uid)
-            .collection('unlocked_achievements')
-            .get(),
-      ]);
-
-      final achSnap = results[0] as QuerySnapshot;
-      final unlockedSnap = results[1] as QuerySnapshot;
-      final alreadyUnlocked = unlockedSnap.docs.map((d) => d.id).toSet();
-
-      final newlyUnlocked = <Map<String, dynamic>>[];
-
-      final batch = firestore.batch();
-      for (final doc in achSnap.docs) {
-        final id = doc.id;
-        if (alreadyUnlocked.contains(id)) continue;
-
-        final achData = doc.data() as Map<String, dynamic>;
-        // Más település jutalma itt nem oldódhat fel.
-        if (!inActiveProject(achData)) continue;
-        final type = achData['conditionType']?.toString() ?? '';
-        final target = (achData['conditionValue'] as num?)?.toInt() ?? 1;
-
-        bool met = false;
-        if (type == 'station_count') {
-          met = completedStations.length >= target;
-        } else if (type == 'event_count') {
-          met = completedEvents.length >= target;
-        } else if (type == 'qr_count') {
-          met = (completedStations.length + completedEvents.length) >= target;
-        } else if (type == 'points_threshold') {
-          met = totalPoints >= target;
-        } else if (type == 'trip_complete') {
-          met = completedTripIds.length >= target;
-        } else if (type == 'top_n') {
-          // A leaderboard-szinkron előbb futott, így a saját friss
-          // pontszámunkkal versenyzünk.
-          // A legacy (kliensoldali) út a globális public_leaderboard-ot írja,
-          // ezért itt is azt olvassa – így önmagában konzisztens. A szerveres
-          // úton (redeemQr) a településenkénti ranglista dönt.
-          final top = await firestore
-              .collection('public_leaderboard')
-              .orderBy('points', descending: true)
-              .limit(target)
-              .get();
-          met = top.docs.any((d) => d.id == uid);
-        }
-
-        if (met) {
-          batch.set(
-            firestore
-                .collection('user_progress')
-                .doc(uid)
-                .collection('unlocked_achievements')
-                .doc(id),
-            {'unlockedAt': FieldValue.serverTimestamp()},
-          );
-          // NOTE: we intentionally do NOT increment achievements/{id}.unlockedCount
-          // here — that collection is admin-write-only, so including it would make
-          // the whole batch fail with permission-denied and the unlock (plus its
-          // notification) would never commit.
-          newlyUnlocked.add({'id': id, ...achData});
-        }
-      }
-
-      if (newlyUnlocked.isNotEmpty) {
-        final first = newlyUnlocked.first;
-        batch.set(
-          firestore.collection('user_progress').doc(uid),
-          {
-            'pendingAchievementBanner': {
-              'title': first['name']?.toString() ?? 'Jutalom feloldva!',
-              'subtitle': newlyUnlocked.length == 1
-                  ? (first['description']?.toString() ?? '')
-                  : "${newlyUnlocked.length} új jutalom feloldva!",
-            },
-          },
-          SetOptions(merge: true),
-        );
-      }
-      await batch.commit();
-      return newlyUnlocked;
-    } catch (e, stack) {
-      // A jutalom-ellenőrzés hibája nem blokkolja a beolvasást, de ne
-      // vesszen el nyomtalanul.
-      try {
-        await FirebaseCrashlytics.instance.recordError(
-          e,
-          stack,
-          reason: 'QR achievement check failed',
-        );
-      } catch (_) {
-        // Crashlytics nem elérhető (pl. tesztfuttatásban).
-      }
-      return [];
-    }
   }
 }

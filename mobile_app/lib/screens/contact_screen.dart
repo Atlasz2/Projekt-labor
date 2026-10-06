@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/offline_sync_service.dart';
 import '../utils/project_filter.dart';
 import '../config/app_config.dart';
+import '../utils/app_version.dart';
 
 class ContactScreen extends StatefulWidget {
   const ContactScreen({super.key});
@@ -15,6 +16,23 @@ class ContactScreen extends StatefulWidget {
 
 class _ContactScreenState extends State<ContactScreen>
     with SingleTickerProviderStateMixin {
+  // A korábbi bejelentések élő lekérdezése felhasználónként egyszer jön
+  // létre; a build-ben létrehozott stream minden újrarajzoláskor új
+  // Firestore-feliratkozást nyitna.
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _reportsStream;
+  String? _reportsStreamUid;
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> _reportsFor(String uid) {
+    if (_reportsStream == null || _reportsStreamUid != uid) {
+      _reportsStreamUid = uid;
+      _reportsStream = FirebaseFirestore.instance
+          .collection('bug_reports')
+          .where('reported_by.user_id', isEqualTo: uid)
+          .snapshots();
+    }
+    return _reportsStream!;
+  }
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late final TabController _tabController;
 
@@ -92,6 +110,8 @@ class _ContactScreenState extends State<ContactScreen>
     setState(() => _submitting = true);
 
     final user = FirebaseAuth.instance.currentUser;
+    final platform = Theme.of(context).platform.name;
+    final appVersion = await appVersionLabel();
     final now = DateTime.now();
     final payload = <String, dynamic>{
       // Melyik település adminja lássa a bejelentést. A payloadban van, hogy az
@@ -99,15 +119,14 @@ class _ContactScreenState extends State<ContactScreen>
       'projectId': AppConfig.projectId,
       'title': 'Bejelentés a Kapcsolat oldalról',
       'description': _descriptionController.text.trim(),
-      'severity': 'medium',
       'status': 'active',
       'resolved': false,
       'reported_by': {
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'user_id': user?.uid ?? '',
-        'app_version': '1.0.0',
-        'os': Theme.of(context).platform.name,
+        'app_version': appVersion,
+        'os': platform,
       },
       'admin_response': '',
       'screenshot_urls': <String>[],
@@ -121,11 +140,14 @@ class _ContactScreenState extends State<ContactScreen>
 
     try {
       if (service.isOnline) {
-        await FirebaseFirestore.instance.collection('bug_reports').doc(bugId).set({
-          ...payload,
-          'created_at': FieldValue.serverTimestamp(),
-          'updated_at': FieldValue.serverTimestamp(),
-        });
+        await FirebaseFirestore.instance
+            .collection('bug_reports')
+            .doc(bugId)
+            .set({
+              ...payload,
+              'created_at': FieldValue.serverTimestamp(),
+              'updated_at': FieldValue.serverTimestamp(),
+            });
       } else {
         await service.queueAction(
           actionType: 'create',
@@ -198,7 +220,10 @@ class _ContactScreenState extends State<ContactScreen>
           isScrollable: true,
           tabs: const [
             Tab(icon: Icon(Icons.call_outlined), text: 'Kapcsolat'),
-            Tab(icon: Icon(Icons.bug_report_outlined), text: 'Új hibabejelentés'),
+            Tab(
+              icon: Icon(Icons.bug_report_outlined),
+              text: 'Új hibabejelentés',
+            ),
             Tab(icon: Icon(Icons.history), text: 'Előzmények'),
           ],
         ),
@@ -225,7 +250,9 @@ class _ContactScreenState extends State<ContactScreen>
         padding: const EdgeInsets.all(16),
         child: Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -301,12 +328,18 @@ class _ContactScreenState extends State<ContactScreen>
                     child: const Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.visibility_outlined, color: Color(0xFF2563EB)),
+                        Icon(
+                          Icons.visibility_outlined,
+                          color: Color(0xFF2563EB),
+                        ),
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             'A korábbi bejelentéseidet és az admin válaszait az Előzmények fülön találod.',
-                            style: TextStyle(color: Color(0xFF1E3A8A), height: 1.45),
+                            style: TextStyle(
+                              color: Color(0xFF1E3A8A),
+                              height: 1.45,
+                            ),
                           ),
                         ),
                       ],
@@ -320,8 +353,9 @@ class _ContactScreenState extends State<ContactScreen>
                       prefixIcon: Icon(Icons.person_outline),
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Kötelező mező.' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Kötelező mező.'
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
@@ -332,24 +366,25 @@ class _ContactScreenState extends State<ContactScreen>
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'Kötelező mező.' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Kötelező mező.'
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _descriptionController,
                     minLines: 5,
                     maxLines: 10,
+                    maxLength: 4000,
                     decoration: const InputDecoration(
                       labelText: 'Mi a probléma?',
                       hintText: 'Írd le részletesen, hogy mit tapasztaltál...',
                       alignLabelWithHint: true,
                       border: OutlineInputBorder(),
                     ),
-                    validator: (v) =>
-                        (v == null || v.trim().length < 10)
-                            ? 'Legalább 10 karakter szükséges.'
-                            : null,
+                    validator: (v) => (v == null || v.trim().length < 10)
+                        ? 'Legalább 10 karakter szükséges.'
+                        : null,
                   ),
                   const SizedBox(height: 20),
                   SizedBox(
@@ -386,16 +421,15 @@ class _ContactScreenState extends State<ContactScreen>
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('Jelentkezz be a korábbi hibabejelentéseid megtekintéséhez.'),
+          child: Text(
+            'Jelentkezz be a korábbi hibabejelentéseid megtekintéséhez.',
+          ),
         ),
       );
     }
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('bug_reports')
-          .where('reported_by.user_id', isEqualTo: uid)
-          .snapshots(),
+      stream: _reportsFor(uid),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -534,6 +568,31 @@ class _ContactScreenState extends State<ContactScreen>
                         ),
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        // Lezárt bejelentés már nem szerkeszthető (a szabályok
+                        // sem engedik), csak visszavonható.
+                        if (!closed)
+                          TextButton.icon(
+                            onPressed: () => _editReport(
+                              doc.id,
+                              (item['description'] ?? '').toString(),
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            label: const Text('Szerkesztés'),
+                          ),
+                        TextButton.icon(
+                          onPressed: () => _deleteReport(doc.id),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFFB91C1C),
+                          ),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('Visszavonás'),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               );
@@ -542,6 +601,108 @@ class _ContactScreenState extends State<ContactScreen>
         );
       },
     );
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// A saját, még nyitott bejelentés leírásának javítása.
+  Future<void> _editReport(String id, String current) async {
+    final controller = TextEditingController(text: current);
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Bejelentés szerkesztése'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 8,
+          maxLength: 4000,
+          decoration: const InputDecoration(
+            labelText: 'Mi a probléma?',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Mentés'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (updated == null || updated == current.trim()) return;
+    if (updated.isEmpty) {
+      _showSnack('A leírás nem lehet üres.');
+      return;
+    }
+    try {
+      final now = DateTime.now();
+      await FirebaseFirestore.instance
+          .collection('bug_reports')
+          .doc(id)
+          .update({
+            'description': updated,
+            'updated_at_text': now.toIso8601String(),
+            'updated_at_ms': now.millisecondsSinceEpoch,
+          });
+      _showSnack('A bejelentést frissítettük.');
+    } catch (e) {
+      debugPrint('Bejelentés szerkesztése sikertelen: $e');
+      _showSnack(
+        'A mentés nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.',
+      );
+    }
+  }
+
+  /// A saját bejelentés visszavonása (törlése) megerősítés után.
+  Future<void> _deleteReport(String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Bejelentés visszavonása'),
+        content: const Text(
+          'Biztosan visszavonod ezt a bejelentést? A művelet nem vonható vissza.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB91C1C),
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Visszavonás'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('bug_reports')
+          .doc(id)
+          .delete();
+      _showSnack('A bejelentést visszavontuk.');
+    } catch (e) {
+      debugPrint('Bejelentés törlése sikertelen: $e');
+      _showSnack(
+        'A törlés nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.',
+      );
+    }
   }
 
   Widget _buildItem(IconData icon, String label, String value) {
@@ -565,7 +726,10 @@ class _ContactScreenState extends State<ContactScreen>
               const SizedBox(height: 4),
               Text(
                 value,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),

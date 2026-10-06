@@ -46,7 +46,7 @@ vi.mock("../utils/photoHelpers", () => ({
 }));
 vi.mock("../utils/qrHelpers", () => ({
   getQrValue: vi.fn(() => "QR123"),
-  getQrImageUrl: vi.fn(() => ""),
+  qrDataUrl: vi.fn(async () => "data:image/png;base64,"),
 }));
 
 import { getDocs } from "firebase/firestore";

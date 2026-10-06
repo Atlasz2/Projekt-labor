@@ -56,11 +56,13 @@ function Layout() {
               </div>
             </div>
             <button
+              type="button"
               className="sidebar-close-btn"
               onClick={() => setSidebarOpen(false)}
-              title="Bezárás"
+              title="Menü bezárása"
+              aria-label="Menü bezárása"
             >
-              x
+              ×
             </button>
           </div>
 
@@ -134,11 +136,13 @@ function Layout() {
 
       {!sidebarOpen && (
         <button
+          type="button"
           className="sidebar-open-btn"
           onClick={() => setSidebarOpen(true)}
-          title="Megnyitás"
+          title="Menü megnyitása"
+          aria-label="Menü megnyitása"
         >
-          [=]
+          ☰
         </button>
       )}
 

@@ -10,6 +10,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../services/location_service.dart';
 import '../widgets/station_detail_sheet.dart';
+import '../services/offline_tiles_service.dart';
+import '../services/offline_sync_service.dart';
 import 'camera_screen.dart';
 
 /// Google Maps-szerű túranavigáció: élő GPS-pozíció, a kiválasztott túra
@@ -195,9 +197,9 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
   /// valós teljesítést, és csak akkor lépünk tovább, ha az ténylegesen
   /// megtörtént — így ez a képernyő nem kerülhető meg puszta kattintással.
   Future<void> _scanAtStation() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CameraScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CameraScreen()));
     if (!mounted) return;
     await _refreshCompletionFromServer();
   }
@@ -359,23 +361,29 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
           ? _buildPermissionMessage()
           : Stack(
               children: [
-                GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: initialTarget,
-                    zoom: 16,
+                ValueListenableBuilder<bool>(
+                  valueListenable: OfflineSyncService().onlineNotifier,
+                  builder: (context, online, _) => GoogleMap(
+                    tileOverlays: OfflineTilesService.overlaysFor(
+                      online: online,
+                    ),
+                    initialCameraPosition: CameraPosition(
+                      target: initialTarget,
+                      zoom: 16,
+                    ),
+                    markers: _buildMarkers(),
+                    polylines: _buildPolylines(),
+                    myLocationEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    mapToolbarEnabled: false,
+                    compassEnabled: true,
+                    onMapCreated: (controller) => _controller = controller,
+                    onCameraMoveStarted: () {
+                      // A felhasználó kézzel mozgatta a térképet → követés le.
+                      if (_followUser) setState(() => _followUser = false);
+                    },
                   ),
-                  markers: _buildMarkers(),
-                  polylines: _buildPolylines(),
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                  zoomControlsEnabled: false,
-                  mapToolbarEnabled: false,
-                  compassEnabled: true,
-                  onMapCreated: (controller) => _controller = controller,
-                  onCameraMoveStarted: () {
-                    // A felhasználó kézzel mozgatta a térképet → követés le.
-                    if (_followUser) setState(() => _followUser = false);
-                  },
                 ),
                 Positioned(
                   top: 12,

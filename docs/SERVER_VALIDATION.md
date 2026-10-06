@@ -1,115 +1,97 @@
-# Szerveroldali QR-validáció (redeemQr Cloud Function)
+# Szerveroldali QR-validáció (redeemQr) és jutalom-egyeztetés
 
-## Miért volt rá szükség?
+## Miért szerveroldali?
 
 A korábbi architektúrában a pontjóváírást a mobil kliens számolta és írta a
-Firestore-ba. A security rules a pontcsökkentést és a hamis kezdőértéket
-tiltották, de két támadási vektor nyitva maradt:
+Firestore-ba. A szabályok a pontcsökkentést és a hamis kezdőértéket tiltották, de
+két támadási vektor nyitva maradt:
 
 1. **Pont-felfújás**: egy módosított kliens (vagy a Firestore REST API-t a
-   publikus API-kulccsal hívó szkript) az update-ágon tetszőleges mértékben
-   növelhette a saját `user_progress.totalPoints` értékét — a monoton szabály
-   csak a csökkentést tiltja.
-2. **QR-enumeráció**: a `stations` és `events` kollekciók publikusan
-   olvashatók (a térképhez és a listákhoz kell), és a `qrCode` mező is bennük
-   volt — a teljes QR-készlet lekérdezhető volt beolvasás nélkül, otthonról.
+   nyilvános API-kulccsal hívó szkript) tetszőlegesen növelhette a saját
+   `user_progress.totalPoints` értékét – a legitim jóváírás is pontnövelés, ezt
+   deklaratív szabály nem tudja megkülönböztetni.
+2. **Jutalom önfeloldása**: a kliens maga írta az `unlocked_achievements`
+   alkollekciót, így bármely jutalmat (akár fizikai kedvezményt) feloldhatott.
 
-## Az új architektúra
+Mindkettőt az zárja, hogy a pontot és a jutalmat **kizárólag a szerver** írja, a
+kliens elől pedig a `firestore.rules` ezeket teljesen lezárja.
+
+## Architektúra
 
 ```
-Mobil app ──(nyers kód + GPS)──► redeemQr Cloud Function (europe-west1)
-                               │  1. qr_codes/{URI-kódolt kód} leképezés
-                               │     (fallback: stations/events qrCode mező,
-                               │      majd doc-id — a migráció idejére)
-                               │  2. helyszín-ellenőrzés (Haversine, radius)
-                               │  3. tranzakció: user_progress jóváírás
-                               │  4. jutalom-feloldás + unlockedCount
-                               │  5. public_leaderboard szinkron
-                               ▼
-                           Firestore (Admin SDK, a rules megkerülésével)
+Mobil app ──(nyers kód + GPS + projectId)──► redeemQr (europe-west1, App Check)
+                                           │ 1. qr_codes/{URI-kódolt kód} leképezés
+                                           │    (tartalék: stations/events qrCode mező,
+                                           │     majd doc-id)
+                                           │ 2. település-ellenőrzés (wrong_project)
+                                           │ 3. helyszín-ellenőrzés (Haversine, radius / 150 m)
+                                           │ 4. tranzakció: user_progress jóváírás
+                                           │ 5. túra-teljesítés, ranglista-szinkron
+                                           │ 6. jutalmak (csak a település sajátjai)
+                                           ▼
+                                       Firestore (Admin SDK)
+
+Mobil (jutalmak képernyő) ──► reconcileAchievements (App Check)
+                               → utólag teljesült jutalmak feloldása
 ```
 
-- **`functions/lib/redeem-core.js`** — a teljes jóváírási logika, injektált
-  db-vel; a `redeemQr` opcionális `lat`/`lng`-t is fogad, és ha a cél helyhez
-  kötött (van koordinátája) és a pozíció túl messze (állomásonkénti `radius`
-  vagy alap 150 m), `rejected: 'out_of_range'`-et ad vissza a jóváírás helyett.
-  30 unit teszt fedi (in-memory Firestore-stub, `npm test`).
-- **`qr_codes` kollekció** — kód → cél (állomás/esemény) leképezés; csak admin
-  írhatja/olvashatja, kliens egyáltalán nem. Az admin felület mentéskor/
-  törléskor automatikusan karbantartja (`admin/src/utils/qrMapping.js`),
-  ütközésvédelemmel.
-- **Flutter** — szerver-először: a `QrProcessingService` a függvényt hívja;
-  ha az nincs deployolva (`not-found`), erre a futásra visszavált a legacy
-  kliensoldali útra. Ismeretlen kódra a szerver `found:false`-t ad (nem
-  hibát), így az offline várólista poison-kezelése változatlanul működik.
-  Tranziens hálózati hiba továbbdobódik, a várólista újrapróbálja.
-- **Helyszín-ellenőrzés (GPS)** — a `LocationService` a beolvasáskor lekéri az
-  eszközpozíciót; a `processByCode` beküldi a szervernek (és a legacy úton maga
-  is ellenőrzi). Túl nagy távolságnál `QrOutOfRangeException` → a UI „menj
-  közelebb" üzenetet ad. Offline beolvasásnál a pozíció a várólistába kerül, és
-  a szinkronkor a szerver is ellenőrzi. Platform-engedélyek: Android
-  `ACCESS_FINE/COARSE_LOCATION` (manifest), iOS
-  `NSLocationWhenInUseUsageDescription` (Info.plist). A pozíció opcionális:
-  hiányában a szerver átengedi (részletek és korlátok:
-  `docs/SZAKDOLGOZAT_BIZTONSAG.md` 3.4/5. szakasz).
+- **`functions/lib/redeem-core.js`** – a teljes jóváírási és egyeztetési logika,
+  injektált adatbázissal (`redeemQrCore`, `reconcileAchievementsCore`); a
+  `functions/test/` alatt memóriabeli Firestore-hamisítvánnyal, a
+  `firestore-tests/` alatt valódi emulátorral tesztelt.
+- **`qr_codes` kollekció** – kód → cél (állomás/esemény) leképezés; csak admin és
+  a szerver olvashatja. Az admin felület mentéskor/törléskor karbantartja
+  (`admin/src/utils/qrMapping.js`), ütközésvédelemmel.
+- **Mobil** – a `QrProcessingService` csak a szervert hívja. Ismeretlen kódra a
+  szerver `found:false`-t ad (végleges hiba, az offline sor eldobja); a nem
+  elérhető függvény (`QrServerUnavailableException`) és a hálózati hiba átmeneti,
+  az offline sor később újrapróbálja. Kliensoldali jóváírási tartalék nincs: a
+  lezárt szabályok mellett nem is működhetne.
+- **Helyszín-ellenőrzés** – a `LocationService` a beolvasáskor lekéri a pozíciót,
+  a szerver az állomás koordinátáihoz méri. Offline beolvasásnál a pozíció a sorba
+  kerül, a kliens a biztosan elutasítandó beolvasást már a sorba állítás előtt
+  kiszűri. A pozíció opcionális: hiányában a szerver átengedi (lásd
+  `docs/SZAKDOLGOZAT_BIZTONSAG.md`).
 
-## Üzembe helyezés (sorrend számít!)
+## A lezárt szabályok (`firestore.rules`)
 
-> **Előfeltétel**: a Cloud Functions **Blaze (pay-as-you-go)** Firebase-csomagot
-> igényel. A Spark (ingyenes) csomagon a deploy elutasításra kerül — az app
-> ilyenkor is működik, a legacy fallback úton.
+```
+match /user_progress/{userId} {
+  allow read: if isOwner(userId) || isAdmin();
+  allow write: if isAdmin();
+  allow create: if isOwner(userId) && isZeroedProgress(request.resource.data);
+  allow update: if isOwner(userId)
+    && request.resource.data.diff(resource.data).affectedKeys()
+         .hasOnly(['pendingAchievementBanner']);   // értesítés nyugtázása
+  match /{subcollection}/{docId} {
+    allow read: if isOwner(userId) || isAdmin();
+    allow write: if isAdmin();                       // jutalmak: csak szerver/admin
+  }
+}
+```
 
-1. **Függvény deploy**
-   ```bash
-   firebase deploy --only functions
-   ```
-2. **qr_codes backfill** (egyszeri, idempotens)
-   ```bash
-   cd functions
-   GOOGLE_APPLICATION_CREDENTIALS=<service-account.json> node scripts/backfill-qr-codes.mjs
-   ```
-   Ütközéseket (két elem azonos QR-értékkel) kiírja — ezeket az admin
-   felületen kell feloldani.
-3. **Ellenőrzés**: mobil beolvasás után a Functions log mutatja a hívást;
-   a pontnak a szerveren kell jóváíródnia.
-4. **Rules lockdown** — CSAK akkor, ha a szerver-utas mobil verzió már kint
-   van (a régi, tisztán kliensoldali app-verziók ettől elromlanak!).
-   A `firestore.rules`-ban a `user_progress` blokk cseréje:
+A települési ranglistát (`leaderboards/{projectId}/entries`) kliens nem írhatja. A
+régi, globális `public_leaderboard` írása a kereszt-ellenőrzés
+(`points == user_progress.totalPoints`) miatt a lezárt haladás mellett
+hamisíthatatlan; a szerver a még nem frissített appverziók miatt továbbra is írja.
 
-   ```
-   match /user_progress/{userId} {
-     allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-     allow write: if isAdmin();
+## Üzembe helyezés
 
-     // Regisztráció: nullázott create továbbra is kliensről történik.
-     allow create: if isSignedIn() && request.auth.uid == userId
-       && (!request.resource.data.keys().hasAny(['totalPoints'])
-           || request.resource.data.totalPoints == 0)
-       && (!request.resource.data.keys().hasAny(['completedStations'])
-           || request.resource.data.completedStations.size() == 0)
-       && (!request.resource.data.keys().hasAny(['completedEvents'])
-           || request.resource.data.completedEvents.size() == 0)
-       && (!request.resource.data.keys().hasAny(['completedTripIds'])
-           || request.resource.data.completedTripIds.size() == 0);
+```bash
+firebase deploy --only functions
+firebase deploy --only firestore:rules,firestore:indexes,storage
+```
 
-     // Az egyetlen megengedett kliens-update: a jutalom-banner nyugtázása.
-     allow update: if isSignedIn() && request.auth.uid == userId
-       && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['pendingAchievementBanner']);
-
-     // ... alkollekciók változatlanul ...
-   }
-   ```
-
-   A `public_leaderboard` szabályát nem kell szigorítani: a meglévő
-   kereszt-ellenőrzés (points == user_progress.totalPoints) a lezárt
-   user_progress mellett már önmagában is hamisíthatatlan.
-
-5. **Opcionális utolsó lépés (teljes enumeráció-védelem)**: a `qrCode` mező
-   eltávolítása a publikus `stations`/`events` dokumentumokból és a doc-id
-   fallback kivezetése a függvényből. A kinyomtatott QR-matricák érvényben
-   maradnak (az értékük a `qr_codes` leképezésben él tovább). Ehhez az admin
-   PDF-exportot a `qr_codes` kollekcióból kell kiszolgálni.
+1. **Függvények** (köztük az új `reconcileAchievements`).
+2. **`qr_codes` feltöltése** (egyszeri, idempotens), ha még nem futott:
+   `cd functions && GOOGLE_APPLICATION_CREDENTIALS=<service-account.json> node scripts/backfill-qr-codes.mjs`
+3. **Szabályok.** A szerver-utas mobilverzió (App Distribution) kiadása után. A régi,
+   kliensoldali jóváírású verziók ezután nem tudnak pontot írni, és a jutalmak
+   képernyőjük egyeztetése sem működik.
+4. **Opcionális:** a `qrCode` mező eltávolítása a nyilvános `stations`/`events`
+   dokumentumokból és a doc-id tartalék kivezetése a függvényből (teljes
+   enumeráció-védelem). Ehhez a mobil offline QR-felismerését is a leképezésre
+   kell átállítani, mert az jelenleg a gyorsítótárazott `qrCode` mezőt használja.
 
 ## Helyi kipróbálás emulátorral
 
@@ -117,57 +99,25 @@ Mobil app ──(nyers kód + GPS)──► redeemQr Cloud Function (europe-west
 firebase emulators:start          # functions + firestore + auth (firebase.json)
 ```
 
-Flutter oldalon fejlesztéskor irányítsd a függvényhívást az emulátorra
-(pl. a main.dart-ban, debug módban):
+Flutter oldalon fejlesztéskor a függvényhívás az emulátorra irányítható:
 
 ```dart
 FirebaseFunctions.instanceFor(region: 'europe-west1')
     .useFunctionsEmulator('localhost', 5001);
 ```
 
-## Push értesítések (notifyOnNewEvent)
+## Push-értesítések (notifyOnNewEvent)
 
-A `functions/` ugyanebben a workspace-ben tartalmaz egy `notifyOnNewEvent`
-Firestore-triggert: új `events/{id}` dokumentum létrehozásakor push-üzenetet
-küld az `events` FCM-topicra. Az üzenetet a tesztelhető
-`functions/lib/notification-builder.js` állítja össze (cím, dátum+helyszín,
-rövidített leírás). A mobil kliens (`NotificationService`) bejelentkezés után
-engedélyt kér és feliratkozik a topicra; kijelentkezéskor leiratkoztatható.
+Új `events/{id}` dokumentum létrehozásakor push-üzenet megy az `events`
+FCM-topicra; az üzenetet a tesztelt `functions/lib/notification-builder.js`
+állítja össze. A mobil (`NotificationService`) bejelentkezés után engedélyt kér és
+feliratkozik.
 
-Ez is a `firebase deploy --only functions` paranccsal élesedik (Blaze-csomag).
-Androidon opcionálisan létrehozható egy `events` nevű notification-csatorna a
-natív rétegben; ennek hiányában az FCM a default csatornát használja.
+## GDPR-adatjogok (exportUserData / deleteMyAccount)
 
-## GDPR adatjogok (exportUserData / deleteMyAccount)
+- **`exportUserData`** (20. cikk): a hívó összes adatának JSON-exportja; a mobil
+  fájlba írja és a megosztó lapon felkínálja.
+- **`deleteMyAccount`** (17. cikk): a hívó minden dokumentumának törlése, a
+  hibabejelentések anonimizálása, végül az Auth-fiók törlése.
 
-A `functions/` két callable-t is kínál a felhasználó adatjogaihoz
-(`functions/lib/gdpr-core.js`, injektált db-vel, teljesen tesztelt):
-
-- **`exportUserData`** (GDPR 20. cikk — adathordozhatóság): a hívó saját
-  adatainak teljes összegyűjtése (profil, haladás + alkollekciók, ranglista-
-  bejegyzés, foglalt felhasználónevek, hibabejelentések). A mobil kliens
-  (`AccountService.exportAndShare`) JSON-fájlba írja és megnyitja a rendszer
-  megosztó lapját.
-- **`deleteMyAccount`** (GDPR 17. cikk — törléshez való jog): a hívó összes
-  dokumentumának törlése (`user_progress` + alkollekciók, `users`,
-  `public_leaderboard`, foglalt `usernames`), a hibabejelentések
-  **anonimizálásával** (nem törlés — a hiba üzemeltetési értéke megmarad, a
-  személyes azonosítók lenullázódnak), végül az Auth-fiók törlése. A mobil
-  ezután helyben kijelentkezik, és az AuthGate a bejelentkező képernyőre vált.
-
-Mindkettő `firebase deploy --only functions` paranccsal élesedik (Blaze).
-A művelet kizárólag a hitelesített hívó saját adatain dolgozik (a callable az
-`request.auth.uid`-ből dolgozik, nem kliens-paraméterből).
-
-## Tesztek
-
-| Réteg | Teszt | Darab |
-|---|---|---|
-| Cloud Function (mag + értesítés + helyszín + GDPR) | `functions/test/*.test.js` (node:test) | 37 |
-| Cloud Function (emulátor ellen: redeem + GDPR) | `firestore-tests/tests/*-emulator.test.js` | 9 |
-| Firestore rules (emulátor) | `firestore-tests/tests/rules-*.test.js` | 22 |
-| Admin util | `admin/src/utils/qrMapping.test.js` (Vitest) | 13 |
-| Flutter (QR + helyszín) | `mobile_app/test/qr_processing_service_test.dart`, `location_service_test.dart` | 30 |
-
-A CI (`.github/workflows/ci.yml`) minden réteget futtat; a rules-job Temurin
-JDK 21 + `firebase emulators:exec` alatt fut.
+Mindkettő kizárólag a hitelesített hívó adataival dolgozik (`request.auth.uid`).

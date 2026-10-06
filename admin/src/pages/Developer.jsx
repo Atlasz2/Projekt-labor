@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useProject } from '../context/ProjectContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { DEFAULT_PROJECT_ID } from '../utils/projects';
 import StateCard from '../components/StateCard';
 import '../styles/Developer.css';
 
@@ -13,7 +15,12 @@ function Developer() {
     loading,
     setActiveProjectId,
     createProject,
+    renameProject,
+    deleteProject,
   } = useProject();
+
+  const [editing, setEditing] = useState({ id: null, name: '' });
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,6 +39,37 @@ function Developer() {
       setError(err?.message || 'Nem sikerült létrehozni a települést.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const runSafely = async (action, fallbackMessage) => {
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      return true;
+    } catch (err) {
+      setError(err?.message || fallbackMessage);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRename = async (e) => {
+    e.preventDefault();
+    const ok = await runSafely(
+      () => renameProject(editing.id, editing.name),
+      'Nem sikerült átnevezni a települést.',
+    );
+    if (ok) setEditing({ id: null, name: '' });
+  };
+
+  const handleDelete = async () => {
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    if (target) {
+      await runSafely(() => deleteProject(target.id), 'Nem sikerült törölni a települést.');
     }
   };
 
@@ -75,18 +113,65 @@ function Developer() {
         <ul className="project-list">
           {projects.map((p) => {
             const isActive = p.id === activeProjectId;
+            const isEditing = editing.id === p.id;
             return (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  className={`project-item${isActive ? ' active' : ''}`}
-                  onClick={() => setActiveProjectId(p.id)}
-                  aria-current={isActive ? 'true' : undefined}
-                >
-                  <span className="project-item-name">{p.name || p.id}</span>
-                  <span className="project-item-id">{p.id}</span>
-                  {isActive && <span className="project-item-badge">aktív</span>}
-                </button>
+              <li key={p.id} className="project-row">
+                {isEditing ? (
+                  <form className="project-rename" onSubmit={handleRename}>
+                    <input
+                      type="text"
+                      value={editing.name}
+                      onChange={(e) => setEditing({ id: p.id, name: e.target.value })}
+                      aria-label={`${p.name || p.id} új neve`}
+                      disabled={busy}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setEditing({ id: null, name: '' })}
+                      disabled={busy}
+                    >
+                      Mégse
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={busy || !editing.name.trim()}>
+                      Mentés
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className={`project-item${isActive ? ' active' : ''}`}
+                      onClick={() => setActiveProjectId(p.id)}
+                      aria-current={isActive ? 'true' : undefined}
+                    >
+                      <span className="project-item-name">{p.name || p.id}</span>
+                      <span className="project-item-id">{p.id}</span>
+                      {isActive && <span className="project-item-badge">aktív</span>}
+                    </button>
+                    <div className="project-row-actions">
+                      <button
+                        type="button"
+                        className="btn-edit"
+                        onClick={() => setEditing({ id: p.id, name: p.name || p.id })}
+                        disabled={busy}
+                      >
+                        Átnevezés
+                      </button>
+                      {p.id !== DEFAULT_PROJECT_ID && (
+                        <button
+                          type="button"
+                          className="btn-delete"
+                          onClick={() => setDeleteTarget(p)}
+                          disabled={busy}
+                        >
+                          Törlés
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </li>
             );
           })}
@@ -113,6 +198,15 @@ function Developer() {
           </button>
         </form>
       </section>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Település törlése"
+        message={`Biztosan törlöd: ${deleteTarget?.name || deleteTarget?.id || ''}? Csak olyan település törölhető, amelyhez már nem tartozik tartalom vagy admin.`}
+        confirmText="Törlés"
+        onConfirm={handleDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

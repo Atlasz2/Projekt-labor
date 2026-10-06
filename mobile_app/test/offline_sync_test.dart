@@ -50,7 +50,7 @@ void main() {
     test('toString names the unknown code (drives the scan error message)', () {
       expect(
         const QrCodeNotFoundException('XYZ').toString(),
-        'Ismeretlen QR kod: XYZ',
+        'Ismeretlen QR-kód: XYZ',
       );
     });
 

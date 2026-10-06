@@ -52,7 +52,9 @@ class _CameraScreenState extends State<CameraScreen> {
     try {
       final doc = await _firestore.collection('user_progress').doc(uid).get();
       final data = doc.data() ?? <String, dynamic>{};
-      final completed = List<String>.from(data['completedStations'] ?? const []);
+      final completed = List<String>.from(
+        data['completedStations'] ?? const [],
+      );
       if (completed.isEmpty) {
         if (!mounted) return;
         setState(() => _history = []);
@@ -103,8 +105,10 @@ class _CameraScreenState extends State<CameraScreen> {
       // Offline helyszín-kapu: ha a cache-elt állomás helyhez kötött és a
       // pozíció túl messze, azonnal elutasítjuk (nem tesszük sorba).
       if (cachedStation != null) {
-        final rejection =
-            QrProcessingService.locationRejection(cachedStation, location);
+        final rejection = QrProcessingService.locationRejection(
+          cachedStation,
+          location,
+        );
         if (rejection != null) {
           if (!mounted) return;
           setState(() {
@@ -162,7 +166,6 @@ class _CameraScreenState extends State<CameraScreen> {
       if (uid == null) throw Exception('Nincs bejelentkezett felhasználó');
 
       final result = await QrProcessingService.processByCode(
-        uid: uid,
         code: code,
         location: location,
       );
@@ -187,7 +190,8 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() {
         _loading = false;
         _station = null;
-        _errorMsg = 'Ez a QR-kód egy másik település túrájához tartozik, '
+        _errorMsg =
+            'Ez a QR-kód egy másik település túrájához tartozik, '
             'ezért itt nem írható jóvá.';
       });
     } on QrOutOfRangeException catch (e) {
@@ -195,14 +199,35 @@ class _CameraScreenState extends State<CameraScreen> {
       setState(() {
         _loading = false;
         _station = null;
-        _errorMsg = 'Túl messze vagy az állomástól (${e.distance} m). '
+        _errorMsg =
+            'Túl messze vagy az állomástól (${e.distance} m). '
             'Menj közelebb az állomáshoz, és próbáld újra!';
       });
-    } catch (e) {
+    } on QrCodeNotFoundException {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _errorMsg = 'Hiba: ${e.toString().replaceAll('Exception: ', '')}';
+        _station = null;
+        _errorMsg =
+            'Ez a QR-kód egyetlen állomáshoz vagy rendezvényhez sem tartozik.';
+      });
+    } catch (e) {
+      // Átmeneti (hálózati / szerver) hiba: a beolvasás ne vesszen el – az
+      // offline sorba kerül, és a kapcsolat helyreállásakor jóváíródik.
+      debugPrint('QR-beváltás átmenetileg sikertelen: $e');
+      final queuedNow = await LocalCache.enqueuePendingQr(
+        code,
+        lat: location?.lat,
+        lng: location?.lng,
+      );
+      unawaited(PendingQrSyncService.start());
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _station = null;
+        _errorMsg = queuedNow
+            ? 'A kapcsolat most nem stabil. A beolvasást elmentettük, és automatikusan jóváírjuk, amint lehet.'
+            : 'Ez a QR-kód már szinkronizálásra vár.';
       });
     }
   }
@@ -456,4 +481,3 @@ class _CameraScreenState extends State<CameraScreen> {
     );
   }
 }
-

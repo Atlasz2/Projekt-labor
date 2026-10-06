@@ -44,9 +44,10 @@ function applyTransforms(existing, incoming) {
 }
 
 class FakeDocSnapshot {
-  constructor(id, data) {
+  constructor(id, data, ref) {
     this.id = id;
     this._data = data;
+    this.ref = ref;
   }
 
   get exists() {
@@ -73,7 +74,7 @@ class FakeDocRef {
   }
 
   async get() {
-    return new FakeDocSnapshot(this.id, this.store.data.get(this.path));
+    return new FakeDocSnapshot(this.id, this.store.data.get(this.path), this);
   }
 
   async set(data, options = {}) {
@@ -106,12 +107,24 @@ function resolveFieldPath(data, fieldPath) {
 }
 
 class FakeQuery {
-  constructor(store, path, filters, limitN, order) {
+  constructor(store, path, filters, limitN, order, group = null) {
     this.store = store;
     this.path = path;
     this.filters = filters;
     this.limitN = limitN;
     this.order = order;
+    this.group = group;
+  }
+
+  /** Közvetlen gyereke-e a dokumentum a lekérdezett kollekciónak (vagy a
+   *  collectionGroup esetén bármely azonos nevű kollekciónak). */
+  _inScope(path) {
+    if (this.group) {
+      const parts = path.split('/');
+      return parts.length % 2 === 0 && parts[parts.length - 2] === this.group;
+    }
+    const prefix = `${this.path}/`;
+    return path.startsWith(prefix) && !path.slice(prefix.length).includes('/');
   }
 
   where(field, op, value) {
@@ -124,27 +137,29 @@ class FakeQuery {
       [...this.filters, { field, op, value }],
       this.limitN,
       this.order,
+      this.group,
     );
   }
 
   orderBy(field, direction = 'asc') {
-    return new FakeQuery(this.store, this.path, this.filters, this.limitN, {
-      field,
-      direction,
-    });
+    return new FakeQuery(
+      this.store,
+      this.path,
+      this.filters,
+      this.limitN,
+      { field, direction },
+      this.group,
+    );
   }
 
   limit(n) {
-    return new FakeQuery(this.store, this.path, this.filters, n, this.order);
+    return new FakeQuery(this.store, this.path, this.filters, n, this.order, this.group);
   }
 
   async get() {
-    const prefix = `${this.path}/`;
     let docs = [];
     for (const [path, data] of this.store.data.entries()) {
-      if (!path.startsWith(prefix)) continue;
-      // Csak közvetlen gyerek dokumentumok (alkollekciók kizárva).
-      if (path.slice(prefix.length).includes('/')) continue;
+      if (!this._inScope(path)) continue;
       const matches = this.filters.every((f) => {
         const fieldValue = resolveFieldPath(data, f.field);
         if (f.op === 'array-contains') {
@@ -153,7 +168,9 @@ class FakeQuery {
         return fieldValue === f.value;
       });
       if (matches) {
-        docs.push(new FakeDocSnapshot(path.slice(prefix.length), data));
+        docs.push(
+          new FakeDocSnapshot(path.split('/').at(-1), data, new FakeDocRef(this.store, path)),
+        );
       }
     }
     if (this.order) {
@@ -198,6 +215,10 @@ class FakeTransaction {
   update(ref, data) {
     ref.update(data);
   }
+
+  delete(ref) {
+    ref.delete();
+  }
 }
 
 class FakeBatch {
@@ -233,6 +254,11 @@ export class FakeFirestore {
 
   async runTransaction(fn) {
     return fn(new FakeTransaction(this));
+  }
+
+  /** Az összes azonos nevű (al)kollekció együttes lekérdezése. */
+  collectionGroup(name) {
+    return new FakeQuery(this, null, [], undefined, undefined, name);
   }
 
   batch() {

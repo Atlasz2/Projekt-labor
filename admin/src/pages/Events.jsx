@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { db, storage } from '../firebaseConfig';
 import { updateDoc, doc } from 'firebase/firestore';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
-import { getQrValue, getQrImageUrl } from '../utils/qrHelpers';
+import { getQrValue } from '../utils/qrHelpers';
+import QrImage from '../components/QrImage';
 import { assertQrCodeAvailable, syncQrMapping, removeQrMapping, QrCodeCollisionError } from '../utils/qrMapping';
 import { safeString } from '../utils/safeString';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
@@ -272,7 +273,7 @@ function Events() {
                 <p className="editor-kicker">Rendezvény szerkesztő</p>
                 <h2>{editingId ? 'Rendezvény frissítése' : 'Új rendezvény'}</h2>
               </div>
-              <button className="editor-close" onClick={closeEditor}>x</button>
+              <button type="button" className="editor-close" onClick={closeEditor} aria-label="Bezárás" title="Bezárás">×</button>
             </div>
 
             <form onSubmit={handleSubmit} className="editor-grid">
@@ -364,12 +365,7 @@ function Events() {
               {event.imageUrl && (
                 <img src={event.imageUrl} alt={event.name} loading="lazy" className="content-cover" />
               )}
-              <img
-                src={getQrImageUrl(qrValue)}
-                alt={`QR ${event.name}`}
-                loading="lazy"
-                className="content-qr"
-              />
+              <QrImage value={qrValue} alt={`QR ${event.name}`} className="content-qr" />
               {event.description && <p>{event.description}</p>}
               <div className="card-actions">
                 <button className="btn-edit"   onClick={() => openEditor(event)}>Szerkesztés</button>

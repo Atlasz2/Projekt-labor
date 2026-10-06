@@ -29,8 +29,8 @@ import {
   formatDuration,
   getStoredRouteCoordinates,
 } from "../utils/routeService";
-import { getQrValue, getQrImageUrl } from "../utils/qrHelpers";
-import { fetchDataUrl } from "../utils/imageUpload";
+import { getQrValue, qrDataUrl } from "../utils/qrHelpers";
+import QrImage from "../components/QrImage";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import StateCard from "../components/StateCard";
@@ -54,7 +54,8 @@ const getDistanceValue = (distance) => {
 
 const getDurationLabel = (duration) => {
   if (typeof duration === "string" && duration.trim()) {
-    return duration.trim();
+    // Régi adatokban puszta percszám is előfordulhat („180”).
+    return /^\d+$/.test(duration.trim()) ? `${duration.trim()} perc` : duration.trim();
   }
 
   if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
@@ -520,7 +521,7 @@ function Trips() {
         if (i > 0) docPdf.addPage();
 
         const qrValue = getQrValue(station);
-        const qrData = await fetchDataUrl(getQrImageUrl(qrValue, 220));
+        const qrData = await qrDataUrl(qrValue, 440);
 
         docPdf.setFont("helvetica", "bold");
         docPdf.setFontSize(16);
@@ -552,8 +553,7 @@ function Trips() {
     try {
       const docPdf = new jsPDF({ unit: "mm", format: "a4" });
       const qrValue = getQrValue(station);
-      const qrUrl = getQrImageUrl(qrValue, 220);
-      const qrData = await fetchDataUrl(qrUrl);
+      const qrData = await qrDataUrl(qrValue, 440);
 
       docPdf.setFont("helvetica", "bold");
       docPdf.setFontSize(18);
@@ -571,7 +571,8 @@ function Trips() {
 
       const fileName = `${(station.name || "allomas").replace(/\s+/g, "_")}_QR.pdf`;
       docPdf.save(fileName);
-    } catch {      showMsg("Hiba a PDF letöltése közben");
+    } catch {
+      showMsg("Hiba a PDF letöltése közben");
     }
   };
 
@@ -635,7 +636,7 @@ function Trips() {
             >
             <div className="form-header">
               <h2>{editingId ? "Túra szerkesztése" : "Új túra hozzáadása"}</h2>
-              <button className="btn-close" onClick={handleCancel}>×</button>
+              <button type="button" className="btn-close" onClick={handleCancel} aria-label="Bezárás" title="Bezárás">×</button>
             </div>
 
             <form onSubmit={handleSubmit} className="beautiful-form">
@@ -683,15 +684,11 @@ function Trips() {
               </p>
 
               <div className="form-actions">
-                <button type="submit" className="btn-submit">
-                  {editingId ? "Frissítés" : "Létrehozás"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={handleCancel}
-                >
+                <button type="button" className="btn-secondary" onClick={handleCancel}>
                   Mégse
+                </button>
+                <button type="submit" className="btn-primary">
+                  {editingId ? "Frissítés" : "Létrehozás"}
                 </button>
               </div>
             </form>
@@ -718,7 +715,7 @@ function Trips() {
                 metrics?.distanceLabel ||
                 (trip.distance ? `${trip.distance} km` : "–");
               const durationLabel =
-                metrics?.durationLabel || trip.duration || "–";
+                metrics?.durationLabel || getDurationLabel(trip.duration) || "–";
 
               return (
                 <div key={trip.id} className="trip-card">
@@ -813,7 +810,6 @@ function Trips() {
                           <ul className="stations-list">
                             {tripStations.map((station, idx) => {
                               const qrValue = getQrValue(station);
-                              const qrUrl = getQrImageUrl(qrValue);
                               return (
                                 <li key={station.id} className="station-item">
                                   <div className="station-order-btns">
@@ -854,7 +850,7 @@ function Trips() {
                                     </button>
                                   </div>
                                   <div className="station-qr">
-                                    <img src={qrUrl} alt={`QR ${station.name}`} loading="lazy" />
+                                    <QrImage value={qrValue} alt={`QR ${station.name}`} />
                                     <button
                                       className="btn-qr-download"
                                       onClick={() => handleDownloadPdf(station, trip.name)}

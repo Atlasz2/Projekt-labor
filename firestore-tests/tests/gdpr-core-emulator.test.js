@@ -7,9 +7,10 @@ import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 import { collectUserData, deleteUserData } from '../../functions/lib/gdpr-core.js';
+import { renameUserCore } from '../../functions/lib/profile-core.js';
 
 const PROJECT = 'demo-gdpr-core';
 const uid = 'user-1';
@@ -84,4 +85,37 @@ test('deleteUserData valós Firestore-on: saját adat törlődik, idegen érinte
   // Idegen adat érintetlen
   assert.equal((await db.doc('users/masik').get()).exists, true);
   assert.equal((await db.doc('bug_reports/r2').get()).data().reported_by.user_id, 'masik-uid');
+});
+
+test('települési ranglista valós collectionGroup-pal: törléskor eltűnik, idegené marad', async () => {
+  await db.doc(`users/${uid}`).set({ name: 'Teszt Elek' });
+  await db.doc(`leaderboards/nagyvazsony/entries/${uid}`).set({ uid, displayName: 'Teszt Elek', points: 10 });
+  await db.doc(`leaderboards/tapolca/entries/${uid}`).set({ uid, displayName: 'Teszt Elek', points: 4 });
+  await db.doc('leaderboards/nagyvazsony/entries/masik').set({ uid: 'masik', displayName: 'Más', points: 3 });
+
+  const exported = await collectUserData({ db, uid });
+  assert.equal(exported.projectLeaderboardEntries.length, 2);
+
+  await deleteUserData({ db, uid });
+  assert.equal((await db.doc(`leaderboards/nagyvazsony/entries/${uid}`).get()).exists, false);
+  assert.equal((await db.doc(`leaderboards/tapolca/entries/${uid}`).get()).exists, false);
+  assert.equal((await db.doc('leaderboards/nagyvazsony/entries/masik').get()).exists, true);
+});
+
+test('névmódosítás valós Firestore-on: foglalás, profil és minden ranglista frissül', async () => {
+  await db.doc('usernames/teszt elek').set({ uid, normalized: 'teszt elek' });
+  await db.doc(`users/${uid}`).set({ name: 'Teszt Elek', displayName: 'Teszt Elek' });
+  await db.doc(`user_progress/${uid}`).set({ name: 'Teszt Elek', totalPoints: 10 });
+  await db.doc(`leaderboards/nagyvazsony/entries/${uid}`).set({ uid, displayName: 'Teszt Elek', points: 10 });
+
+  await renameUserCore({ db, FieldValue, uid, name: 'Kinizsi Pál' });
+
+  assert.equal((await db.doc('usernames/teszt elek').get()).exists, false);
+  assert.equal((await db.doc('usernames/kinizsi pál').get()).data().uid, uid);
+  assert.equal((await db.doc(`users/${uid}`).get()).data().displayName, 'Kinizsi Pál');
+  assert.equal((await db.doc(`user_progress/${uid}`).get()).data().name, 'Kinizsi Pál');
+  assert.equal(
+    (await db.doc(`leaderboards/nagyvazsony/entries/${uid}`).get()).data().displayName,
+    'Kinizsi Pál',
+  );
 });

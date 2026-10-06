@@ -3,13 +3,14 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 // Firestore doc limit is 1MB. We store the same URL in 3 fields
 // (imageUrl, photoUrls[0], photos[0].url) so max per-field = 150KB
 const MAX_INLINE_BYTES = 150_000;
+const STORAGE_TIMEOUT_MS = 30_000;
 
 /** FileReader dataURL — always works, never hangs */
 const readAsDataUrl = (blob) =>
   new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result);
-    r.onerror = () => reject(new Error("Nem sikerult beolvasni a fajlt."));
+    r.onerror = () => reject(new Error("Nem sikerült beolvasni a fájlt."));
     r.readAsDataURL(blob);
   });
 
@@ -38,7 +39,7 @@ export async function fileToOptimizedDataUrl(file) {
   const img = await new Promise((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error("A kep nem toltheto be tomoriteshez."));
+    el.onerror = () => reject(new Error("A kép nem tölthető be a tömörítéshez."));
     el.src = raw;
   });
 
@@ -68,27 +69,31 @@ export async function fileToOptimizedDataUrl(file) {
     if (dataUrl.length <= MAX_INLINE_BYTES) return dataUrl;
   }
 
-  throw new Error("A kep tul nagy. Valassz kisebb kepet (max ~1 MB).");
+  throw new Error("A kép túl nagy. Válassz kisebb képet (legfeljebb kb. 1 MB).");
 }
 
 export async function uploadImageWithFallback({ file, storage, folder }) {
-  if (!file) throw new Error("Nincs kivalasztott fajl.");
+  if (!file) throw new Error("Nincs kiválasztott fájl.");
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-  // Try Firebase Storage with a hard 5-second timeout.
-  // Without this, uploadBytes can hang forever when the bucket is not provisioned.
+  // Firebase Storage feltöltés kemény időkorláttal: enélkül az uploadBytes
+  // örökre függhet, ha a bucket nincs létrehozva. Nagyobb képeknél lassú
+  // mobilneten is legyen idő a feltöltésre, ezért 30 másodperc.
+  let timer;
   try {
     const storageRef = ref(storage, `${folder}/${Date.now()}_${safeName}`);
     const url = await Promise.race([
       uploadBytes(storageRef, file).then((snap) => getDownloadURL(snap.ref)),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("storage-timeout")), 30000),
-      ),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("storage-timeout")), STORAGE_TIMEOUT_MS);
+      }),
     ]);
-    return { url, mode: "storage", message: "Kep feltoltve." };
+    return { url, mode: "storage", message: "Kép feltöltve." };
   } catch {
     // Storage not available or timed out — fall through to inline
+  } finally {
+    clearTimeout(timer);
   }
 
   const url = await fileToOptimizedDataUrl(file);
@@ -98,7 +103,7 @@ export async function uploadImageWithFallback({ file, storage, folder }) {
     // Figyelmeztetes: a beagyazott (base64) kep a Firestore dokumentumba kerul,
     // ami erosen lassitja a betoltest. Csak vegso menedek.
     message:
-      "FIGYELEM: a kep a Storage helyett a dokumentumba agyazodott (lassitja az appot). Ellenorizd a Storage jogosultsagot es probald ujra.",
+      "FIGYELEM: a kép a Storage helyett a dokumentumba ágyazódott (lassítja az alkalmazást). Ellenőrizd a Storage-jogosultságot, és próbáld újra.",
   };
 }
 export const fetchDataUrl = async (url) => {

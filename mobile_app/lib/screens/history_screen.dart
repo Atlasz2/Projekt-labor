@@ -80,9 +80,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('Történet betöltése sikertelen: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Hiba: $e';
+        _error =
+            'A tartalom betöltése nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.';
         _isLoading = false;
       });
     }
@@ -130,9 +132,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w800,
-                      shadows: [
-                        Shadow(color: Colors.black54, blurRadius: 6),
-                      ],
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
                     ),
                   ),
                   background: Stack(
@@ -280,7 +280,10 @@ class _TimelineEntryState extends State<_TimelineEntry> {
               const SizedBox(height: 12),
               Text(
                 event['title']?.toString() ?? '',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               if (description.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -306,7 +309,8 @@ class _TimelineEntryState extends State<_TimelineEntry> {
                     height: 220,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => _placeholder(),
+                    errorBuilder: (context, error, stackTrace) =>
+                        _placeholder(),
                   ),
                 ),
               )

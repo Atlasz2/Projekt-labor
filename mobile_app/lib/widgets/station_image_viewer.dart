@@ -31,6 +31,7 @@ void showStationImageViewer(
                   child: OfflineImage.network(
                     photos[index],
                     fit: BoxFit.contain,
+                    decodeScale: 2,
                     errorBuilder: (_, _, _) => const Icon(
                       Icons.broken_image_outlined,
                       color: Colors.white54,

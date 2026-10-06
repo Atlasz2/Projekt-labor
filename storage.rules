@@ -32,7 +32,11 @@ service firebase.storage {
 
     match /{allPaths=**} {
       allow read: if true;
-      allow write: if isAdmin();
+      // Feltöltés csak képként és legfeljebb 10 MB-ig; törlésnél nincs új tartalom.
+      allow write: if isAdmin()
+        && (request.resource == null
+            || (request.resource.size < 10 * 1024 * 1024
+                && request.resource.contentType.matches('image/.*')));
     }
   }
 }

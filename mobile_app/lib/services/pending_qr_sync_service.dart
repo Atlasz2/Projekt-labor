@@ -61,7 +61,6 @@ class PendingQrSyncService {
       for (final entry in queueEntries) {
         try {
           await QrProcessingService.processByCode(
-            uid: uid,
             code: entry.key,
             location: LocalCache.getPendingQrLocation(entry.key),
           );

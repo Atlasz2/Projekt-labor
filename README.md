@@ -1,411 +1,142 @@
-﻿# Nagyvazsonyi Turist App
+# Nagyvázsonyi turisztikai QR-pontgyűjtő rendszer
 
-Turisztikai pontgyujto mobilalkalmazas Nagyvazsony szamara, admin webes fellolettel.
+Turisztikai pontgyűjtő rendszer Nagyvázsony számára: a látogatók a túraútvonalak
+állomásain elhelyezett QR-kódok beolvasásával helytörténeti tartalmat oldanak fel,
+pontot és jutalmakat gyűjtenek, és települési ranglistán versenyeznek. A
+tartalmat a település egy webes adminisztrációs felületen kezeli.
 
-## Projekt attekintes
-
-A rendszer ket fo komponensbol all:
-- **Flutter mobilapp** – turistak szamara: utvonalak, QR-beolvaso, pontgyujtes, offline tamogatas
-- **React admin panel** – tartalomkezelok szamara: allomások, turak, események, szallasok, ettermek kezelese
-
----
-
-## 2026-05-02 Minosegi javitasok
-
-Admin oldali clean-code es stabilitasi refaktor keszult:
-- Hook refaktor: a kezdeti adatbetoltes aszinkron inditasa kesleltetett effect-triggerrel, hogy ne legyen set-state-in-effect lint hiba.
-- Hoisting/hivatkozasi tisztitas: a nagyobb oldalak adatbetolto rutinjai atalakitasra kerultek, hogy ne legyen use-before-declare jellegu kockazat.
-- Prop contractek: a belso ujrahasznosithato komponensek (pl. megerosito dialog, foto-racs, terkep valasztok) PropTypes validaciot kaptak.
-- Logging tisztitas: felesleges console hivasok eltavolitva vagy fallback kommenttel kivaltva.
-- Admin tesztalap: Vitest bevezetve, kezdo automata teszttel a safeString utilhoz.
-
-## Technologiai stack
-
-### Admin (webes felulet)
-| Konyvtar | Verzio | Szerep |
+| Komponens | Könyvtár | Technológia |
 |---|---|---|
-| React | 19 | UI framework |
-| Vite | 7 | Build tool / dev server |
-| Material UI | 7 | Komponens konyvtar |
-| Firebase JS SDK | 12 | Firestore + Auth + Storage |
-| TanStack Query | 5 | Szerver-allapot, cache, automatikus ujratoltés |
-| React Router | 7 | Oldal-navigacio |
-| @react-google-maps/api | 2 | Google Maps terkep-valaszto |
-| jsPDF | 2 | QR kod PDF export |
+| Mobilalkalmazás (turisták) | `mobile_app/` | Flutter 3.38 (Dart ≥ 3.10), Android / iOS |
+| Adminisztrációs felület | `admin/` | React 19, Vite 7, Material UI 7, TanStack Query 5 |
+| Szerveroldali logika | `functions/` | Cloud Functions v2, Node 22, firebase-admin 14 |
+| Biztonsági szabályok | `firestore.rules`, `storage.rules` | Firestore / Storage Security Rules |
+| Emulátoros tesztek | `firestore-tests/` | `@firebase/rules-unit-testing`, Firestore-emulátor |
 
-### Mobilapp (Flutter)
-| Csomag | Verzio | Szerep |
+Firebase-projekt: `projekt-labor-a4b1c` (Blaze-csomag, régió: `europe-west1`).
+
+## Architektúra röviden
+
+- A kliensek a **tartalmat** (túrák, állomások, rendezvények stb.) közvetlenül a
+  Firestore-ból olvassák; a mobil offline gyorsítótárral (Firestore persistence +
+  Hive) hálózat nélkül is működik.
+- **Pontot kizárólag a szerver ír.** A mobil a `redeemQr` hívható függvénynek csak a
+  nyers QR-kódot, a beolvasáskori GPS-pozíciót és a kiadás települését küldi; a
+  feloldás (privát `qr_codes` leképezés), a helyszín-ellenőrzés (Haversine,
+  állomásonkénti `radius`, alap 150 m), a tranzakciós jóváírás, a túra-teljesítés,
+  a ranglista és a jutalmak a szerveren futnak. A `firestore.rules` a pontokat és a
+  feloldott jutalmakat a kliens elől teljesen lezárja.
+- **White-label:** minden tartalmi dokumentum `projectId` mezővel jelöli a
+  települést (hiánya = `nagyvazsony`). Az admin csak a saját települését, a
+  developer mindet kezeli. A mobil kiadás települése build-időben dől el
+  (`--dart-define=PROJECT_ID=…`).
+- Részletek: [docs/DATA_MODEL.md](docs/DATA_MODEL.md),
+  [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md),
+  [docs/SZAKDOLGOZAT_BIZTONSAG.md](docs/SZAKDOLGOZAT_BIZTONSAG.md).
+
+## Cloud Functions
+
+| Függvény | Hívó | Feladat |
 |---|---|---|
-| Flutter | 3.10+ | Framework |
-| firebase_core | 4.4 | Firebase inicializacio |
-| cloud_firestore | 6.1 | Adatbazis + offline cache |
-| firebase_auth | 6.1 | Felhasznalo-azonositas |
-| hive_flutter | - | Helyi perzisztencia (Hive) |
-| mobile_scanner | 7 | QR kod beolvaso |
-| flutter_map | 7 | Terkep megjelenites |
-| google_maps_flutter | 2.13 | Google Maps |
-| geolocator | 14 | GPS helymeghatarozas (QR helyszin-ellenorzes) |
-| cloud_functions | 5 | redeemQr hivas (szerveroldali jovairas) |
-| firebase_messaging | 15 | Push ertesitesek (esemeny-topic) |
-| connectivity_plus | 6 | Halozati allapot figyelése |
-| firebase_crashlytics | 5 | Crash reporting |
-| firebase_performance | 0.11 | Teljesitmeny monitorozas |
+| `redeemQr` | mobil (App Check) | QR-beváltás: validáció, jóváírás, jutalom, ranglista |
+| `reconcileAchievements` | mobil (App Check) | utólag teljesült jutalmak feloldása |
+| `renameMe` | mobil (App Check) | a játékos nevének módosítása (foglalás, profil, ranglisták) |
+| `exportUserData` | mobil (App Check) | GDPR 20. cikk – adatexport |
+| `deleteMyAccount` | mobil (App Check) | GDPR 17. cikk – saját fiók törlése |
+| `notifyOnNewEvent` | Firestore-trigger | push-értesítés új rendezvényről (`events` topic) |
+| `tripAnalytics` | admin | túra-tölcsér, átlagos idő, állomás-népszerűség |
+| `hikingRoute` | admin | gyalogos útvonal (BRouter → Valhalla → OSRM → egyenes) |
+| `inviteAdmin`, `setUserBanned`, `adminDeleteUser`, `seedProjectLeaderboards` | developer | felhasználó- és ranglistakezelés |
 
-### Backend / infrastruktura
-| Szolgaltatas | Szerep |
-|---|---|
-| Firebase Firestore | Realtime adatbazis (NoSQL) |
-| Firebase Authentication | Google / email bejelentkezes |
-| Firebase Storage | Kep / media tarolas |
-| Firebase Cloud Functions | Szerveroldali QR-validacio, push, GDPR adatjogok (Node 22) |
-| Firebase Crashlytics | Mobil crash analytics |
-| Firebase Performance | API/kepernyo latencia meres |
+## Mobilalkalmazás
 
----
+Képernyők (`lib/screens/`): bejelentkezés-kapu, regisztráció, főmenü, térkép és
+túrák, túranavigáció, QR-beolvasás, feloldott tartalmak, előzmények, profil
+(ranglista, jutalmak, adatvédelem), jutalmak előrehaladása, rendezvények, szállás
+és vendéglátás, kapcsolat és hibabejelentés.
 
-## Firebase adatmodell
+Offline működés:
+1. Firestore offline gyorsítótár (korlátlan méret).
+2. Hive-gyorsítótár a túrákhoz, állomásokhoz, jutalmakhoz és útvonalakhoz (12 óránként frissül).
+3. Offline QR-sor: hálózat nélkül a kód és a pozíció tartós sorba kerül, a kapcsolat
+   helyreállásakor (valódi elérhetőség-próba után) automatikusan beváltódik;
+   végleges hibánál az elem kikerül, átmeneti hibánál marad.
+4. Offline térképcsempék: a kiválasztott túra mentén letöltött CARTO-csempék
+   offline állapotban egy helyi csempeszolgáltatón keresztül jelennek meg a térképen.
+5. Offline képek: az állomásképek helyi fájlként, a megjelenítési mérethez
+   illesztett felbontásban dekódolva.
 
-### `stations` kollekcio
-```
-{
-  name:                 string,
-  description:          string,
-  latitude:             number,
-  longitude:            number,
-  points:               number,
-  qrCode:               string,   // egyedi QR ertek
-  tripId:               string,   // refs trips.id
-  funFact:              string,
-  unlockContent:        string,   // QR beolvasas utan latszik
-  extraInfo:            string,
-  photos:               [{url: string}],
-  photoUrls:            [string],
-  imageUrl:             string,   // borítokep
-  unlockContentImageUrl:string
-}
-```
+## Adminisztrációs felület
 
-### `trips` kollekcio
-```
-{
-  name:        string,
-  description: string,
-  difficulty:  string,
-  distance:    number,
-  duration:    number,
-  stationIds:  [string]
-}
-```
+Oldalak: áttekintő (napi pillanatképekkel), analitika, túrák (útvonaltervezéssel,
+túránkénti állomássorrenddel), állomások (térképes helykijelölés, QR-kód és
+nyomtatható PDF), térkép, rendezvények, szállások, vendéglátóhelyek, a település
+története, elérhetőségek, jutalmak, hibabejelentések, felhasználók, települések
+(developer). A QR-képeket a böngésző helyben generálja (`qrcode`), külső szolgáltatás nélkül.
 
-### `events` kollekcio
-```
-{
-  name:        string,
-  date:        string,
-  description: string,
-  location:    string,
-  points:      number,
-  qrCode:      string,
-  photos:      [{url: string}],
-  photoUrls:   [string],
-  imageUrl:    string
-}
-```
+## Fejlesztés
 
-### `accommodations` kollekcio
-```
-{
-  name:          string,
-  type:          hotel | guesthouse | apartment | campsite,
-  pricePerNight: string,
-  capacity:      string,
-  description:   string,
-  photos:        [{url: string}],
-  photoUrls:     [string],
-  imageUrl:      string
-}
-```
-
-### `restaurants` kollekcio
-```
-{
-  name:        string,
-  type:        hungarian | fish | cafe | pizzeria | icecream | bar,
-  cuisine:     string,
-  priceRange:  string,
-  description: string,
-  photos:      [{url: string}],
-  photoUrls:   [string],
-  imageUrl:    string
-}
-```
-
-### `about` kollekcio
-```
-{
-  year:        string,
-  title:       string,
-  description: string,
-  imageUrl:    string   // opcionalis, a tortenet esemeny kepje
-}
-```
-
-### `users` kollekcio
-```
-{
-  email:     string,
-  role:      admin | user,
-  points:    number,
-  name:      string,
-  createdAt: timestamp
-}
-```
-
-### `achievements` kollekcio
-```
-{
-  title:       string,
-  description: string,
-  threshold:   number,  // pont kuszob
-  icon:        string
-}
-```
-
----
-
-## Admin architektura
-
-```
-admin/src/
-├── App.jsx                        # Gyoker: QueryClientProvider + AdminAuthProvider + lazy routes
-├── context/
-│   └── AdminAuthContext.jsx       # Egyetlen auth forrás; logout(); isLoggedIn, userRole, userEmail
-├── hooks/
-│   ├── useFirestoreCollection.js  # Generikus CRUD hook (TanStack Query)
-│   └── usePhotoManager.js         # Fotokezeles: feltoltes, eltavolitás, Storage torles
-├── components/
-│   ├── Layout.jsx                 # Oldalsav, navigació, kijelentkezes
-│   ├── PhotoGrid.jsx              # Ujrahasznosithato foto-rasteres feltolto UI
-│   └── ConfirmDialog.jsx          # MUI modal megerosito dialog
-├── pages/
-│   ├── Login.jsx                  # Firebase Auth bejelentkezes
-│   ├── Dashboard.jsx              # Statisztikak, gyors muveletek
-│   ├── Stations.jsx               # Allomas CRUD – terkep, QR PDF export, 4-szekcious modal
-│   ├── Trips.jsx                  # Tura CRUD
-│   ├── Events.jsx                 # Rendezveny CRUD + foto + QR
-│   ├── Accommodations.jsx         # Szallas CRUD + foto
-│   ├── Restaurants.jsx            # Vendeglatohely CRUD + foto
-│   ├── Users.jsx                  # Felhasznalok es jogosultsagok
-│   ├── Achievements.jsx           # Dijak, jelvények kezelese
-│   ├── Map.jsx                    # Interaktiv terkep az osszes allomással
-│   ├── BugReports.jsx             # Mobil hibajelentesek megtekintése
-│   ├── SeedDatabase.jsx           # Adatbazis feltoltes teszt-adatokkal
-│   ├── Contact.jsx                # Kapcsolati informaciok szerkesztese
-│   └── About.jsx                  # Nagyvazsony tortenete timeline szerkesztese – imageUrl feltoltesssel
-└── utils/
-    ├── photoHelpers.js            # normalizePhotosFromDoc() + buildPhotoFields()
-    ├── qrHelpers.js               # getQrValue() + getQrImageUrl()
-    ├── safeString.js              # Firestore adatokhoz biztonságos string-konverzio
-    ├── imageUpload.js             # Firebase Storage feltoltes 5mp timeout + base64 fallback
-    └── resolveUserRole.js         # UID / email alapjan role lekerdezés
-```
-
-### Kulcs tervezési döntések
-
-**TanStack Query** (`useFirestoreCollection`):
-- A kollekcio neve lesz a cache kulcs (`['events']`, `['stations']`, stb.)
-- `staleTime: 60s` – visszanavigalaskor nincs felesleges ujratoltés
-- `invalidateQueries` mutacio utan – automatikus frissites
-
-**Foto-pipeline** (`usePhotoManager` + `buildPhotoFields`):
-- Feltoltes: Firebase Storage, 5s timeout, base64 fallback ha a Storage nem valaszol
-- Menteskor: `photos[{url}]`, `photoUrls[]`, `imageUrl` – mindhármat irja, Flutter barmely mezőt olvassa
-- Torleskor: `commitRemovals()` – csak mentés siker utan torli a Storage fajlt (cancel nem torli)
-
-**AdminAuthContext**:
-- Egyetlen `onAuthStateChanged` szukription az egesz alkalmazasban
-- `logout()` = `signOut(auth)`, a context kezeli a navigaciot
-- `resolveUserRole()` – UID, majd email-doc, majd email-query fallback lancban
-
----
-
-## Flutter architektura
-
-```
-mobile_app/lib/
-├── main.dart                         # Init: Hive, Firebase, Crashlytics, Performance, offline-cache
-├── firebase_options.dart             # Auto-generalt Firebase config
-├── screens/
-│   ├── auth_gate.dart                # Bejelentkezes kapujá (Firebase Auth stream)
-│   ├── name_screen.dart              # Felhasznalonev beallitas (jatekos profil)
-│   ├── main_menu_screen.dart         # Fooldal: turak, terkep, profil, QR
-│   ├── map_trips_screen.dart         # Interaktiv terkep az utvonalakkal
-│   ├── camera_screen.dart            # QR kod beolvaso
-│   ├── unlocked_content_screen.dart  # QR beolvasas utan feltart tartalom
-│   ├── history_screen.dart           # Beolvasasi elozmenyek
-│   ├── profile_screen.dart           # Pont egyenleg, jelvények
-│   ├── achievement_progress_screen.dart # Dijak előrehaladasa
-│   ├── events_screen.dart            # Esemenyek listaja
-│   ├── accommodation_screen.dart     # Szallasok listaja
-│   ├── contact_screen.dart           # Kapcsolat oldal
-│   └── bug_report_screen.dart        # Hibabejelentes
-└── services/
-    ├── bootstrap_service.dart        # App indit ellenorzesek
-    ├── local_cache.dart              # Hive wrapperek
-    ├── offline_image_service.dart    # Kepek helyi cachealasa
-    ├── offline_sync_service.dart     # Adatok letoltese offline hasznalatra
-    ├── offline_tiles_service.dart    # Terkep csempek offline cacheje
-    ├── pending_qr_sync_service.dart  # Offline QR beolvasasok szinkronizalása
-    └── qr_processing_service.dart    # QR kod feldolgozas, pont szamitas
-```
-
-### Offline tamogatas stratégia
-
-1. **Firestore offline cache** (`Settings.persistenceEnabled = true`) – Firestore automatikusan cacheli a dokumentumokat
-2. **Hive lokalis tarolas** – Gyors eleres, QR elozmények, felhasznalo adatok
-3. **Pending QR szinkron** – Ha offline QR-t olvasnak be, `pending_qr_sync_service` menti Hive-ba, majd szinkronizal ha halozat visszater
-4. **Offline terkep csempek** – `offline_tiles_service` letolti a terkep csempeket elore
-5. **Kepek cacheje** – `offline_image_service` local fajlba menti az allomask kepeeit
-
----
-
-## Fejlesztesi kornyezet
-
-### Elokovetelmeny
-
-- Node.js 18+
-- Flutter SDK 3.10+
-- Firebase CLI (`npm install -g firebase-tools`)
-- Google Maps API kulcs (`.env.local` ban)
-
-### Telepites
+Előfeltételek: Node.js 22, Flutter 3.38, Firebase CLI, a Firestore-emulátorhoz JDK 21.
 
 ```bash
-# Gyoker dependencies
-npm install
-
-# Admin dependencies
-npm --prefix admin install
-
-# Flutter dependencies
-cd mobile_app
-flutter pub get
+npm --prefix admin ci              # admin függőségek
+npm --prefix functions ci          # Cloud Functions függőségek
+npm --prefix firestore-tests ci    # emulátoros tesztek függőségei
+cd mobile_app && flutter pub get   # mobil függőségek
 ```
 
-### Futtatás
-
-```bat
-# Windows – mindkét app egyszerre
-start.bat
-```
-
-Vagy manuálisan:
-```bash
-# Admin (http://localhost:5173)
-npm --prefix admin run dev
-
-# Flutter Windows desktop
-flutter run --project-dir mobile_app -d windows
-```
-
-### Build
+Indítás Windowson egyszerre: `start.bat`. Külön:
 
 ```bash
-# Admin production build
-npm run admin:build
-
-# Flutter
-cd mobile_app
-flutter build windows
-flutter build apk
+npm run admin:dev                  # http://localhost:5173
+cd mobile_app && flutter run
 ```
 
-### Kornyezeti valtozok
+Helyi fejlesztéshez az admin a Firebase Emulator Suite-hoz is csatlakozhat, éles
+adatok érintése nélkül:
 
-`admin/.env.local`:
-```
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-VITE_GOOGLE_MAPS_API_KEY=...
+```bash
+firebase emulators:start --only auth,firestore,storage,functions
+VITE_USE_EMULATORS=true npm --prefix admin run dev
 ```
 
----
+Az admin a `admin/.env.local` fájlból olvassa a Firebase- és Maps-kulcsokat
+(minta: `admin/.env.example`). A mobil Android-konfigurációja
+(`google-services.json`) nem része a tárolónak.
 
-## Firebase biztonsag
+## Tesztek és minőség
 
-### Firestore szabalyok (`firestore.rules`)
+```bash
+npm run admin:test         # Vitest
+npm run functions:test     # node:test, memóriabeli Firestore-hamisítvánnyal
+npm run rules:test         # szabályok + integráció a Firestore-emulátor ellen (JDK 21)
+npm run mobile:test        # flutter test
+npm run admin:lint         # ESLint, 0 figyelmeztetés
+npm run mobile:analyze     # flutter analyze
+```
 
-- **Olvasas**: barmely bejelentkezett felhasznalo
-- **Iras `users` gyjtemeny**: csak a sajat doc-jat modosithatja (role mezo kivételevel)
-- **Iras tobbi gyjtemeny**: csak `admin` role-u felhasznalo
-- **`isAdmin()`**: UID-alapu elsodleges ellenorzes; email-doc fallback csak ha a doc `uid` mezoje megegyezik a caller UID-javal
-- **`user_progress` letrehozas**: felhasznalo csak nullazott szamlalokkal hozhatja letre (totalPoints == 0, ures completed-listak)
-- **`user_progress` iras**: felhasznalo csak monoton novelhet pontot / allomast (csokkenetes tiltva)
-- **`public_leaderboard` iras**: pontszam csak akkor fogadott el, ha megegyezik a `user_progress.totalPoints`-al (Firestore cross-referencia)
+A tesztelés részletei: [docs/TESTING.md](docs/TESTING.md). A GitHub Actions CI
+(`.github/workflows/ci.yml`) mind a négy réteget futtatja; a `release.yml` a `main`
+ágról kiadási APK-t épít és a Firebase App Distributionön keresztül a tesztelőkhöz juttatja
+([docs/APP_DISTRIBUTION.md](docs/APP_DISTRIBUTION.md)).
 
-### Szerveroldali QR-validacio (redeemQr Cloud Function)
+## Telepítés (Firebase)
 
-A pontjovairas szerveroldalon tortenik: a mobil kliens csak a nyers QR-kodot
-kuldi a `redeemQr` hivhato fuggvenynek (`functions/`), amely a privat
-`qr_codes` lekepezo kollekcion keresztul validal, tranzakcioban ir jova,
-jutalmat old fel es szinkronizalja a ranglistat — Admin SDK-val. A mobil
-kliens fuggveny-eloszor mukodik, legacy fallback-kel amig a fuggveny nincs
-deployolva (Blaze-csomag szukseges). Reszletek, uzembe helyezesi sorrend es
-a vegso rules-lockdown: [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md).
+```bash
+firebase deploy --only functions
+firebase deploy --only firestore:rules,firestore:indexes,storage
+```
 
-### Helyszin-ellenorzes (GPS)
+Sorrend: előbb a függvények, majd a szabályok – a mobil csak a szerveren keresztül
+ír pontot, a régi (kliensoldali jóváírású) alkalmazásverziók a lezárt szabályok
+mellett nem tudnak pontot írni. Részletek: [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md).
 
-A QR beolvasasakor a kliens rogziti az eszkoz pozíciojat, es beku ldi a
-`redeemQr`-nek. A szerver az allomas koordinataihoz meri (Haversine); ha a
-tavolsag meghaladja a kuszobot (allomasonkenti `radius` mezo, vagy alap
-150 m), a jovairas elmarad. Igy a lefenykepezett/megosztott QR-kod nem
-hasznalhato a helyszintol tavol. A pozicio opcionalis: hianyaban a szerver
-atengedi (regi kliensek, GPS nelkuli eszkozok) — ez tudatosan vallalt korlat,
-lasd [docs/SZAKDOLGOZAT_BIZTONSAG.md](docs/SZAKDOLGOZAT_BIZTONSAG.md).
+## Ismert korlátok
 
-### Storage szabalyok (`storage.rules`)
-
-- **Olvasas**: nyilvanos
-- **Iras**: csak bejelentkezett, admin role-u felhasznalok
-
----
-
-## Projekt statusz
-
-| Funkció | Státusz |
-|---|---|
-| Admin bejelentkezes (Firebase Auth) | Kész |
-| Allomás CRUD + terkep + QR PDF | Kész |
-| Tura CRUD + allomas-rendelés | Kész |
-| Rendezvény CRUD + foto + QR | Kész |
-| Szallas CRUD + foto | Kész |
-| Vendeglatohely CRUD + foto | Kész |
-| Felhasznalók és jogosultságok | Kész |
-| Dijak / jelvények | Kész |
-| Hibabejelentések admin kezelőfelület | Kész |
-| Flutter auth + profil | Kész |
-| Flutter QR beolvaso | Kész |
-| Flutter pont szamlas | Kész |
-| Esemény-QR beolvasas (mobil) | Kész |
-| Tranzakcios pontjovairas (dupla jóváírás ellen) | Kész |
-| Szerveroldali QR-validacio (Cloud Function) | Kész (deploy: Blaze-csomag) |
-| GPS helyszin-ellenorzes (QR csak az allomas kozeleben) | Kész |
-| Flutter offline mod | Kész |
-| Flutter terkep | Kész |
-| Admin UI teljes újratervezés (kék/slate téma, Inter betűtípus) | Kész |
-| Dark mode (Admin panel, localStorage-perzisztált) | Kész |
-| Nagyvázsony Történet képfeltöltés | Kész |
-| Flutter Push notifications (FCM, esemény-topic) | Kész (deploy: Blaze-csomag) |
-| GDPR adatexport + fiók törlés (mobil + Cloud Function) | Kész (deploy: Blaze-csomag) |
-| Admin email ertesitok | Nem implementalt |
-
----
-
-## Fejleszto
-
-Szakdolgozati projekt – Nagyvazsony turisztikai QR pontgyujto rendszer.
-Firebase projektazonosito: `projekt-labor-a4b1c`
+- A helyszín-ellenőrzés a pozíció hiányát átengedi (GPS nélküli eszközök), és a
+  pozíció szoftveresen hamisítható; az App Check a módosított klienseket szűri.
+- A mobilfiók e-mailes visszaállításának jelszava a névből képződik (tudatos
+  egyszerűsítés: pontgyűjtő fiók, nyilvános név + nem nyilvános e-mail).
+- Az admin felület a település szerinti szűrést kliensoldalon végzi; sok település
+  esetén szerveroldali `where('projectId', …)` lekérdezésre érdemes váltani.
+- Adminisztrátoroknak szóló e-mail-értesítések nincsenek.

@@ -1,203 +1,131 @@
 # A pontgyűjtő rendszer biztonsági architektúrája
 
-> Szakdolgozati fejezet-nyersanyag. A rendszer QR-alapú pontgyűjtő logikájának
-> fenyegetés-modellezését, a rétegzett védekezést és a maradék kockázatokat
-> tárgyalja. A hivatkozott forrásfájlok a repóban találhatók.
+> Szakdolgozati fejezet-nyersanyag: a QR-alapú pontgyűjtés fenyegetésmodellje, a
+> rétegzett védekezés és a maradék kockázatok. A hivatkozott fájlok a repóban
+> találhatók.
 
 ## 1. A probléma: kliensoldali bizalom egy pontgyűjtő játékban
 
-A rendszer gamifikált turisztikai alkalmazás: a felhasználók fizikai
-helyszíneken QR-kódot olvasnak be, amiért pontot kapnak, és a pontok alapján
-jutalmakat oldanak fel, illetve ranglistán versenyeznek. A pont tehát a
-rendszer „valutája" — ha hamisítható, az egész gamifikáció értékét veszti.
+A pont a rendszer „valutája”: jutalmak és ranglista-helyezés függ tőle, ezért ha
+hamisítható, a játékosítás értékét veszti. A kiinduló architektúrában a pontot a
+mobil kliens számolta és írta közvetlenül a Firestore-ba. Ez kényelmes, de a kliens
+nem megbízható: a Firebase-projekt API-kulcsa nyilvános, így egy bejelentkezett
+felhasználó a hivatalos alkalmazás nélkül is írhat mindent, amit a szabályok
+engednek. A fejezet azt mutatja be, hogyan került a rendszer a „bízz a kliensben”
+modellből a „bízz a szerverben” modellbe, tesztekkel bizonyított módon.
 
-A kiinduló architektúrában a pontszámítást a **mobil kliens** végezte és írta
-közvetlenül az adatbázisba (Firebase Firestore). Ez a mobil- és
-webalkalmazásoknál gyakori, kényelmes minta, de egy alapvető bizalmi hibát
-hordoz: **a kliens nem megbízható**. A Firestore biztonsági szabályai
-(`security rules`) korlátozzák ugyan, mit írhat egy hitelesített felhasználó,
-de a szabályok csak deklaratív feltételek — nem tudják kiváltani a
-szerveroldali üzleti logikát.
+## 2. Fenyegetésmodell
 
-A fejezet azt a folyamatot mutatja be, ahogy a rendszer a „bízz a kliensben"
-modellből a „bízz a szerverben" modellbe került, tesztekkel bizonyított
-módon.
+A támadó **hitelesített, de rosszindulatú felhasználó**: valódi fiókja van, és a
+hivatalos klienst megkerülve közvetlenül hívhatja a Firestore REST API-t, vagy
+módosított appot futtathat. Nem feltételezünk adatbázis-szintű hozzáférést vagy
+ellopott admin-fiókot.
 
-## 2. Fenyegetés-modell
-
-A vizsgált támadó egy **hitelesített, de rosszindulatú felhasználó**: valós
-fiókkal rendelkezik (bejelentkezett), és képes a hivatalos kliens megkerülésére
-— akár a Firestore REST API-t hívja közvetlenül a publikus API-kulccsal, akár
-módosított app-buildet futtat. Nem feltételezünk viszont adatbázis-szintű
-hozzáférést vagy ellopott admin-hitelesítést.
-
-| # | Támadási vektor | Cél | Kiinduló állapot |
-|---|---|---|---|
-| T1 | Pont-felfújás létrehozáskor | A saját `user_progress` doksi létrehozása magas `totalPoints`-szal | **Nyitva** |
-| T2 | Pont-felfújás módosítással | A saját `totalPoints` tetszőleges növelése update-tel | **Nyitva** |
-| T3 | Pontcsökkentés / állomás-eltávolítás | Adatrongálás, versenyző visszavetése | Zárva (monoton szabály) |
-| T4 | Más felhasználó adatának írása | Idegen pontszám/haladás manipulálása | Zárva |
-| T5 | Jogosultság-eszkaláció | Saját fiók `admin` szerepre emelése | Zárva |
-| T6 | Ranglista-hamisítás | Magas pont a ranglistán valódi teljesítmény nélkül | Zárva (kereszt-ellenőrzés) |
-| T7 | QR-kód enumeráció | Az összes QR-érték kigyűjtése beolvasás (helyszín) nélkül | **Nyitva** |
-| T8 | Tartalmi kollekció írása | Hamis állomás/jutalom létrehozása | Zárva |
-| T9 | Távoli beolvasás | Pont szerzése a helyszíntől távol (lefényképezett QR) | **Nyitva** |
-
-A négy **nyitott** vektor (T1, T2, T7, T9) adta a munka fókuszát.
+| # | Támadási vektor | Cél | Kiinduló állapot | Jelenlegi állapot |
+|---|---|---|---|---|
+| T1 | Pontfelfújás létrehozáskor | saját haladás létrehozása magas ponttal | nyitott | zárt (nullázott létrehozás) |
+| T2 | Pontfelfújás módosítással | saját pont tetszőleges növelése | nyitott | zárt (csak szerver ír) |
+| T3 | Pontcsökkentés, állomás eltávolítása | adatrongálás | zárt | zárt |
+| T4 | Más felhasználó adatának írása | idegen haladás manipulálása | zárt | zárt |
+| T5 | Jogosultság-eszkaláció | saját fiók admin szerepre emelése | zárt | zárt |
+| T6 | Ranglista-hamisítás | magas helyezés teljesítmény nélkül | zárt | zárt |
+| T7 | QR-kód-enumeráció | kódok kigyűjtése helyszíni jelenlét nélkül | nyitott | részben zárt |
+| T8 | Tartalmi kollekció írása | hamis állomás vagy jutalom | zárt | zárt (tenant-izolációval) |
+| T9 | Távoli beolvasás | pont lefényképezett kóddal, távolról | nyitott | visszaszorítva (GPS) |
+| T10 | Jutalom önfeloldása | jutalom (akár fizikai kedvezmény) teljesítés nélkül | nyitott | zárt (csak szerver ír) |
 
 ## 3. A védekezés rétegei
 
-A megoldás nem egyetlen kapcsoló, hanem egymásra épülő rétegek sora — a
-„defense in depth" elv szerint minden réteg akkor is korlátoz, ha egy másik
-kiesik.
+### 3.1 Firestore security rules
 
-### 3.1 Réteg: Firestore security rules
+- **UID-alapú admin-ellenőrzés**: az admin jogot a felhasználó UID-kulcsú `users`
+  dokumentumának `role` mezője dönti el; szerepkört csak developer adhat (T5). Az
+  e-mail-kulcsú tartalék csak egyező `uid` mezővel fogad el.
+- **Lezárt haladás**: a `user_progress` dokumentumot a kliens csak nullázva hozhatja
+  létre (T1), és csak a jutalom-értesítés nyugtázását módosíthatja; pontot,
+  teljesített listát és alkollekciót (feloldott jutalmak) csak a szerver vagy admin
+  írhat (T2, T3, T10).
+- **Ranglisták**: a települési ranglistát csak a szerver írja; a régi globális
+  ranglistán a pont csak a tárolt `totalPoints`-szal egyezhet (T6).
+- **Tenant-izoláció**: admin csak a saját települése tartalmát írhatja, és nem
+  mozgathat át tartalmat másik településre; a developer mindet kezeli (T8).
+- **Privát `qr_codes`**: kliens nem olvashatja (T7).
 
-Az első védvonal deklaratív. A `firestore.rules` néhány kulcsdöntése:
+### 3.2 Szerveroldali jóváírás és jutalom-egyeztetés (Cloud Functions)
 
-- **UID-alapú admin-ellenőrzés** (`adminByUid`): az admin jogot a felhasználó
-  dokumentumának UID-kulcsú változata dönti el, amit a felhasználó nem tud
-  meghamisítani (nem hozhat létre tetszőleges UID-jű doksit). Az email-alapú
-  fallback is csak akkor fogad el, ha a doksi `uid` mezője egyezik a hívóéval.
-- **Monoton haladás** (`isValidProgressUpdate`): a `totalPoints` nem
-  csökkenhet, a `completedStations` nem zsugorodhat (T3 zárva).
-- **Nullázott létrehozás**: a `user_progress` létrehozásakor a számlálóknak
-  nulláznak kell lenniük — ez zárja a T1 vektort.
-- **Ranglista kereszt-ellenőrzés**: a `public_leaderboard` bejegyzés
-  `points` mezője csak akkor fogadott el, ha megegyezik a felhasználó
-  `user_progress.totalPoints` értékével (T6 zárva). A védelem a
-  `user_progress` doksi létezését is megköveteli, hogy a hiányzó doksin
-  keresztüli megkerülés se működjön.
+A `redeemQr` hívható függvény a klienstől csak a nyers QR-kódot, a pozíciót és a
+kiadás települését kapja; minden mást Admin SDK-val maga állapít meg. A felhasználó
+azonosítója a tokenből jön, nem a kérésből.
 
-**Amit a rules nem tud**: a T2 vektort (update-tel való pont-növelés) nem
-lehet tisztán deklaratívan zárni, amíg a kliens írja a pontot — hiszen a
-legitim jóváírás is éppen pont-növelés. Ehhez szerveroldali logika kell.
+- **Atomicitás**: a jóváírás tranzakcióban fut (`arrayUnion` + `increment`), így
+  párhuzamos feldolgozás (élő beolvasás + offline sor) sem ír kétszer – emulátoros
+  teszt: négy párhuzamos hívásból pontosan egy ír.
+- **Település-ellenőrzés**: másik település kódja `wrong_project`; a jutalmak közül
+  csak a cél településéi oldódhatnak fel.
+- **Jutalom-egyeztetés**: a beolvasás nélkül teljesülő jutalmakat (utólag létrehozott
+  jutalom, top-N rangváltozás) a `reconcileAchievements` függvény oldja fel, így a
+  kliensnek nem kell írnia a jutalmak alkollekcióját.
 
-### 3.2 Réteg: szerveroldali validáció (Cloud Function)
+### 3.3 A QR-értékek elrejtése (T7)
 
-A döntő lépés a pontszámítás áthelyezése a kliensről a szerverre. A `redeemQr`
-hívható Cloud Function (`functions/`) fogadja a **nyers QR-kódot**, és Admin
-SDK jogosultsággal (a rules megkerülésével) maga végzi:
+A `stations`/`events` publikusan olvashatók, és tartalmazzák a `qrCode` mezőt. A
+kód → cél hozzárendelés a privát `qr_codes` kollekcióban él; a végső lépés a
+`qrCode` mező kivezetése a nyilvános dokumentumokból (a kinyomtatott matricák
+érvényesek maradnak). Az admin a QR-képeket helyben, böngészőben generálja, így a
+kódértékek harmadik félhez sem jutnak el (korábban egy külső QR-képszolgáltatás
+kapta meg őket).
 
-```
-Mobil app ──(csak a nyers kód)──► redeemQr Cloud Function
-                                     │  1. kód → cél feloldás (qr_codes)
-                                     │  2. tranzakció: pont + lista jóváírás
-                                     │  3. túra-teljesítés + jutalom-feloldás
-                                     │  4. ranglista-szinkron
-                                     ▼
-                                 Firestore (Admin SDK)
-```
+### 3.4 Helyszín-ellenőrzés (T9)
 
-Mivel a kliens már csak a nyers kódot küldi, a `user_progress` kliensoldali
-írása **teljesen lezárható** (T2 zárva) — ezt a `firestore.lockdown.rules`
-tartalmazza: az egyetlen megengedett kliens-update a jutalom-banner
-nyugtázása, minden más mezőt kizárólag a függvény vagy admin írhat.
+A kliens a beolvasáskor rögzíti a GPS-pozíciót, a szerver az állomás koordinátáihoz
+méri (Haversine); ha a távolság nagyobb a küszöbnél (állomásonkénti `radius`, alap
+150 m), `rejected: 'out_of_range'`. A mobil ugyanezt a képletet az offline sorba
+állítás előtt is alkalmazza (felesleges sorelemek kiszűrése, azonnali
+visszajelzés), de a döntés mindig a szerveren születik. Koordináta nélküli célok
+mentesülnek.
 
-Két tervezési részlet emelendő ki:
+### 3.5 App Check
 
-- **Atomicitás**: a jóváírás Firestore-tranzakcióban fut (`arrayUnion` +
-  `increment` transzformokkal), így két párhuzamos feldolgozás (pl. élő
-  beolvasás és az offline sor szinkronja) nem tud ugyanazért a kódért kétszer
-  pontot írni. Ezt emulátor ellen futó konkurrencia-teszt bizonyítja: négy
-  párhuzamos hívásból pontosan egy ír.
-- **Fokozatos bevezetés**: a mobil kliens „függvény-először" működik, de ha a
-  függvény nincs deployolva, visszaesik a régi kliensoldali útra. Így a
-  migráció nem igényel egyszerre-váltást, és a régi app-verziók sem törnek el.
+A mobilból hívott függvények (`redeemQr`, `reconcileAchievements`,
+`exportUserData`, `deleteMyAccount`) csak érvényes App Check-tokennel fogadnak
+hívást (Play Integrity / App Attest), ami a módosított klienseket és a közvetlen
+API-hívó szkripteket szűri.
 
-### 3.3 Réteg: a QR-értékek elrejtése (T7)
-
-A `stations` és `events` kollekciók publikusan olvashatók (a térképhez és a
-listákhoz kell), és eredetileg a `qrCode` mezőt is tartalmazták — így a teljes
-QR-készlet lekérdezhető volt beolvasás nélkül, otthonról (T7). A megoldás egy
-**privát leképező kollekció** (`qr_codes`): a kód → cél hozzárendelés ide
-kerül, amit csak admin és a szerver olvashat, a kliens egyáltalán nem. A
-végső lépésben a `qrCode` mező kivezethető a publikus dokumentumokból is,
-miközben a kinyomtatott QR-matricák érvényben maradnak (értékük a
-leképezésben él tovább).
-
-### 3.4 Réteg: helyszín-ellenőrzés (T9)
-
-A QR-kód enumeráció lezárása után is marad egy fizikai vektor: a matrica
-**lefényképezhető és megosztható**, így a kód önmagában megszerezhető a
-helyszínen járás nélkül (T9). Az ellenszer a beolvasáskori pozíció
-ellenőrzése: a kliens rögzíti az eszköz GPS-koordinátáját, és beküldi a
-`redeemQr`-nek, amely az állomás koordinátáihoz méri (Haversine-távolság). Ha
-a távolság meghaladja a küszöböt — állomásonként a `radius` mező, vagy
-alapból 150 m —, a jóváírás elmarad (`rejected: 'out_of_range'`).
-
-A védelem a szerveren dől el (a kliens megkerülhető), de a mobil a beolvasás
-pillanatában is ad UX-visszajelzést („Menj közelebb az állomáshoz"), és az
-offline sorba tett beolvasásokhoz elmenti a pozíciót, hogy a szinkronkor a
-szerver azt is ellenőrizhesse. A `latitude/longitude` mező nélküli célok
-(pl. helyhez nem kötött események) mentesülnek az ellenőrzés alól.
-
-Fontos, hogy ez **defense in depth réteg, nem tökéletes zár**: a pozíció
-opcionális (a GPS-mentes vagy engedélyt megtagadó eszközök is használhassák az
-appot), ezért a szerver a *hiányzó* pozíciót átengedi — egy elszánt támadó
-tehát pozíció nélkül küld, vagy hamis GPS-t szimulál. A réteg értéke, hogy a
-triviális távoli lekérdezést megszünteti, és a legitim felhasználót a
-helyszínre irányítja; a maradék kockázat tudatosan vállalt és dokumentált
-(lásd 5. szakasz).
-
-## 4. A védekezés bizonyítása: tesztelés
-
-A biztonság állítás, amíg nincs bizonyítva — ezért minden réteg automatizált
-teszttel van alátámasztva, több szinten:
+## 4. A védekezés bizonyítása
 
 | Szint | Mit bizonyít | Eszköz |
 |---|---|---|
-| Rules-tesztek (emulátor) | Minden támadási vektor elutasítva; a nyitott T2 dokumentált külön teszttel | `@firebase/rules-unit-testing` |
-| Lockdown rules-tesztek | Élesítés után T2 is zárul, a legitim banner-nyugtázás viszont megy | ua. |
-| Cloud Function (stub) | A jóváírási logika minden ága (állomás, esemény, túra, top-N) + a helyszín-ellenőrzés (Haversine, radius, out_of_range) | `node:test` + in-memory stub |
-| Cloud Function (emulátor) | Valós tranzakció-szemantika, konkurrencia-védelem, helyszín-elutasítás valós adaton | valós Firestore-emulátor |
-| Mobil (Flutter) | A legacy úti helyszín-kapu és a Haversine-számítás | `flutter test` + fake Firestore |
+| Szabálytesztek (emulátor, 26) | T1–T8 és T10 elutasítva, a legitim műveletek (regisztráció, nyugtázás, admin jutalom-odaítélés) engedettek, tenant-izoláció | `@firebase/rules-unit-testing` |
+| Cloud Functions (stub, 82) | a jóváírás és az egyeztetés minden ága, helyszín- és település-ellenőrzés, GDPR | `node:test` + memóriabeli Firestore |
+| Cloud Functions (emulátor, 9) | valós tranzakció-szemantika, konkurencia, helyszín-elutasítás, egyeztetés | Firestore-emulátor |
+| Mobil (95) | szerver-válasz értelmezése, hibaosztályozás, helyszín-előszűrés | `flutter test` |
 
-A rules-tesztek külön futtatják a **jelenlegi** és az **előkészített
-lockdown** szabálykészletet, így egyszerre látszik a mostani állapot és a
-deploy utáni cél. A T2 vektor tudatosan van bent egy `ISMERT KORLÁT` nevű
-tesztben: a rendszer őszintén dokumentálja, hogy a Cloud Function deploy-ja
-(Blaze-csomag) előtt ez a kockázat fennáll.
+## 5. Maradék kockázatok
 
-## 5. Maradék kockázatok és korlátok
-
-Egyetlen rendszer sem tökéletesen biztonságos; a felelős tervezés a maradék
-kockázatok kimondását is jelenti.
-
-- **A deploy előtti állapot**: amíg a `redeemQr` függvény nincs éles környezetbe
-  telepítve (ehhez a Firebase Blaze, azaz fizetős csomag kell), a T2 vektor
-  nyitva marad, és a rendszer a kliensoldali úton működik. A kód, a tesztek és
-  a lockdown szabályok készen állnak; a váltás egyetlen deploy + a szigorított
-  szabályok élesítése.
-- **GPS-hamisítás és a pozíció opcionalitása**: a helyszín-ellenőrzés (3.4)
-  a lefényképezett QR-kód triviális távoli beolvasását megszünteti, de nem
-  tökéletes zár. Egyrészt a pozíció opcionális (GPS-mentes eszközök miatt), így
-  egy támadó pozíció nélkül is küldhet; másrészt a GPS-koordináta szoftveresen
-  szimulálható (mock location). Szigorúbb módban a `redeemQr` elutasíthatná a
-  pozíció nélküli beolvasást, és integritás-ellenőrzést (pl. Play Integrity)
-  köthetne be — ez a jelen projekt keretein túlmutat.
-- **Ismételt beolvasás elleni védelem**: a jóváírás idempotens (egy állomás
-  egyszer ér pontot), de ez játékmenetbeli, nem biztonsági korlát.
+- **GPS-hamisítás és opcionális pozíció**: pozíció nélküli kéréssel vagy
+  szimulált pozícióval a helyszín-ellenőrzés megkerülhető. Szigorúbb módban a
+  szerver elutasíthatná a pozíció nélküli kérést, illetve sebességellenőrzést
+  (két beolvasás közti távolság / idő) végezhetne.
+- **QR-enumeráció a migráció alatt**: amíg a `qrCode` mező a nyilvános
+  dokumentumokban van, a kódok kigyűjthetők; ezt a mező kivezetése zárja.
+- **Fiók-visszaállítás**: az e-mailhez kapcsolt fiók jelszava a névből képződik;
+  aki ismeri valaki e-mail-címét és (nyilvános) nevét, hozzáférhet a fiókhoz.
+  Tudatos egyszerűsítés pontgyűjtő fióknál.
+- **Régi appverziók**: a lezárt szabályok után a kliensoldali jóváírást használó
+  régi verziók nem írhatnak pontot – ez szándékos, de frissítést igényel.
 
 ## 6. Összegzés
 
-A rendszer a „bízz a kliensben" modellből a rétegzett, szerveroldali
-validációval megtámogatott „bízz a szerverben" modellbe került. A kilenc
-azonosított támadási vektorból ötöt már a deklaratív szabályréteg zár; a
-maradék négyet a nullázott létrehozás (T1), a szerveroldali jóváírás (T2), a
-privát leképező kollekció (T7) és a GPS-alapú helyszín-ellenőrzés (T9) zárja
-vagy szorítja vissza. Minden réteget automatizált teszt bizonyít, valós
-Firestore-emulátor ellen is. A megoldás fokozatosan vezethető be, és a maradék
-kockázatok (deploy előtti állapot, GPS-hamisíthatóság) dokumentáltak — ez a
-felelős biztonsági tervezés mintája egy hallgatói projekt keretei között.
+A tíz azonosított vektorból hatot (T1, T3–T6, T8) önmagában a deklaratív
+szabályréteg zár; a pontfelfújást és a jutalom önfeloldását (T2, T10) a
+szerveroldali jóváírás és egyeztetés a lezárt szabályokkal együtt zárja, a
+QR-enumerációt a privát leképezés és a helyi QR-generálás szorítja vissza, a távoli
+beolvasást a GPS-ellenőrzés nehezíti. Minden réteget automatizált teszt bizonyít,
+valós Firestore-emulátor ellen is; a maradék kockázatok dokumentáltak.
 
----
+### Hivatkozott fájlok
 
-### Hivatkozott források a repóban
-
-- `firestore.rules` — a jelenlegi (élő) szabálykészlet
-- `firestore.lockdown.rules` — az előkészített, deploy utáni végső szabályok
-- `functions/lib/redeem-core.js` — a szerveroldali jóváírás magja
-- `functions/lib/notification-builder.js` — push-üzenet összeállítás
-- `firestore-tests/tests/` — rules- és emulátoros tesztek
-- `docs/SERVER_VALIDATION.md` — üzembe helyezési (deploy) útmutató
+- `firestore.rules`, `storage.rules`
+- `functions/lib/redeem-core.js`, `functions/index.js`
+- `firestore-tests/tests/` – szabály- és emulátoros tesztek
+- `docs/SERVER_VALIDATION.md` – üzembe helyezés

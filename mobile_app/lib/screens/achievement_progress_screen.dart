@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../services/achievement_service.dart';
 import '../services/leaderboard_service.dart';
 import '../utils/project_filter.dart';
-import '../config/app_config.dart';
 
 class AchievementProgressScreen extends StatefulWidget {
   const AchievementProgressScreen({super.key});
@@ -47,7 +46,7 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
     if (uid == null) {
       setState(() {
         _loading = false;
-        _error = 'Nincs bejelentkezett felhasznalo.';
+        _error = 'Nincs bejelentkezett felhasználó.';
       });
       return;
     }
@@ -58,13 +57,28 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
         _error = null;
       });
 
-      final progressDoc = await _firestore
-          .collection('user_progress')
-          .doc(uid)
-          .get();
-      final userDoc = await _firestore.collection('users').doc(uid).get();
-      final progressData = progressDoc.data() ?? {};
-      final userData = userDoc.data() ?? {};
+      // Előbb a szerveroldali egyeztetés: a már teljesült, de fel nem oldott
+      // jutalmak (utólag létrehozott jutalom, top-N rangváltozás) itt
+      // oldódnak fel, így az utána olvasott adatok már frissek.
+      await AchievementService.reconcile();
+
+      final results = await Future.wait<Object>([
+        _firestore.collection('user_progress').doc(uid).get(),
+        _firestore.collection('achievements').get(),
+        _firestore
+            .collection('user_progress')
+            .doc(uid)
+            .collection('unlocked_achievements')
+            .get(),
+        LeaderboardService.rankOf(uid),
+      ]);
+
+      final progressData =
+          (results[0] as DocumentSnapshot<Map<String, dynamic>>).data() ??
+          const <String, dynamic>{};
+      final achSnap = results[1] as QuerySnapshot<Map<String, dynamic>>;
+      final unlockedSnap = results[2] as QuerySnapshot<Map<String, dynamic>>;
+      final rank = results[3] as int;
 
       final stations =
           ((progressData['completedStations'] as List<dynamic>?) ?? []).length;
@@ -73,64 +87,12 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
       final points = _safeInt(progressData['totalPoints']);
       final completedTrips =
           ((progressData['completedTripIds'] as List<dynamic>?) ?? []).length;
-      final displayName =
-          userData['displayName']?.toString() ??
-          userData['name']?.toString() ??
-          progressData['name']?.toString() ??
-          'Felhasználó';
-
-      await LeaderboardService.syncEntry(
-        uid: uid,
-        displayName: displayName,
-        points: points,
-        completedStationsCount: stations,
-        completedEventsCount: events,
-      );
-
-      final results = await Future.wait([
-        _firestore.collection('achievements').get(),
-        _firestore
-            .collection('user_progress')
-            .doc(uid)
-            .collection('unlocked_achievements')
-            .get(),
-        // A település saját ranglistája adja a rangot.
-        _firestore
-            .collection('leaderboards')
-            .doc(AppConfig.projectId)
-            .collection('entries')
-            .orderBy('points', descending: true)
-            .get(),
-      ]);
-
-      final achSnap = results[0];
-      final unlockedSnap = results[1];
-      final leaderboardSnap = results[2];
 
       // Csak ennek a településnek a jutalmai.
-      final achievements = whereActiveProject(achSnap.docs)
-          .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
-          .toList();
-      final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
-      final rank = leaderboardSnap.docs.indexWhere((doc) => doc.id == uid) + 1;
-
-      // Feloldja a teljesített, de még fel nem oldott jutalmakat (pl. utólag
-      // létrehozott jutalom, vagy top-N rangváltozás más felhasználó miatt),
-      // majd bővíti a feloldott listát az újakkal.
-      final newlyUnlocked = await AchievementService.reconcileFromStats(
-        uid: uid,
-        achievements: achievements,
-        alreadyUnlocked: unlockedIds,
-        stations: stations,
-        events: events,
-        points: points,
-        trips: completedTrips,
-        rank: rank > 0 ? rank : 0,
-      );
-      final allUnlocked = {
-        ...unlockedIds,
-        ...newlyUnlocked.map((a) => a['id'].toString()),
-      };
+      final achievements = whereActiveProject(
+        achSnap.docs,
+      ).map((d) => <String, dynamic>{'id': d.id, ...d.data()}).toList();
+      final allUnlocked = unlockedSnap.docs.map((d) => d.id).toSet();
 
       if (!mounted) return;
       setState(() {
@@ -140,14 +102,16 @@ class _AchievementProgressScreenState extends State<AchievementProgressScreen> {
         _completedTrips = completedTrips;
         _achievements = achievements;
         _unlockedIds = allUnlocked;
-        _rank = rank > 0 ? rank : 0;
+        _rank = rank;
         _loading = false;
       });
     } catch (e) {
+      debugPrint('Jutalmak betöltése sikertelen: $e');
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Hiba a betolteskor: $e';
+        _error =
+            'A jutalmak betöltése nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.';
       });
     }
   }
@@ -536,4 +500,3 @@ class _TopStatCard extends StatelessWidget {
     );
   }
 }
-

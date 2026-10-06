@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { collection, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, deleteDoc, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { describeUsage, projectUsage } from '../utils/projectUsage';
 import { db } from '../firebaseConfig';
 import { useAdminAuth } from './AdminAuthContext';
 import { DEFAULT_PROJECT_ID, slugifyProjectId } from '../utils/projects';
@@ -119,6 +120,11 @@ export function ProjectProvider({ children }) {
       const clean = (name ?? '').trim();
       if (!clean) throw new Error('A projekt neve kötelező.');
       const id = slugifyProjectId(clean);
+      // Létező azonosítóra a setDoc némán felülírná a meglévő települést.
+      const existing = await getDoc(doc(db, 'projects', id));
+      if (id === DEFAULT_PROJECT_ID || existing.exists()) {
+        throw new Error(`Már létezik település ezzel az azonosítóval (${id}).`);
+      }
       await setDoc(doc(db, 'projects', id), {
         name: clean,
         isActive: true,
@@ -129,6 +135,42 @@ export function ProjectProvider({ children }) {
       return id;
     },
     [loadProjects, setActiveProjectId],
+  );
+
+  // Átnevezés: csak a megjelenített név változik, az azonosító (és vele minden
+  // tartalom hozzárendelése) változatlan marad.
+  const renameProject = useCallback(
+    async (id, name) => {
+      const clean = (name ?? '').trim();
+      if (!clean) throw new Error('A település neve kötelező.');
+      await setDoc(
+        doc(db, 'projects', id),
+        { name: clean, updatedAt: serverTimestamp() },
+        { merge: true },
+      );
+      await loadProjects();
+    },
+    [loadProjects],
+  );
+
+  // Törlés csak üres településre: ha tartalom vagy admin tartozik hozzá, a
+  // törlés elmarad, és a hibaüzenet felsorolja, mi van még hozzárendelve.
+  const deleteProject = useCallback(
+    async (id) => {
+      if (id === DEFAULT_PROJECT_ID) {
+        throw new Error('Az alapértelmezett település nem törölhető.');
+      }
+      const inUse = describeUsage(await projectUsage(db, id));
+      if (inUse) {
+        throw new Error(
+          `A település nem törölhető, mert még hozzá tartozik: ${inUse}. Előbb ezeket töröld vagy rendeld át.`,
+        );
+      }
+      await deleteDoc(doc(db, 'projects', id));
+      if (id === activeProjectId) setActiveProjectId(DEFAULT_PROJECT_ID);
+      await loadProjects();
+    },
+    [activeProjectId, loadProjects, setActiveProjectId],
   );
 
   const activeProject =
@@ -144,6 +186,8 @@ export function ProjectProvider({ children }) {
         canSwitchProject: isDeveloper,
         setActiveProjectId,
         createProject,
+        renameProject,
+        deleteProject,
         reloadProjects: loadProjects,
       }}
     >

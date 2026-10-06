@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   redeemQrCore,
+  reconcileAchievementsCore,
   qrMappingDocId,
   haversineMeters,
   checkLocation,
@@ -491,4 +492,64 @@ test('ranglista: a település saját bejegyzése jön létre a szerzett ponttal
   assert.equal(entry.projectId, 'nagyvazsony');
   // A régi globális ranglista is frissül (átmeneti kettős írás).
   assert.equal(db.read(`public_leaderboard/${uid}`).points, 25);
+});
+
+test('jutalom: másik település jutalma nem oldódik fel a szerveres úton', async () => {
+  db.seed('stations/st1', { name: 'Kinizsi vár', qrCode: 'VAR-001', points: 10 });
+  db.seed('achievements/sajat', { name: 'Első', conditionType: 'station_count', conditionValue: 1 });
+  db.seed('achievements/idegen', {
+    name: 'Más falu',
+    conditionType: 'station_count',
+    conditionValue: 1,
+    projectId: 'mencshely',
+  });
+
+  const result = await redeem('VAR-001');
+
+  assert.deepEqual(result.newAchievements.map((a) => a.id), ['sajat']);
+  assert.equal(db.read(`user_progress/${uid}/unlocked_achievements/idegen`), undefined);
+});
+
+function reconcile(projectId) {
+  return reconcileAchievementsCore({ db, FieldValue: FakeFieldValue, uid, projectId });
+}
+
+test('reconcile: utólag létrehozott, már teljesült jutalom feloldódik', async () => {
+  db.seed(`user_progress/${uid}`, {
+    name: 'Teszt Elek',
+    totalPoints: 40,
+    completedStations: ['st1', 'st2'],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  db.seed('achievements/ket-allomas', { name: 'Két állomás', conditionType: 'station_count', conditionValue: 2 });
+  db.seed('achievements/sok-pont', { name: 'Sok pont', conditionType: 'points_threshold', conditionValue: 100 });
+
+  const { newAchievements } = await reconcile('nagyvazsony');
+
+  assert.deepEqual(newAchievements.map((a) => a.id), ['ket-allomas']);
+  assert.ok(db.read(`user_progress/${uid}/unlocked_achievements/ket-allomas`));
+  assert.equal(db.read('achievements/ket-allomas').unlockedCount, 1);
+  assert.equal(db.read(`user_progress/${uid}`).pendingAchievementBanner.title, 'Két állomás');
+});
+
+test('reconcile: a már feloldott jutalom nem oldódik fel újra', async () => {
+  db.seed(`user_progress/${uid}`, { totalPoints: 10, completedStations: ['st1'] });
+  db.seed('achievements/elso', { name: 'Első', conditionType: 'station_count', conditionValue: 1 });
+  db.seed(`user_progress/${uid}/unlocked_achievements/elso`, { unlockedAt: 1 });
+
+  const { newAchievements } = await reconcile('nagyvazsony');
+
+  assert.equal(newAchievements.length, 0);
+  assert.equal(db.read('achievements/elso').unlockedCount, undefined);
+});
+
+test('reconcile: haladás-dokumentum nélkül üres eredmény, írás nélkül', async () => {
+  db = new FakeFirestore();
+  db.seed('achievements/elso', { name: 'Első', conditionType: 'station_count', conditionValue: 0 });
+
+  const { newAchievements } = await reconcile('');
+
+  assert.deepEqual(newAchievements, []);
+  assert.equal(db.read(`user_progress/${uid}/unlocked_achievements/elso`), undefined);
 });

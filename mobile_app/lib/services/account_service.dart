@@ -9,8 +9,47 @@ import 'package:share_plus/share_plus.dart';
 
 /// GDPR adatjogok kliensoldali kapuja: a szerveroldali exportUserData /
 /// deleteMyAccount Cloud Functionöket hívja (lásd functions/lib/gdpr-core.js).
+/// A névmódosítás olyan okból hiúsult meg, amelyet a felhasználónak meg kell
+/// mutatni (foglalt név, érvénytelen név).
+class RenameRejectedException implements Exception {
+  const RenameRejectedException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class AccountService {
   const AccountService._();
+
+  /// Tesztekben lecserélhető; élesben a renameMe Cloud Functiont hívja.
+  static Future<String> Function(String name)? renameOverride;
+
+  /// A megjelenített név módosítása a szerveren (névfoglalás, profil,
+  /// ranglisták és az e-mailes visszaállítás jelszava együtt frissül).
+  /// Az új, elmentett nevet adja vissza.
+  static Future<String> rename(String name) async {
+    final override = renameOverride;
+    if (override != null) return override(name);
+    try {
+      final response = await _functions.httpsCallable('renameMe').call<dynamic>(
+        {'name': name},
+      );
+      final data = _stringKeyed(response.data);
+      return (data['displayName'] ?? name).toString();
+    } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'already-exists') {
+        throw const RenameRejectedException(
+          'Ez a név már foglalt. Válassz másikat.',
+        );
+      }
+      if (e.code == 'invalid-argument') {
+        throw RenameRejectedException(e.message ?? 'Érvénytelen név.');
+      }
+      rethrow;
+    }
+  }
 
   static FirebaseFunctions get _functions =>
       FirebaseFunctions.instanceFor(region: 'europe-west1');

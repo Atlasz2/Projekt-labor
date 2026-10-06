@@ -102,11 +102,8 @@
 .form-group textarea { resize: vertical; min-height: 100px; line-height: 1.6; }
 
 .form-actions {
-  display: flex;
-  gap: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #f1f5f9;
-  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--admin-border);
 }
 /* ========== Form Elements ========== */
 .form-container form {
@@ -140,84 +137,6 @@
 .form-container textarea {
   resize: vertical;
   min-height: 100px;
-}
-
-/* ========== Primary Button ========== */
-.btn-primary {
-  background: var(--admin-accent);
-  color: white;
-  /* Átlátszó keret, hogy PONTOSAN akkora legyen, mint a .btn-secondary
-     (aminek 1px kerete van) – enélkül 2px-szel alacsonyabb lenne. */
-  border: 1px solid transparent;
-  padding: 12px 24px;
-  border-radius: 10px;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: var(--admin-shadow-sm);
-}
-
-.btn-primary:hover {
-  background: var(--admin-accent-deep);
-  transform: translateY(-2px);
-  box-shadow: var(--admin-shadow);
-}
-
-.btn-primary:active {
-  transform: translateY(0);
-}
-
-/* ========== Secondary Button ========== */
-.btn-secondary {
-  background: var(--admin-bg-soft);
-  color: var(--admin-text);
-  border: 1px solid var(--admin-border);
-  padding: 12px 24px;
-  border-radius: 10px;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-  background: var(--admin-surface-muted);
-  border-color: var(--admin-border-strong);
-}
-
-/* ========== Edit Button ========== */
-.btn-edit {
-  background: #3a4a2f;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.9em;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-edit:hover {
-  background: #5b6f4c;
-  transform: translateY(-1px);
-}
-
-/* ========== Delete Button ========== */
-.btn-delete {
-  background: #dc2626;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.9em;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-delete:hover {
-  background: #991b1b;
-  transform: translateY(-1px);
 }
 
 /* ========== Cards Grid ========== */
@@ -426,9 +345,13 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  font-size: 18px;
+  font-size: 22px;
+  line-height: 1;
   cursor: pointer;
+  transition: background 0.15s;
 }
+
+.editor-close:hover { background: rgba(255,255,255,0.3); }
 
 .editor-grid {
   display: grid;
@@ -595,11 +518,8 @@
 
 .editor-actions {
   grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 6px;
-  border-top: 1px solid #efe5d6;
+  padding-top: 12px;
+  border-top: 1px solid var(--admin-border);
 }
 
 @media (max-width: 900px) {
@@ -646,92 +566,6 @@
   color: #991b1b;
   font-weight: 600;
 }
-.photo-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.upload-count {
-  color: #64748b;
-  font-size: 0.9em;
-  font-weight: 500;
-  margin-left: 8px;
-}
-
-.photo-thumb {
-  position: relative;
-  min-height: 120px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #d8c8b3;
-  background: #f8fafc;
-}
-
-.photo-thumb img {
-  display: block;
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
-}
-
-.photo-remove {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 999px;
-  background: rgba(52, 38, 26, 0.82);
-  color: white;
-  cursor: pointer;
-  font-size: 0.95rem;
-  line-height: 1;
-}
-
-.thumb-badge {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  background: rgba(15,23,42,0.85);
-  color: white;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.photo-add-btn {
-  min-height: 120px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px dashed #5b6f4c;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #5c4631;
-  font-weight: 700;
-  cursor: pointer;
-  text-align: center;
-  padding: 12px;
-}
-
-.photo-add-btn input {
-  display: none;
-}
-
-.photo-add-btn:hover {
-  background: #fffaf3;
-}
-
-@media (max-width: 768px) {
-  .photo-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Múltbeli rendezvények jelölése (Events oldal) */
 .past-toggle {
   display: inline-flex;

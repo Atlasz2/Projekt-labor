@@ -32,3 +32,7 @@ firebase-debug.log
 ui-debug.log
 database-debug.log
 pubsub-debug.log
+
+# Helyi eszköz- és szerkesztőbeállítások
+.claude/
+mobile_app/android/.kotlin/

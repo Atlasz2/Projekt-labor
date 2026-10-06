@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { storage } from '../firebaseConfig';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
 import { safeString } from '../utils/safeString';
+import { normalizeWebsite, websiteLabel } from '../utils/website';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePhotoManager } from '../hooks/usePhotoManager';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -16,6 +17,15 @@ const EMPTY_FORM = {
   pricePerNight: '',
   capacity:      '',
   description:   '',
+  website:       '',
+  phone:         '',
+};
+
+const TYPE_LABELS = {
+  hotel: 'Hotel',
+  guesthouse: 'Vendégház',
+  apartment: 'Apartman',
+  campsite: 'Kemping',
 };
 
 const mapAccommodation = (docSnap) => {
@@ -29,6 +39,8 @@ const mapAccommodation = (docSnap) => {
     pricePerNight: safeString(d.pricePerNight),
     capacity:      safeString(d.capacity),
     description:   safeString(d.description),
+    website:       safeString(d.website),
+    phone:         safeString(d.phone),
     photos:        normalized,
     imageUrl:      normalized[0] || '',
   };
@@ -75,6 +87,8 @@ function Accommodations() {
         pricePerNight: item.pricePerNight || '',
         capacity:      item.capacity      || '',
         description:   item.description   || '',
+        website:       item.website       || '',
+        phone:         item.phone         || '',
       });
       resetPhotos(item.photos || (item.imageUrl ? [item.imageUrl] : []));
     } else {
@@ -100,6 +114,11 @@ function Accommodations() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMutateError(null);
+    const website = normalizeWebsite(formData.website);
+    if (website === null) {
+      setMutateError('A weboldal címe érvénytelen (pl. www.pelda.hu).');
+      return;
+    }
     const cleanData = {
       name:          safeString(formData.name),
       address:       safeString(formData.address),
@@ -107,6 +126,8 @@ function Accommodations() {
       pricePerNight: safeString(formData.pricePerNight),
       capacity:      safeString(formData.capacity),
       description:   safeString(formData.description),
+      website,
+      phone:         safeString(formData.phone),
       ...buildPhotoFields(photos),
     };
     try {
@@ -194,7 +215,7 @@ function Accommodations() {
                 <p className="editor-kicker">Szállás szerkesztő</p>
                 <h2>{editingId ? 'Szállás frissítése' : 'Új szállás'}</h2>
               </div>
-              <button className="editor-close" onClick={closeEditor}>x</button>
+              <button type="button" className="editor-close" onClick={closeEditor} aria-label="Bezárás" title="Bezárás">×</button>
             </div>
 
             <form onSubmit={handleSubmit} className="editor-grid">
@@ -231,6 +252,27 @@ function Accommodations() {
                 <div className="editor-field">
                   <label>Ár / éjszaka</label>
                   <input type="text" value={formData.pricePerNight} onChange={setField('pricePerNight')} />
+                </div>
+                <div className="editor-row">
+                  <div className="editor-field">
+                    <label>Telefon</label>
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={setField('phone')}
+                      placeholder="pl. +36 88 123 456"
+                    />
+                  </div>
+                  <div className="editor-field">
+                    <label>Weboldal</label>
+                    <input
+                      type="text"
+                      inputMode="url"
+                      value={formData.website}
+                      onChange={setField('website')}
+                      placeholder="pl. www.pelda.hu"
+                    />
+                  </div>
                 </div>
                 <div className="editor-field">
                   <label>Leírás</label>
@@ -281,10 +323,17 @@ function Accommodations() {
               <img src={acc.imageUrl} alt={acc.name} loading="lazy" className="content-cover" />
             )}
             {acc.address       && <p><strong>Cím:</strong> {acc.address}</p>}
-            {acc.type          && <p><strong>Típus:</strong> {acc.type}</p>}
+            {acc.type          && <p><strong>Típus:</strong> {TYPE_LABELS[acc.type] || acc.type}</p>}
             {acc.pricePerNight && <p><strong>Ár:</strong> {acc.pricePerNight}</p>}
             {acc.capacity      && <p><strong>Kapacitás:</strong> {acc.capacity}</p>}
             {acc.description   && <p>{acc.description}</p>}
+            {acc.phone && <p><strong>Telefon:</strong> {acc.phone}</p>}
+            {acc.website && (
+              <p>
+                <strong>Weboldal:</strong>{' '}
+                <a href={acc.website} className="card-link" target="_blank" rel="noopener noreferrer">{websiteLabel(acc.website)}</a>
+              </p>
+            )}
             <div className="card-actions">
               <button className="btn-edit"   onClick={() => openEditor(acc)}>Szerkesztés</button>
               <button className="btn-delete" onClick={() => setDeleteDialog({ open: true, id: acc.id })}>Törlés</button>
