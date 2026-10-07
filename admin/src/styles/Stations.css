@@ -43,12 +43,17 @@
 .station-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; font-size: 48px; color: white; gap: 8px; text-shadow: 0 2px 8px rgba(15,23,42,0.08); }
 .station-placeholder span { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 1.5px; text-shadow: none; }
 .station-points { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,.65); color: gold; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 700; }
-.station-body { padding: 16px; }
+.station-body { padding: 16px; display: flex; flex-direction: column; flex: 1; }
+/* Kártyán belüli egységes elrendezés: a leírás hossza nem tolja el a QR-blokkot
+   és a gombokat – ezek mindig a kártya alján, egy vonalban állnak. */
+.station-card { display: flex; flex-direction: column; }
+.station-body > .station-desc { margin-bottom: 12px; }
+.station-desc { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .station-title h3 { margin: 0 0 6px; font-size: 17px; color: #2b2720; }
 .trip-badge { display: inline-block; background: #eef2e6; color: #5b21b6; font-size: 12px; padding: 2px 8px; border-radius: 20px; margin-bottom: 8px; }
 .station-desc { font-size: 13px; color: #64748b; margin: 0 0 6px; line-height: 1.5; }
 .station-fun-fact { font-size: 12px; color: #3a4a2f; background: #eef2e6; border-left: 3px solid #5b6f4c; padding: 6px 10px; border-radius: 4px; margin: 6px 0; }
-.station-qr { display: flex; align-items: center; justify-content: space-between; margin: 12px 0; padding: 10px; background: #f8fafc; border-radius: 8px; }
+.station-qr { display: flex; align-items: center; justify-content: space-between; margin: auto 0 12px; padding: 10px; background: #f8fafc; border-radius: 8px; }
 .qr-meta { display: flex; flex-direction: column; gap: 6px; }
 .qr-label { font-size: 11px; color: #64748b; word-break: break-all; max-width: 160px; }
 .qr-print { background: #5b6f4c; color: white; border: none; padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }

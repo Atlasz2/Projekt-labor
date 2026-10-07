@@ -149,6 +149,8 @@
 
 /* ========== Card ========== */
 .card {
+  display: flex;
+  flex-direction: column;
   background: var(--admin-surface);
   border-radius: var(--r-lg);
   padding: 22px;
@@ -187,10 +189,14 @@
 .card-actions {
   display: flex;
   gap: 8px;
-  margin-top: 16px;
+  /* A gombsor mindig a kártya alján (egy sorban álló kártyák között egy vonalban). */
+  margin-top: auto;
   padding-top: 16px;
   border-top: 1px solid var(--admin-border);
 }
+
+/* Térköz a kártya tartalma és az alul rögzített gombsor között. */
+.card > :nth-last-child(2) { margin-bottom: 16px; }
 
 .card-actions button {
   flex: 1;

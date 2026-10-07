@@ -111,9 +111,12 @@ class _OfflineImageState extends State<OfflineImage> {
   /// felbontásban ~48 MB lenne). Ismeretlen méretnél a képernyőszélesség.
   int _decodeWidth(BuildContext context, BoxConstraints constraints) {
     final media = MediaQuery.of(context);
-    final logical =
-        widget.width ??
-        (constraints.hasBoundedWidth ? constraints.maxWidth : media.size.width);
+    // A `width: double.infinity` („töltse ki a szélességet”) nem méret: ilyenkor
+    // a szülő által adott korlát, végső esetben a képernyőszélesség számít.
+    final requested = widget.width;
+    final logical = (requested != null && requested.isFinite)
+        ? requested
+        : (constraints.hasBoundedWidth ? constraints.maxWidth : media.size.width);
     return (logical * media.devicePixelRatio * widget.decodeScale)
         .round()
         .clamp(1, 4096);

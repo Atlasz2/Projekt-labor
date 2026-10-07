@@ -24,6 +24,19 @@ class _AuthGateState extends State<AuthGate> {
   Stream<DocumentSnapshot>? _userDocStream;
   String? _userDocStreamUid;
 
+  // A névmegadó képernyő EGY példánya a regisztráció teljes ideje alatt. A
+  // névtelen bejelentkezés közben a kapu ágat vált (nincs felhasználó →
+  // van felhasználó, de még nincs profil); a GlobalKey miatt a képernyő
+  // állapota (kitöltött mezők, töltésjelző, hibaüzenet) ilyenkor megmarad,
+  // nem egy új, üres példány jelenik meg.
+  final GlobalKey _nameScreenKey = GlobalKey();
+  bool _showingNameScreen = false;
+
+  Widget _nameScreen() {
+    _showingNameScreen = true;
+    return NameScreen(key: _nameScreenKey);
+  }
+
   // A live snapshot stream (not a one-shot get) so the gate reacts the moment
   // the user document is created during registration — no app restart needed.
   Stream<DocumentSnapshot> _userDocByUid(String uid) {
@@ -74,7 +87,7 @@ class _AuthGateState extends State<AuthGate> {
 
         if (!snapshot.hasData || snapshot.data == null) {
           unawaited(_stopBackgroundServices());
-          return const NameScreen();
+          return _nameScreen();
         }
 
         _initialAuthResolved = true;
@@ -85,13 +98,18 @@ class _AuthGateState extends State<AuthGate> {
           stream: _userDocByUid(user.uid),
           builder: (context, docSnapshot) {
             if (!docSnapshot.hasData) {
-              return const _LoadingSplashScreen();
+              // Regisztráció közben ne villanjon fel a töltőképernyő (az
+              // eldobná a névmegadó képernyő állapotát).
+              return _showingNameScreen
+                  ? _nameScreen()
+                  : const _LoadingSplashScreen();
             }
 
             if (!docSnapshot.data!.exists) {
-              return const NameScreen();
+              return _nameScreen();
             }
 
+            _showingNameScreen = false;
             return const MainMenuScreen();
           },
         );

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'location_service.dart';
@@ -120,6 +123,42 @@ class QrProcessingService {
       );
     }
     return _resultFromServerPayload(payload);
+  }
+
+  /// Átmeneti-e a hiba (hálózat, szerver-túlterhelés), vagyis érdemes-e a
+  /// beolvasást az offline sorba tenni és később újrapróbálni. A szerver
+  /// elutasítása (pl. hitelesítési hiba) NEM átmeneti: azt a felhasználónak
+  /// a valódi okkal kell jelezni, nem „instabil kapcsolatként”.
+  static bool isTransientError(Object error) {
+    if (error is QrServerUnavailableException) return true;
+    if (error is SocketException || error is TimeoutException) return true;
+    if (error is FirebaseFunctionsException) {
+      return const {
+        'unavailable',
+        'deadline-exceeded',
+        'resource-exhausted',
+        'aborted',
+        'cancelled',
+        'internal',
+        'unknown',
+      }.contains(error.code);
+    }
+    return false;
+  }
+
+  /// A nem átmeneti hiba felhasználónak szóló magyarázata.
+  static String rejectionMessage(Object error) {
+    if (error is FirebaseFunctionsException) {
+      switch (error.code) {
+        case 'unauthenticated':
+        case 'permission-denied':
+          return 'A szerver nem fogadta el az alkalmazás hitelesítését. '
+              'Frissítsd az alkalmazást a legújabb verzióra, vagy jelentkezz be újra.';
+        case 'invalid-argument':
+          return 'A beolvasott kód nem értelmezhető.';
+      }
+    }
+    return 'A beolvasás feldolgozása nem sikerült. Próbáld újra.';
   }
 
   /// A cél koordinátája `(lat, lng)`, vagy null, ha nincs érvényes helye.

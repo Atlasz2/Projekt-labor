@@ -42,6 +42,7 @@ flutter:
   assets:
     - assets/logo_splash.png
     - assets/var.jpg
+    - assets/name_bg.jpg
 
 flutter_launcher_icons:
   android: true

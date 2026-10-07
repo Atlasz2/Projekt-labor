@@ -212,9 +212,19 @@ class _CameraScreenState extends State<CameraScreen> {
             'Ez a QR-kód egyetlen állomáshoz vagy rendezvényhez sem tartozik.';
       });
     } catch (e) {
+      debugPrint('QR-beváltás sikertelen: $e');
+      if (!QrProcessingService.isTransientError(e)) {
+        // A szerver elutasította (nem hálózati hiba): a valódi okot mutatjuk.
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _station = null;
+          _errorMsg = QrProcessingService.rejectionMessage(e);
+        });
+        return;
+      }
       // Átmeneti (hálózati / szerver) hiba: a beolvasás ne vesszen el – az
       // offline sorba kerül, és a kapcsolat helyreállásakor jóváíródik.
-      debugPrint('QR-beváltás átmenetileg sikertelen: $e');
       final queuedNow = await LocalCache.enqueuePendingQr(
         code,
         lat: location?.lat,

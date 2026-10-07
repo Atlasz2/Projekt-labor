@@ -313,14 +313,6 @@ class _TimelineEntryState extends State<_TimelineEntry> {
                         _placeholder(),
                   ),
                 ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: _placeholder(),
-                ),
               ),
             if ((event['quote']?.toString() ?? '').isNotEmpty) ...[
               const SizedBox(height: 14),

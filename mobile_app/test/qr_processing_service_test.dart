@@ -259,4 +259,36 @@ void main() {
       );
     });
   });
+
+  group('hibák osztályozása (átmeneti vs. elutasítás)', () {
+    test('hálózati és túlterheléses hiba átmeneti', () {
+      for (final code in ['unavailable', 'deadline-exceeded', 'internal']) {
+        expect(
+          QrProcessingService.isTransientError(
+            FirebaseFunctionsException(code: code, message: ''),
+          ),
+          isTrue,
+          reason: code,
+        );
+      }
+      expect(
+        QrProcessingService.isTransientError(
+          const QrServerUnavailableException(),
+        ),
+        isTrue,
+      );
+    });
+
+    test('a hitelesítési elutasítás nem „instabil kapcsolat”', () {
+      final e = FirebaseFunctionsException(
+        code: 'unauthenticated',
+        message: 'App Check',
+      );
+      expect(QrProcessingService.isTransientError(e), isFalse);
+      expect(
+        QrProcessingService.rejectionMessage(e),
+        contains('hitelesítését'),
+      );
+    });
+  });
 }

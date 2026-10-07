@@ -29,6 +29,10 @@ initializeApp();
 // (users/{uid}.role, vagy az email-doc variáns). Máskülönben permission-denied.
 const STAFF_ROLES = ['admin', 'developer'];
 
+// A mobilból hívott callable-ök közös beállítása (lásd a redeemQr feletti
+// App Check-megjegyzést).
+const MOBILE_CALLABLE = { region: 'europe-west1', enforceAppCheck: false };
+
 async function assertAdmin(db, request) {
   const uid = request.auth?.uid;
   if (!uid) {
@@ -71,17 +75,17 @@ async function assertDeveloper(db, request) {
 // Admin SDK jogosultsággal. A Flutter oldal a
 // FirebaseFunctions.instanceFor(region: 'europe-west1') példányon hívja.
 //
-// enforceAppCheck: ez a három callable (redeemQr, exportUserData,
-// deleteMyAccount) KIZÁRÓLAG a mobilappból hívott – az admin panel egyiket
-// sem használja (lásd tripAnalytics/hikingRoute/adminDeleteUser/inviteAdmin/
-// setUserBanned, amik admin-hívásúak, ezért NINCS rajtuk App Check
-// kikényszerítés: a webes admin nem küld App Check tokent). A mobil oldalon
-// az AppConfig.appCheckEnabled alapból be van kapcsolva (app_config.dart) –
-// enélkül a régi, App Check nélküli telepítések ezekre a hívásokra
-// 'unauthenticated' hibát kapnának, ezért ÚJ mobil build nélkül ez a
-// kikényszerítés NEM deployolható biztonságosan éles felhasználókra.
+// App Check: a mobilból hívott callable-ök (redeemQr, reconcileAchievements,
+// renameMe, exportUserData, deleteMyAccount) az App Check-tokent ellenőrzik és
+// naplózzák, de NEM követelik meg (MOBILE_CALLABLE.enforceAppCheck = false).
+// Ok: a Firebase App Distributionnel terjesztett, nem a Play Áruházból
+// telepített Android-build nem kap érvényes Play Integrity-tokent, így a
+// kikényszerítés minden hívást elutasított ("app: INVALID" a naplóban). A
+// Play Áruházas kiadás és az App Check konzolbeli regisztrációja után
+// visszakapcsolható. A pontintegritást ettől függetlenül a szerveroldali
+// jóváírás és a lezárt Firestore-szabályok védik.
 export const redeemQr = onCall(
-  { region: 'europe-west1', enforceAppCheck: true },
+  MOBILE_CALLABLE,
   async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
@@ -126,9 +130,9 @@ export const redeemQr = onCall(
 
 // A hívó jutalmainak utólagos egyeztetése (a jutalmak képernyő betöltésekor).
 // A feloldást a szerver írja, így az unlocked_achievements alkollekció a
-// kliens elől lezárható. enforceAppCheck: csak a mobilapp hívja.
+// kliens elől lezárható.
 export const reconcileAchievements = onCall(
-  { region: 'europe-west1', enforceAppCheck: true },
+  MOBILE_CALLABLE,
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
@@ -155,9 +159,8 @@ export const reconcileAchievements = onCall(
 // A ranglistát csak a szerver írhatja, ezért a módosítás itt fut. E-mailhez
 // kötött fióknál a névből képzett visszaállítási jelszó is frissül, hogy a
 // másik eszközös belépés az új névvel működjön.
-// enforceAppCheck: csak a mobilapp hívja.
 export const renameMe = onCall(
-  { region: 'europe-west1', enforceAppCheck: true },
+  MOBILE_CALLABLE,
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
@@ -192,9 +195,8 @@ export const renameMe = onCall(
 
 // GDPR 20. cikk — adathordozhatóság: a hívó SAJÁT adatainak teljes exportja.
 // A kliens JSON-fájlként menti/megosztja a választ.
-// enforceAppCheck: csak a mobilapp hívja (lásd a redeemQr fenti kommentjét).
 export const exportUserData = onCall(
-  { region: 'europe-west1', enforceAppCheck: true },
+  MOBILE_CALLABLE,
   async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
@@ -212,9 +214,8 @@ export const exportUserData = onCall(
 // GDPR 17. cikk — törléshez való jog: a hívó SAJÁT fiókjának és minden
 // kapcsolódó dokumentumának törlése (a hibabejelentések anonimizálásával),
 // legvégül az Auth-fiókkal együtt. A kliens ezután kijelentkezik.
-// enforceAppCheck: csak a mobilapp hívja (lásd a redeemQr fenti kommentjét).
 export const deleteMyAccount = onCall(
-  { region: 'europe-west1', enforceAppCheck: true },
+  MOBILE_CALLABLE,
   async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { db, functions } from "../firebaseConfig";
+import { auth, db, functions } from "../firebaseConfig";
+import { sendPasswordResetEmail } from "firebase/auth";
 import {
   collection, deleteField, doc, getDocs, serverTimestamp, setDoc,
 } from "firebase/firestore";
@@ -52,6 +53,7 @@ function Users() {
   const [inviteForm, setInviteForm] = useState({ email: "", name: "", projectId: "" });
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
+  const [inviteMailSent, setInviteMailSent] = useState(false);
   // Jutalom-beváltás nyomon követése: melyik jutalmakhoz tartozik fizikai/
   // kedvezmény jutalom (rewardInfo), és felhasználónként (lusta betöltéssel,
   // csak kinyitáskor) melyiket váltották már be.
@@ -395,6 +397,7 @@ function Users() {
     if (!email) return;
     setInviteBusy(true);
     setInviteLink("");
+    setInviteMailSent(false);
     try {
       const call = httpsCallable(functions, "inviteAdmin");
       const res = await call({
@@ -403,12 +406,25 @@ function Users() {
         projectId: inviteForm.projectId || projects[0]?.id,
       });
       setInviteLink(res.data?.resetLink || "");
+
+      // A meghívó e-mail kiküldése: a Firebase Authentication beépített,
+      // magyar nyelvű jelszó-beállító levele. Ezzel a meghívott beállítja a
+      // jelszavát, és beléphet az admin felületre.
+      let mailSent = false;
+      try {
+        auth.languageCode = "hu";
+        await sendPasswordResetEmail(auth, email);
+        mailSent = true;
+      } catch {
+        // A link a felületen tartalékként megmarad (lásd lent).
+      }
+      setInviteMailSent(mailSent);
       setSnack({
         open: true,
-        severity: "success",
-        message: res.data?.created
-          ? `${email} meghívva adminként.`
-          : `${email} admin jogot kapott.`,
+        severity: mailSent ? "success" : "warning",
+        message: mailSent
+          ? `Meghívó elküldve: ${email}. A levélben lévő linkkel állíthatja be a jelszavát.`
+          : `${email} admin jogot kapott, de az e-mailt nem sikerült elküldeni – küldd el neki az alábbi linket.`,
       });
       await fetchUsers();
     } catch (err) {
@@ -898,7 +914,11 @@ function Users() {
 
             {inviteLink && (
               <div className="invite-link-box">
-                <strong>Jelszó-beállító link (küldd el a meghívottnak):</strong>
+                <strong>
+                  {inviteMailSent
+                    ? "A meghívót e-mailben elküldtük. Ha nem érkezne meg (spam mappa!), ezt a linket is továbbíthatod:"
+                    : "Az e-mailt nem sikerült elküldeni. Küldd el a meghívottnak ezt a jelszó-beállító linket:"}
+                </strong>
                 <textarea readOnly rows="3" value={inviteLink} onFocus={(e) => e.target.select()} />
               </div>
             )}

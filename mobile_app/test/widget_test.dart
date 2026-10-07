@@ -7,9 +7,9 @@ void main() {
     testWidgets('megjeleníti az összes alapmezőt', (WidgetTester tester) async {
       await tester.pumpWidget(const MaterialApp(home: NameScreen()));
 
-      expect(find.text('Nagyvázsony'), findsOneWidget);
-      expect(find.text('Teljes név *'), findsOneWidget);
-      expect(find.text('Email (opcionális)'), findsOneWidget);
+      expect(find.text('Fedezd fel Nagyvázsonyt!'), findsOneWidget);
+      expect(find.text('Név *'), findsOneWidget);
+      expect(find.text('E-mail (opcionális)'), findsOneWidget);
       expect(find.text('Folytatás'), findsOneWidget);
     });
 
@@ -17,10 +17,10 @@ void main() {
         (WidgetTester tester) async {
       await tester.pumpWidget(const MaterialApp(home: NameScreen()));
 
-      final button = find.widgetWithText(ElevatedButton, 'Folytatás');
+      final button = find.widgetWithText(FilledButton, 'Folytatás');
       expect(button, findsOneWidget);
       // A gomb nem disabled (nem null onPressed)
-      final widget = tester.widget<ElevatedButton>(button);
+      final widget = tester.widget<FilledButton>(button);
       expect(widget.onPressed, isNotNull);
     });
 
@@ -29,6 +29,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: NameScreen()));
 
       // Kattintás üres névmezővel
+      await tester.ensureVisible(find.text('Folytatás'));
       await tester.tap(find.text('Folytatás'));
       await tester.pump(); // trigger Snackbar
 
@@ -40,7 +41,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: NameScreen()));
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'Teljes név *'),
+        find.widgetWithText(TextField, 'Név *'),
         'Teszt Elek',
       );
       expect(find.text('Teszt Elek'), findsOneWidget);
@@ -51,7 +52,7 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: NameScreen()));
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'Email (opcionális)'),
+        find.widgetWithText(TextField, 'E-mail (opcionális)'),
         'teszt@example.com',
       );
       expect(find.text('teszt@example.com'), findsOneWidget);
@@ -62,13 +63,14 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: NameScreen()));
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'Teljes név *'),
+        find.widgetWithText(TextField, 'Név *'),
         'Teszt Elek',
       );
       await tester.enterText(
-        find.widgetWithText(TextField, 'Email (opcionális)'),
+        find.widgetWithText(TextField, 'E-mail (opcionális)'),
         'ervenytelen-email',
       );
+      await tester.ensureVisible(find.text('Folytatás'));
       await tester.tap(find.text('Folytatás'));
       await tester.pump(); // trigger Snackbar
 

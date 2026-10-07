@@ -201,89 +201,213 @@ class _NameScreenState extends State<NameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Nagyvázsony'), centerTitle: true),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 40),
-            Icon(Icons.location_on, size: 64, color: const Color(0xFF667EEA)),
-            const SizedBox(height: 24),
-            const Text(
-              'Üdvözölünk a Nagyvázsony Túra Alkalmazásban!',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Kérjük, add meg a nevedet a folytatáshoz.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            const SizedBox(height: 48),
-            TextField(
-              controller: _displayNameController,
-              enabled: !_isLoading,
-              decoration: InputDecoration(
-                labelText: 'Teljes név *',
-                hintText: 'pl. Kiss János',
-                prefixIcon: const Icon(Icons.person),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // A Kinizsi-vár légifotója, alul sötétedő átmenettel, hogy a kártya
+          // és a fehér szöveg jól olvasható legyen.
+          Image.asset(
+            'assets/name_bg.jpg',
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            cacheWidth:
+                (MediaQuery.sizeOf(context).width *
+                        MediaQuery.devicePixelRatioOf(context) *
+                        1.6)
+                    .round(),
+          ),
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0x73000000),
+                  Color(0x00000000),
+                  Color(0x26141F10),
+                  Color(0xE6141F10),
+                ],
+                stops: [0, 0.3, 0.5, 1],
               ),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _emailController,
-              enabled: !_isLoading,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: 'Email (opcionális)',
-                hintText: 'pl. kiss.janos@example.com',
-                prefixIcon: const Icon(Icons.email),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _handleContinue,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text(
-                      'Folytatás',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+          ),
+          // A fejléc felül, az űrlap alul: a vár a kettő között látszik.
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, viewport) => SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 460,
+                      minHeight: viewport.maxHeight - 44,
                     ),
-            ),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: _isLoading
-                  ? null
-                  : () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Image.asset(
+                              'assets/logo_splash.png',
+                              height: 92,
+                              cacheHeight: 276,
+                              semanticLabel: 'Nagyvázsony címere',
+                            ),
+                            const SizedBox(height: 14),
+                            const Text(
+                              'Fedezd fel Nagyvázsonyt!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                shadows: [
+                                  Shadow(color: Colors.black54, blurRadius: 8),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Járd be a túrákat, olvasd be az állomások QR-kódjait, '
+                              'és gyűjts pontokat, jutalmakat.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 15,
+                                height: 1.4,
+                                color: Color(0xF2FFFFFF),
+                                shadows: [
+                                  Shadow(color: Colors.black45, blurRadius: 6),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 120),
+                        Card(
+                          color: Colors.white.withValues(alpha: 0.95),
+                          elevation: 6,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 22, 20, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Hogyan szólíthatunk?',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Ez a név jelenik meg a ranglistán. Később a profilban módosíthatod.',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                TextField(
+                                  controller: _displayNameController,
+                                  enabled: !_isLoading,
+                                  textCapitalization: TextCapitalization.words,
+                                  textInputAction: TextInputAction.next,
+                                  maxLength: 40,
+                                  decoration: InputDecoration(
+                                    labelText: 'Név *',
+                                    hintText: 'pl. Kiss János',
+                                    prefixIcon: const Icon(
+                                      Icons.person_outline,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _emailController,
+                                  enabled: !_isLoading,
+                                  keyboardType: TextInputType.emailAddress,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) {
+                                    if (!_isLoading) _handleContinue();
+                                  },
+                                  decoration: InputDecoration(
+                                    labelText: 'E-mail (opcionális)',
+                                    hintText: 'pl. kiss.janos@example.com',
+                                    helperText:
+                                        'Ezzel egy másik telefonon is folytathatod.',
+                                    prefixIcon: const Icon(
+                                      Icons.email_outlined,
+                                    ),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                FilledButton(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : _handleContinue,
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Folytatás',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                ),
+                                const SizedBox(height: 6),
+                                TextButton.icon(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () => Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => const LoginScreen(),
+                                          ),
+                                        ),
+                                  icon: const Icon(Icons.devices, size: 18),
+                                  label: const Text(
+                                    'Van már fiókom (másik eszközön)',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-              icon: const Icon(Icons.devices, size: 18),
-              label: const Text('Van már fiókom (másik eszközön)'),
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
