@@ -8,6 +8,12 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test-setup.js",
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{js,jsx}"],
+      exclude: ["src/**/*.test.{js,jsx}", "src/main.jsx", "src/test-setup.js"],
+      reporter: ["text-summary", "lcov"],
+    },
   },
   server: {
     port: 5173,

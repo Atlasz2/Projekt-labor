@@ -1,10 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { db, storage } from '../firebaseConfig';
-import { updateDoc, doc } from 'firebase/firestore';
+import { collection, deleteField, doc, writeBatch } from 'firebase/firestore';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
-import { getQrValue } from '../utils/qrHelpers';
 import QrImage from '../components/QrImage';
-import { assertQrCodeAvailable, syncQrMapping, removeQrMapping, QrCodeCollisionError } from '../utils/qrMapping';
+import {
+  assertQrCodeAvailable,
+  currentQrCode,
+  customQrCodeProblem,
+  generateQrCode,
+  isWeakQrCode,
+  loadQrCodesByTarget,
+  QrCodeCollisionError,
+  stageQrDelete,
+  stageQrSave,
+} from '../utils/qrMapping';
+import { useProject } from '../context/ProjectContext';
 import { safeString } from '../utils/safeString';
 import { useFirestoreCollection } from '../hooks/useFirestoreCollection';
 import { usePhotoManager } from '../hooks/usePhotoManager';
@@ -52,17 +63,16 @@ export const isPastEvent = (event) => {
 };
 
 function Events() {
-  const { query, add, update, remove } = useFirestoreCollection(
-    'events',
-    mapEvent,
-    {
-      afterAdd: async (id, data) => {
-        if (!data.qrCode) {
-          await updateDoc(doc(db, 'events', id), { qrCode: id });
-        }
-      },
-    },
-  );
+  // A listázás a generikus hookkal megy; a mentés és a törlés viszont a
+  // QR-leképezéssel együtt, egy kötegben történik (lásd stageQrSave).
+  const { query } = useFirestoreCollection('events', mapEvent);
+  const queryClient = useQueryClient();
+  const { activeProjectId } = useProject();
+  const { data: qrCodes = new Map() } = useQuery({
+    queryKey: ['qr_codes', activeProjectId],
+    queryFn: () => loadQrCodesByTarget(db, activeProjectId),
+  });
+  const eventCode = (event) => currentQrCode(qrCodes, 'event', event);
 
   const [showForm,     setShowForm]     = useState(false);
   const [editingId,    setEditingId]    = useState(null);
@@ -71,6 +81,7 @@ function Events() {
   const [formData,     setFormData]     = useState(EMPTY_FORM);
   const [search,       setSearch]       = useState('');
   const [showPast,     setShowPast]     = useState(false);
+  const [saving,       setSaving]       = useState(false);
 
   const { photos, uploading, uploadFeedback, upload, remove: removePhoto,
           reset: resetPhotos, commitRemovals } =
@@ -91,7 +102,7 @@ function Events() {
         date:        event.date        || '',
         description: event.description || '',
         location:    event.location    || '',
-        qrCode:      event.qrCode      || '',
+        qrCode:      eventCode(event),
         points:      event.points      || 20,
       });
       resetPhotos(event.photos || (event.imageUrl ? [event.imageUrl] : []));
@@ -124,42 +135,39 @@ function Events() {
       description: safeString(formData.description),
       location:    safeString(formData.location),
       ...buildPhotoFields(photos),
-      qrCode:      safeString(formData.qrCode),
       points:      Number(formData.points || 20),
+      projectId:   activeProjectId,
     };
+    setSaving(true);
     try {
-      await assertQrCodeAvailable(db, {
-        code: cleanData.qrCode,
+      const previous = editingId ? events.find((event) => event.id === editingId) : null;
+      const previousCode = previous ? eventCode(previous) : null;
+      const code = safeString(formData.qrCode).trim() || generateQrCode();
+      if (code !== previousCode) {
+        const problem = customQrCodeProblem(code);
+        if (problem) {
+          setMutateError(problem);
+          return;
+        }
+      }
+      await assertQrCodeAvailable(db, { code, kind: 'event', targetId: editingId });
+
+      const targetRef = editingId ? doc(db, 'events', editingId) : doc(collection(db, 'events'));
+      const batch = writeBatch(db);
+      await stageQrSave(db, {
+        batch,
+        ops: { deleteField },
         kind: 'event',
-        targetId: editingId,
+        targetRef,
+        isNew: !editingId,
+        payload: cleanData,
+        code,
+        previousCode,
+        projectId: activeProjectId,
       });
-
-      let savedId = editingId;
-      if (editingId) {
-        await update.mutateAsync({
-          id: editingId,
-          data: { ...cleanData, qrCode: cleanData.qrCode || editingId },
-        });
-      } else {
-        const ref = await add.mutateAsync(cleanData);
-        savedId = ref.id;
-      }
-
-      // A privát qr_codes leképezés frissítése — best effort: ha elhasal,
-      // a Cloud Function legacy fallbackje (qrCode mező) akkor is működik.
-      const previous = editingId
-        ? events.find((event) => event.id === editingId)
-        : null;
-      try {
-        await syncQrMapping(db, {
-          kind: 'event',
-          targetId: savedId,
-          code: cleanData.qrCode,
-          previousCode: previous ? getQrValue(previous) : null,
-        });
-      } catch {
-        /* legacy fallback fedi */
-      }
+      await batch.commit();
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['qr_codes'] });
 
       await commitRemovals();
       closeEditor();
@@ -169,6 +177,8 @@ function Events() {
       } else {
         setMutateError('Hiba a mentéskor');
       }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -176,15 +186,15 @@ function Events() {
     if (!deleteDialog.id) return;
     try {
       const deleted = events.find((event) => event.id === deleteDialog.id);
-      await remove.mutateAsync(deleteDialog.id);
-      try {
-        await removeQrMapping(db, {
-          code: deleted?.qrCode,
-          targetId: deleteDialog.id,
-        });
-      } catch {
-        /* árva leképezést a redeemQr found:false-ként kezel */
-      }
+      const batch = writeBatch(db);
+      stageQrDelete(db, {
+        batch,
+        targetRef: doc(db, 'events', deleteDialog.id),
+        code: deleted ? eventCode(deleted) : null,
+      });
+      await batch.commit();
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['qr_codes'] });
       setDeleteDialog({ open: false, id: null });
     } catch {
       setMutateError('Hiba a törléskor');
@@ -213,7 +223,7 @@ function Events() {
     );
   }
 
-  const isBusy = uploading || add.isPending || update.isPending;
+  const isBusy = uploading || saving;
 
   const pastCount = events.filter(isPastEvent).length;
 
@@ -299,13 +309,22 @@ function Events() {
                   <input type="text" value={formData.location} onChange={setField('location')} />
                 </div>
                 <div className="editor-field">
-                  <label>QR-kód</label>
-                  <input
-                    type="text"
-                    value={formData.qrCode}
-                    onChange={setField('qrCode')}
-                    placeholder="ha üres, a dokumentum azonosítója lesz"
-                  />
+                  <label htmlFor="event-qr">QR-kód</label>
+                  <div className="qr-code-row">
+                    <input
+                      id="event-qr"
+                      type="text"
+                      value={formData.qrCode}
+                      onChange={setField('qrCode')}
+                      placeholder="Üresen hagyva biztonságos, véletlen kód készül"
+                    />
+                    <button type="button" className="btn-secondary" onClick={() => setFormData((prev) => ({ ...prev, qrCode: generateQrCode() }))}>
+                      Új véletlen kód
+                    </button>
+                  </div>
+                  {editingId && formData.qrCode && isWeakQrCode(formData.qrCode, editingId) && (
+                    <span className="field-hint field-warning">⚠️ Ez a kód kitalálható. Generálj újat, és nyomtasd újra a matricát.</span>
+                  )}
                 </div>
                 <div className="editor-field">
                   <label>Leírás</label>
@@ -352,7 +371,7 @@ function Events() {
           </div>
         )}
         {visibleEvents.map((event) => {
-          const qrValue = getQrValue(event);
+          const qrValue = eventCode(event);
           return (
             <div key={event.id} className={`card${isPastEvent(event) ? ' card-past' : ''}`}>
               <h3>

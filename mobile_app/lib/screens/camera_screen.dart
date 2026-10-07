@@ -103,7 +103,21 @@ class _CameraScreenState extends State<CameraScreen> {
       final cachedStation = _findStationFromLocalCache(code);
 
       // Offline helyszín-kapu: ha a cache-elt állomás helyhez kötött és a
-      // pozíció túl messze, azonnal elutasítjuk (nem tesszük sorba).
+      // pozíció túl messze – vagy kötelező a pozíció, de nincs –, azonnal
+      // elutasítjuk (nem tesszük sorba, a szerver is elutasítaná).
+      if (cachedStation != null &&
+          location == null &&
+          QrProcessingService.requiresLocation(cachedStation)) {
+        if (!mounted) return;
+        setState(() {
+          _scanning = false;
+          _loading = false;
+          _station = null;
+          _errorMsg = _locationRequiredMessage;
+        });
+        _controller.stop();
+        return;
+      }
       if (cachedStation != null) {
         final rejection = QrProcessingService.locationRejection(
           cachedStation,
@@ -203,6 +217,13 @@ class _CameraScreenState extends State<CameraScreen> {
             'Túl messze vagy az állomástól (${e.distance} m). '
             'Menj közelebb az állomáshoz, és próbáld újra!';
       });
+    } on QrLocationRequiredException {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _station = null;
+        _errorMsg = _locationRequiredMessage;
+      });
     } on QrCodeNotFoundException {
       if (!mounted) return;
       setState(() {
@@ -242,16 +263,13 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
+  static const _locationRequiredMessage =
+      'Ennél az állomásnál csak bekapcsolt helymeghatározással jár pont. '
+      'Kapcsold be a helymeghatározást, és olvasd be újra a kódot!';
+
   Map<String, dynamic>? _findStationFromLocalCache(String code) {
-    final normalized = code.trim();
-    if (normalized.isEmpty) return null;
-    final allStations = LocalCache.getStations();
-    for (final station in allStations) {
-      final qr = station['qrCode']?.toString().trim();
-      final id = station['id']?.toString().trim();
-      if (qr == normalized || id == normalized) {
-        return station;
-      }
+    for (final station in LocalCache.getStations()) {
+      if (QrProcessingService.matchesStation(station, code)) return station;
     }
     return null;
   }

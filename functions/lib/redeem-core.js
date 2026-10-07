@@ -29,11 +29,14 @@ function projectOf(data) {
 
 /** A beolvasott kód feloldása állomásra vagy eseményre.
  *
- * Elsődleges út a privát `qr_codes` leképező kollekció; amíg a backfill le
- * nem futott, marad a régi keresés: qrCode mező, majd doc-id fallback.
+ * Az egyetlen hiteles út a privát `qr_codes` leképező kollekció. A régi
+ * keresés (nyilvános qrCode mező, majd dokumentum-azonosító) csak
+ * `legacyFallback` mellett fut: a QR-migráció (scripts/harden-qr-codes.mjs)
+ * előtti adatokhoz kell, utána ki kell kapcsolni, mert a nyilvános mezőkön át
+ * a kódok kigyűjthetők (T7). Lásd docs/LAUNCH.md.
  * @returns {Promise<{kind: 'station'|'event', id: string, data: object}|null>}
  */
-async function resolveTarget(db, code) {
+async function resolveTarget(db, code, { legacyFallback }) {
   const mapSnap = await db.collection('qr_codes').doc(qrMappingDocId(code)).get();
   if (mapSnap.exists) {
     const mapping = mapSnap.data();
@@ -41,10 +44,18 @@ async function resolveTarget(db, code) {
     const coll = kind === 'event' ? 'events' : 'stations';
     const target = await db.collection(coll).doc(String(mapping.targetId)).get();
     if (target.exists) {
+      // A leképezés csak a saját településének célját oldhatja fel: egy más
+      // településre „átirányított” kód érvénytelen (a szabályok ezt íráskor is
+      // tiltják – ez a mélységi védelem második vonala).
+      if (mapping.projectId && mapping.projectId !== projectOf(target.data())) {
+        return null;
+      }
       return { kind, id: target.id, data: target.data() };
     }
     // A leképezés árva (a cél törölve) — továbbengedjük a fallbackre.
   }
+
+  if (!legacyFallback) return null;
 
   for (const [coll, kind] of [['stations', 'station'], ['events', 'event']]) {
     const byField = await db
@@ -161,6 +172,12 @@ async function detectTripCompletion({
 
   const newlyCompleted = [];
   for (const tripId of candidateTripIds) {
+    // Csak létező, az állomás településéhez tartozó túra teljesülhet – egy
+    // törölt túrára mutató, ottmaradt hivatkozás nem ér jutalmat.
+    const tripSnap = await db.collection('trips').doc(tripId).get();
+    if (!tripSnap.exists || projectOf(tripSnap.data()) !== projectOf(targetData)) {
+      continue;
+    }
     // Két lekérdezés: az új `tripIds` tömbre (array-contains, egy állomás
     // több túrának is megállója lehet) ÉS a régi egyszeres `tripId` mezőre
     // (amíg a migráció, scripts/migrate-station-trip-memberships.mjs, nem
@@ -311,27 +328,24 @@ export function leaderboardEntryRef(db, projectId, uid) {
     .doc(uid);
 }
 
-async function syncLeaderboard({
+/** A ranglista-bejegyzések írása a jóváírási tranzakción belül: így a pont
+ *  és a ranglista csak együtt változhat (egy félbeszakadt kérés után sem
+ *  maradhat el a ranglista frissítése, mert a tranzakció egésze ismétlődik). */
+function writeLeaderboards(tx, {
   db,
   FieldValue,
   uid,
+  displayName,
   points,
   counts,
-  progressData,
   projectId,
   awardedPoints,
   kind,
 }) {
-  let displayName = String(progressData?.name ?? '').trim();
-  if (!displayName) {
-    const userSnap = await db.collection('users').doc(uid).get();
-    const user = userSnap.exists ? userSnap.data() : {};
-    displayName = String(user.displayName ?? user.name ?? 'Felhasználó');
-  }
-
   // Régi, globális ranglista – megmarad, hogy a még nem frissített
-  // appverziók se törjenek el (átmeneti kettős írás).
-  await db.collection('public_leaderboard').doc(uid).set(
+  // appverziók se törjenek el (átmeneti kettős írás). Abszolút értékek.
+  tx.set(
+    db.collection('public_leaderboard').doc(uid),
     {
       displayName,
       points,
@@ -344,8 +358,9 @@ async function syncLeaderboard({
 
   // Projektenkénti ranglista: a pontokat NÖVELJÜK, mert itt csak az adott
   // településen szerzett pont számít (a globális totalPoints nem jó erre).
-  // Csak új (nem duplikált) jóváíráskor fut, így az increment pontos.
-  await leaderboardEntryRef(db, projectId, uid).set(
+  // A tranzakció garantálja, hogy egy jóváírás pontosan egyszer növel.
+  tx.set(
+    leaderboardEntryRef(db, projectId, uid),
     {
       uid,
       displayName,
@@ -356,6 +371,15 @@ async function syncLeaderboard({
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true },
+  );
+}
+
+/** Érvényes-e a beolvasáskori pozíció (mindkét koordináta véges szám). */
+function hasValidLocation(location) {
+  return (
+    location != null &&
+    Number.isFinite(Number(location.lat)) &&
+    Number.isFinite(Number(location.lng))
   );
 }
 
@@ -377,8 +401,9 @@ export async function redeemQrCore({
   code,
   location,
   projectId,
+  legacyFallback = true,
 }) {
-  const target = await resolveTarget(db, code);
+  const target = await resolveTarget(db, code, { legacyFallback });
   if (!target) {
     return { found: false };
   }
@@ -401,6 +426,18 @@ export async function redeemQrCore({
     };
   }
 
+  // Az admin állomásonként előírhatja a helymeghatározást: ilyenkor a pozíció
+  // nélküli kérés (GPS kikapcsolva, módosított kliens) nem kap pontot.
+  if (target.data?.requireLocation === true && !hasValidLocation(location)) {
+    return {
+      found: true,
+      rejected: 'location_required',
+      kind: target.kind,
+      targetId: target.id,
+      target: target.data,
+    };
+  }
+
   const locationReject = checkLocation(target.data, location);
   if (locationReject) {
     return {
@@ -415,13 +452,22 @@ export async function redeemQrCore({
   }
 
   const points = targetPoints(target.data);
+  const targetProject = projectOf(target.data);
   const progressRef = db.collection('user_progress').doc(uid);
+  const userRef = db.collection('users').doc(uid);
   const listField =
     target.kind === 'station' ? 'completedStations' : 'completedEvents';
 
   const outcome = await db.runTransaction(async (tx) => {
     const snap = await tx.get(progressRef);
     const data = snap.exists ? snap.data() : null;
+    // A ranglistán megjelenő név – minden olvasás az írások előtt történik.
+    let displayName = String(data?.name ?? '').trim();
+    if (!displayName) {
+      const userSnap = await tx.get(userRef);
+      const user = userSnap.exists ? userSnap.data() : {};
+      displayName = String(user?.displayName ?? user?.name ?? 'Felhasználó');
+    }
 
     const completedStations = [...(data?.completedStations ?? [])];
     const completedEvents = [...(data?.completedEvents ?? [])];
@@ -466,6 +512,21 @@ export async function redeemQrCore({
         }
         tx.update(progressRef, update);
       }
+
+      writeLeaderboards(tx, {
+        db,
+        FieldValue,
+        uid,
+        displayName,
+        points: currentPoints + points,
+        counts: {
+          stations: completedStations.length,
+          events: completedEvents.length,
+        },
+        projectId: targetProject,
+        awardedPoints: points,
+        kind: target.kind,
+      });
     }
 
     return {
@@ -477,20 +538,18 @@ export async function redeemQrCore({
     };
   });
 
-  let completedTripIds = [...(outcome.progressData.completedTripIds ?? [])];
-
-  let newAchievements = [];
-  if (!outcome.alreadyDone) {
-    completedTripIds = await detectTripCompletion({
-      db,
-      FieldValue,
-      uid,
-      kind: target.kind,
-      targetData: target.data,
-      completedStations: outcome.completedStations,
-      completedTripIds,
-    });
-  }
+  // A túra-teljesítés és a jutalmak kiértékelése idempotens, ezért ismételt
+  // beolvasáskor is lefut: ha egy korábbi kérés a jóváírás után megszakadt,
+  // az újrapróbálkozás (pl. az offline sorból) pótolja a kimaradt lépést.
+  const completedTripIds = await detectTripCompletion({
+    db,
+    FieldValue,
+    uid,
+    kind: target.kind,
+    targetData: target.data,
+    completedStations: outcome.completedStations,
+    completedTripIds: [...(outcome.progressData.completedTripIds ?? [])],
+  });
 
   const counts = {
     stations: outcome.completedStations.length,
@@ -499,28 +558,15 @@ export async function redeemQrCore({
     points: outcome.updatedPoints,
   };
 
-  if (!outcome.alreadyDone) {
-    // Előbb a leaderboard, hogy a top_n feltétel már a friss pontszámmal
-    // értékelődjön ki.
-    await syncLeaderboard({
-      db,
-      FieldValue,
-      uid,
-      points: outcome.updatedPoints,
-      counts,
-      progressData: outcome.progressData,
-      projectId: projectOf(target.data),
-      awardedPoints: points,
-      kind: target.kind,
-    });
-    newAchievements = await checkAchievements({
-      db,
-      FieldValue,
-      uid,
-      counts,
-      projectId: projectOf(target.data),
-    });
-  }
+  // A ranglista a tranzakcióban már frissült, így a top_n feltétel a friss
+  // pontszámmal értékelődik ki.
+  const newAchievements = await checkAchievements({
+    db,
+    FieldValue,
+    uid,
+    counts,
+    projectId: targetProject,
+  });
 
   return {
     found: true,

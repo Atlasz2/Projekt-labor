@@ -2,7 +2,7 @@ import PropTypes from "prop-types";
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { db, storage } from '../firebaseConfig';
-import { addDoc, collection, deleteDoc, deleteField, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, deleteField, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { uploadImageWithFallback, fetchDataUrl } from '../utils/imageUpload';
 import { useProject } from '../context/ProjectContext';
@@ -16,9 +16,19 @@ import '../styles/About.css';
 import ConfirmDialog from '../components/ConfirmDialog';
 import StateCard from '../components/StateCard';
 import { normalizePhotosFromDoc, buildPhotoFields } from '../utils/photoHelpers';
-import { getQrValue, qrDataUrl } from '../utils/qrHelpers';
+import { qrDataUrl } from '../utils/qrHelpers';
 import QrImage from '../components/QrImage';
-import { assertQrCodeAvailable, syncQrMapping, removeQrMapping, QrCodeCollisionError } from '../utils/qrMapping';
+import {
+  assertQrCodeAvailable,
+  currentQrCode,
+  customQrCodeProblem,
+  generateQrCode,
+  isWeakQrCode,
+  loadQrCodesByTarget,
+  QrCodeCollisionError,
+  stageQrDelete,
+  stageQrSave,
+} from '../utils/qrMapping';
 import { stationTripIds, buildTripOrderOnSave } from '../utils/stationTrips';
 
 const DEFAULT_CENTER = { lat: 47.06, lng: 17.715 };
@@ -64,6 +74,7 @@ const EMPTY_FORM = {
   points: 10,
   photos: [],
   qrCode: '',
+  requireLocation: false,
   tripIds: [],
   unlockContent: '',
   unlockContentImageUrl: '',
@@ -92,6 +103,13 @@ export default function Stations() {
       return filterByProject(all, activeProjectId);
     },
   });
+  // A QR-kódok értéke csak a privát leképezésben él (a nyilvános dokumentum
+  // a lenyomatot tárolja), ezért a megjelenítéshez innen olvassuk.
+  const { data: qrCodes = new Map() } = useQuery({
+    queryKey: ['qr_codes', activeProjectId],
+    queryFn: () => loadQrCodesByTarget(db, activeProjectId),
+  });
+  const stationCode = (station) => currentQrCode(qrCodes, 'station', station);
   const [editingId, setEditingId] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -121,7 +139,8 @@ export default function Stations() {
       description: station.description || '',
       points: station.points || 10,
       photos: normalizePhotosFromDoc(station),
-      qrCode: station.qrCode || '',
+      qrCode: stationCode(station),
+      requireLocation: station.requireLocation === true,
       tripIds: stationTripIds(station),
       unlockContent: station.unlockContent || '',
       unlockContentImageUrl: station.unlockContentImageUrl || '',
@@ -205,7 +224,7 @@ export default function Stations() {
         description: formData.description.trim(),
         points: parseInt(formData.points, 10) || 10,
         ...buildPhotoFields(formData.photos),
-        qrCode: formData.qrCode.trim() || '',
+        requireLocation: !!formData.requireLocation,
         tripIds: formData.tripIds,
         tripOrder: buildTripOrderOnSave({
           station: editingStation,
@@ -226,35 +245,37 @@ export default function Stations() {
         payload.orderIndex = deleteField();
       }
 
-      await assertQrCodeAvailable(db, {
-        code: payload.qrCode,
+      // A kód: a megadott (vagy a meglévő) érték, üresen hagyva biztonságos,
+      // véletlen kód. Új vagy megváltoztatott kódnál a gyenge érték tiltott.
+      const previousCode = editingStation ? stationCode(editingStation) : null;
+      const code = formData.qrCode.trim() || generateQrCode();
+      if (code !== previousCode) {
+        const problem = customQrCodeProblem(code);
+        if (problem) {
+          showMsg(problem, 'warning');
+          return;
+        }
+      }
+      await assertQrCodeAvailable(db, { code, kind: 'station', targetId: editingId });
+
+      // Az állomás és a QR-leképezése egy kötegben íródik (atomi).
+      const targetRef = editingId
+        ? doc(db, 'stations', editingId)
+        : doc(collection(db, 'stations'));
+      const batch = writeBatch(db);
+      await stageQrSave(db, {
+        batch,
+        ops: { deleteField },
         kind: 'station',
-        targetId: editingId,
+        targetRef,
+        isNew: !editingId,
+        payload,
+        code,
+        previousCode,
+        projectId: activeProjectId,
       });
-
-      let savedId = editingId;
-      if (editingId) {
-        await updateDoc(doc(db, 'stations', editingId), payload);
-      } else {
-        const ref = await addDoc(collection(db, 'stations'), payload);
-        savedId = ref.id;
-      }
-
-      // A privát qr_codes leképezés frissítése — best effort: ha elhasal,
-      // a Cloud Function legacy fallbackje (qrCode mező) akkor is működik.
-      const previous = editingId
-        ? stations.find((station) => station.id === editingId)
-        : null;
-      try {
-        await syncQrMapping(db, {
-          kind: 'station',
-          targetId: savedId,
-          code: payload.qrCode,
-          previousCode: previous ? getQrValue(previous) : null,
-        });
-      } catch {
-        /* legacy fallback fedi */
-      }
+      await batch.commit();
+      queryClient.invalidateQueries({ queryKey: ['qr_codes'] });
 
       setShowModal(false);
       showMsg('Állomás mentve!', 'success');
@@ -272,17 +293,17 @@ export default function Stations() {
     if (!deleteDialog.id) return;
     try {
       const deleted = stations.find((station) => station.id === deleteDialog.id);
-      await deleteDoc(doc(db, 'stations', deleteDialog.id));
-      try {
-        await removeQrMapping(db, {
-          code: deleted?.qrCode,
-          targetId: deleteDialog.id,
-        });
-      } catch {
-        /* árva leképezést a redeemQr found:false-ként kezel */
-      }
+      // Az állomás és a QR-leképezése együtt törlődik (nem marad árva kód).
+      const batch = writeBatch(db);
+      stageQrDelete(db, {
+        batch,
+        targetRef: doc(db, 'stations', deleteDialog.id),
+        code: deleted ? stationCode(deleted) : null,
+      });
+      await batch.commit();
       setDeleteDialog({ open: false, id: null });
       queryClient.invalidateQueries({ queryKey: ['stations'] });
+      queryClient.invalidateQueries({ queryKey: ['qr_codes'] });
     } catch {
       showMsg('Hiba törlés közben');
       setDeleteDialog({ open: false, id: null });
@@ -292,7 +313,7 @@ export default function Stations() {
   const handleDownloadPdf = async (station) => {
     try {
       const docPdf = new jsPDF({ unit: 'mm', format: 'a4' });
-      const qrValue = getQrValue(station);
+      const qrValue = stationCode(station);
       const qrData = await qrDataUrl(qrValue, 440);
 
       docPdf.setFont('helvetica', 'bold');
@@ -431,7 +452,7 @@ export default function Stations() {
       ) : (
         <div className="stations-grid">
                 {filtered.map((station) => {
-                  const qrValue = getQrValue(station);
+                  const qrValue = stationCode(station);
                   // A kulcs a túra azonosítója (két ismeretlen túra neve azonos lenne),
                   // és amíg a túrák nem töltődtek be, nem mutatunk „Ismeretlen túrát”.
                   const tripChips = trips.length
@@ -528,9 +549,23 @@ export default function Stations() {
                     <span className="field-hint">Egy állomás akár több túrának is megállója lehet (vagy egynek sem).</span>
                   </div>
                   <div className="field-group">
-                    <label>QR kód (egyedi azonosító)</label>
-                    <input type="text" value={formData.qrCode} onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })} placeholder="Ha üres, az állomás ID lesz használva" />
-                    <span className="field-hint">Az állomásnál kihelyezett QR kódon lévő szöveg</span>
+                    <label htmlFor="station-qr">QR-kód</label>
+                    <div className="qr-code-row">
+                      <input id="station-qr" type="text" value={formData.qrCode} onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })} placeholder="Üresen hagyva biztonságos, véletlen kód készül" />
+                      <button type="button" className="btn-secondary" onClick={() => setFormData({ ...formData, qrCode: generateQrCode() })}>Új véletlen kód</button>
+                    </div>
+                    {editingId && formData.qrCode && isWeakQrCode(formData.qrCode, editingId) ? (
+                      <span className="field-hint field-warning">⚠️ Ez a kód kitalálható (rövid, vagy egyezik az állomás azonosítójával). Generálj újat, és nyomtasd újra a matricát.</span>
+                    ) : (
+                      <span className="field-hint">A kód csak az admin felületen és a kinyomtatott matricán látszik; a mobil kliensek nem tudják kigyűjteni. Kódváltás után a matricát újra kell nyomtatni.</span>
+                    )}
+                  </div>
+                  <div className="field-group">
+                    <label className="checkbox-label">
+                      <input type="checkbox" checked={!!formData.requireLocation} onChange={(e) => setFormData({ ...formData, requireLocation: e.target.checked })} />
+                      Helymeghatározás kötelező a beolvasáshoz
+                    </label>
+                    <span className="field-hint">Bekapcsolva csak a helyszínen lévő, bekapcsolt helymeghatározású telefon kap pontot (a lefényképezett kód távolról nem váltható be). Kikapcsolva a GPS nélküli eszközök is gyűjthetnek.</span>
                   </div>
                 </section>
 

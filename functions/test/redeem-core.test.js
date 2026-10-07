@@ -209,6 +209,7 @@ test('túra-teljesítés: az utolsó állomással a completedTripIds bővül és
     completedEvents: [],
     completedTripIds: [],
   });
+  db.seed('trips/trip1', { name: 'Vár-túra' });
   db.seed('stations/st1', { name: 'Első', tripId: 'trip1', points: 10 });
   db.seed('stations/st2', { name: 'Második', qrCode: 'ST2', tripId: 'trip1', points: 10 });
   db.seed('stations/other', { name: 'Másik túráé', tripId: 'trip2', points: 10 });
@@ -243,6 +244,8 @@ test('túra-teljesítés: egy állomás két túrának is megállója (tripIds) 
     completedTripIds: [],
   });
   // A "kozos" állomás mindkét túrának (rövid és hosszú) is megállója.
+  db.seed('trips/rovid', { name: 'Rövid' });
+  db.seed('trips/hosszu', { name: 'Hosszú' });
   db.seed('stations/rovid1', { name: 'Rövid-1', tripIds: ['rovid'] });
   db.seed('stations/kozos', {
     name: 'Közös',
@@ -267,6 +270,8 @@ test('túra-teljesítés: a közös állomás mindkét túrát lezárhatja, ha �
     completedEvents: [],
     completedTripIds: [],
   });
+  db.seed('trips/rovid', { name: 'Rövid' });
+  db.seed('trips/hosszu', { name: 'Hosszú' });
   db.seed('stations/rovid1', { name: 'Rövid-1', tripIds: ['rovid'] });
   db.seed('stations/kozos', {
     name: 'Közös',
@@ -552,4 +557,158 @@ test('reconcile: haladás-dokumentum nélkül üres eredmény, írás nélkül',
 
   assert.deepEqual(newAchievements, []);
   assert.equal(db.read(`user_progress/${uid}/unlocked_achievements/elso`), undefined);
+});
+
+// ── Indulás előtti megerősítések ───────────────────────────────────────────
+
+test('túra-teljesítés: törölt túrára mutató hivatkozás nem teljesül', async () => {
+  db.seed(`user_progress/${uid}`, {
+    name: 'Teszt Elek',
+    totalPoints: 0,
+    completedStations: [],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  // A 'torolt' túra dokumentuma nincs meg, az állomás mégis hivatkozik rá.
+  db.seed('stations/egyedul', { name: 'Egyetlen', qrCode: 'EGY', tripIds: ['torolt'] });
+
+  await redeem('EGY');
+
+  assert.deepEqual(db.read(`user_progress/${uid}`).completedTripIds, []);
+});
+
+test('túra-teljesítés: más település túrája nem teljesül ezen az állomáson', async () => {
+  db.seed('trips/idegen', { name: 'Idegen', projectId: 'tapolca' });
+  db.seed('stations/st1', { name: 'Egy', qrCode: 'ST1', tripIds: ['idegen'] });
+
+  await redeem('ST1');
+
+  assert.deepEqual(db.read(`user_progress/${uid}`).completedTripIds, []);
+});
+
+test('önjavítás: ismételt beolvasás pótolja a korábban elmaradt túra-teljesítést', async () => {
+  // Az állomás már jóvá van írva, de a túra-teljesítés egy megszakadt kérés
+  // miatt nem íródott be.
+  db.seed(`user_progress/${uid}`, {
+    name: 'Teszt Elek',
+    totalPoints: 20,
+    completedStations: ['a', 'b'],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  db.seed('trips/t1', { name: 'Túra' });
+  db.seed('stations/a', { name: 'A', tripIds: ['t1'] });
+  db.seed('stations/b', { name: 'B', qrCode: 'B', tripIds: ['t1'] });
+
+  const result = await redeem('B');
+
+  assert.equal(result.alreadyDone, true);
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 20, 'pont nem változik');
+  assert.deepEqual(db.read(`user_progress/${uid}`).completedTripIds, ['t1']);
+});
+
+test('ranglista: ismételt beolvasás nem növeli újra a települési pontot', async () => {
+  db.seed('stations/st1', { name: 'Vár', qrCode: 'VAR', points: 30 });
+
+  await redeem('VAR');
+  await redeem('VAR');
+
+  const entry = db.read(`leaderboards/nagyvazsony/entries/${uid}`);
+  assert.equal(entry.points, 30);
+  assert.equal(entry.completedStationsCount, 1);
+  assert.equal(entry.displayName, 'Teszt Elek');
+  assert.equal(db.read(`public_leaderboard/${uid}`).points, 30);
+});
+
+test('ranglista: profil nélküli haladásnál a users dokumentum neve kerül ki', async () => {
+  db.seed(`user_progress/${uid}`, {
+    totalPoints: 0,
+    completedStations: [],
+    completedEvents: [],
+    completedTripIds: [],
+  });
+  db.seed(`users/${uid}`, { displayName: 'Kinizsi Pál' });
+  db.seed('stations/st1', { name: 'Vár', qrCode: 'VAR', points: 5 });
+
+  await redeem('VAR');
+
+  assert.equal(db.read(`leaderboards/nagyvazsony/entries/${uid}`).displayName, 'Kinizsi Pál');
+});
+
+test('kötelező helymeghatározás: pozíció nélkül location_required, nincs pont', async () => {
+  db.seed('stations/st1', {
+    name: 'Kilátó',
+    qrCode: 'KILATO',
+    points: 10,
+    requireLocation: true,
+    location: { latitude: 47.06, longitude: 17.715 },
+  });
+
+  const result = await redeem('KILATO', null);
+
+  assert.equal(result.rejected, 'location_required');
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 0);
+  assert.equal(db.read(`leaderboards/nagyvazsony/entries/${uid}`), undefined);
+});
+
+test('kötelező helymeghatározás: helyszíni pozícióval jóváíródik', async () => {
+  db.seed('stations/st1', {
+    name: 'Kilátó',
+    qrCode: 'KILATO',
+    points: 10,
+    requireLocation: true,
+    location: { latitude: 47.06, longitude: 17.715 },
+  });
+
+  const result = await redeem('KILATO', { lat: 47.0601, lng: 17.7151 });
+
+  assert.equal(result.rejected, undefined);
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 10);
+});
+
+test('QR-migráció után: a nyilvános mezőkön át nem oldható fel kód (T7)', async () => {
+  db.seed('stations/st1', { name: 'Vár', qrCode: 'VAR-001', points: 10 });
+  db.seed('stations/st2', { name: 'Kút', points: 10 });
+
+  const byField = await redeemQrCore({
+    db, FieldValue: FakeFieldValue, uid, code: 'VAR-001', legacyFallback: false,
+  });
+  const byId = await redeemQrCore({
+    db, FieldValue: FakeFieldValue, uid, code: 'st2', legacyFallback: false,
+  });
+
+  assert.deepEqual(byField, { found: false });
+  assert.deepEqual(byId, { found: false });
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 0);
+});
+
+test('QR-migráció után: a privát leképezésen át a jóváírás működik', async () => {
+  db.seed('stations/st1', { name: 'Vár', points: 10 });
+  db.seed(`qr_codes/${qrMappingDocId('NV-8K2M4Q7X9C3T5W1R')}`, {
+    kind: 'station',
+    targetId: 'st1',
+  });
+
+  const result = await redeemQrCore({
+    db, FieldValue: FakeFieldValue, uid, code: 'NV-8K2M4Q7X9C3T5W1R', legacyFallback: false,
+  });
+
+  assert.equal(result.found, true);
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 10);
+});
+
+test('QR: más település célját feloldó (eltérített) leképezés érvénytelen', async () => {
+  db.seed('stations/st1', { name: 'Mencshelyi', projectId: 'mencshely', points: 10 });
+  db.seed(`qr_codes/${qrMappingDocId('NV-ELTERITETT-KOD1')}`, {
+    kind: 'station',
+    targetId: 'st1',
+    projectId: 'nagyvazsony',
+  });
+
+  const result = await redeemQrCore({
+    db, FieldValue: FakeFieldValue, uid, code: 'NV-ELTERITETT-KOD1', legacyFallback: false,
+  });
+
+  assert.deepEqual(result, { found: false });
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 0);
 });

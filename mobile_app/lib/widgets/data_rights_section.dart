@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../screens/privacy_screen.dart';
 import '../services/account_service.dart';
 
 /// A profil "Adataim és adatvédelem" (GDPR) szekciója: adatexport és
@@ -106,6 +107,17 @@ class _DataRightsSectionState extends State<DataRightsSection> {
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.policy_outlined),
+              title: const Text('Adatkezelési tájékoztató'),
+              subtitle: const Text('Milyen adatot, miért és meddig kezelünk'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PrivacyScreen()),
+              ),
+            ),
+            const Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.download_outlined),

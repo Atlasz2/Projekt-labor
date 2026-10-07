@@ -1,9 +1,11 @@
 // Minimális in-memory Firestore-stub a redeem-core tesztjeihez.
 // Csak azt a felületet valósítja meg, amit a core használ:
 // collection/doc get-set-update, where('==')+limit+get, runTransaction, batch,
-// valamint a FieldValue transzformok (serverTimestamp, increment, arrayUnion).
+// valamint a FieldValue transzformok (serverTimestamp, increment, arrayUnion,
+// delete).
 
 const SERVER_TIMESTAMP = Symbol('serverTimestamp');
+const DELETE_FIELD = Symbol('deleteField');
 
 class Increment {
   constructor(n) {
@@ -21,12 +23,15 @@ export const FakeFieldValue = {
   serverTimestamp: () => SERVER_TIMESTAMP,
   increment: (n) => new Increment(n),
   arrayUnion: (...values) => new ArrayUnion(values),
+  delete: () => DELETE_FIELD,
 };
 
 function applyTransforms(existing, incoming) {
   const out = { ...existing };
   for (const [key, value] of Object.entries(incoming)) {
-    if (value === SERVER_TIMESTAMP) {
+    if (value === DELETE_FIELD) {
+      delete out[key];
+    } else if (value === SERVER_TIMESTAMP) {
       out[key] = new Date();
     } else if (value instanceof Increment) {
       out[key] = (Number(out[key]) || 0) + value.n;

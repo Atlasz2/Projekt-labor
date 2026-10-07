@@ -5,6 +5,7 @@ import {
   stationOrderIndexForTrip,
   stationsForTrip,
   buildTripOrderOnSave,
+  tripUnlinkPatch,
 } from "./stationTrips";
 
 describe("stationTripIds", () => {
@@ -96,5 +97,32 @@ describe("buildTripOrderOnSave", () => {
       selectedTripIds: ["t1", "t2"],
     });
     expect(result).toEqual({ t1: 1, t2: 1 });
+  });
+});
+
+describe("tripUnlinkPatch", () => {
+  const ops = {
+    arrayRemove: (v) => ({ op: "arrayRemove", v }),
+    deleteField: () => ({ op: "delete" }),
+  };
+
+  it("kiveszi a túrát a tripIds tömbből és a tripOrder leképezésből", () => {
+    const station = { tripIds: ["t1", "t2"], tripOrder: { t1: 0, t2: 3 } };
+    expect(tripUnlinkPatch(station, "t2", ops)).toEqual({
+      tripIds: { op: "arrayRemove", v: "t2" },
+      "tripOrder.t2": { op: "delete" },
+    });
+  });
+
+  it("a régi egyszeres tripId/orderIndex mezőket is törli", () => {
+    expect(tripUnlinkPatch({ tripId: "t1", orderIndex: 2 }, "t1", ops)).toEqual({
+      tripId: { op: "delete" },
+      orderIndex: { op: "delete" },
+    });
+  });
+
+  it("más túrához tartozó állomásnál nincs teendő", () => {
+    expect(tripUnlinkPatch({ tripIds: ["t1"], tripOrder: { t1: 0 } }, "t9", ops)).toBeNull();
+    expect(tripUnlinkPatch({}, "t1", ops)).toBeNull();
   });
 });

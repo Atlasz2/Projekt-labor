@@ -86,7 +86,8 @@ alapértelmezett projekt akkor is használható, ha nincs külön dokumentuma.
 | `latitude`, `longitude` | number | Koordináta (alternatívaként beágyazott `location.{latitude,longitude}`) |
 | `radius` | number | Opcionális; a helyszín-ellenőrzés sugara méterben (alap: 150) |
 | `points` | number | A beolvasásért járó pont (alap: 10) |
-| `qrCode` | string | A kihelyezett QR-kód szövege |
+| `qrHash` | string | A QR-kód SHA-256 lenyomata (hex) – a mobil offline felismeréséhez; a kód maga csak a privát `qr_codes`-ban él |
+| `requireLocation` | bool | Ha igaz, pozíció nélküli beolvasás nem kap pontot (`location_required`) |
 | `tripIds` | string[] | Mely túráknak megállója (**0, 1 vagy TÖBB** is lehet) |
 | `tripOrder` | map | `{ [tripId]: number }` — sorrend AZ ADOTT túrán belül, túránként külön |
 | `photos`, `photoUrls`, `imageUrl` | array/string | Képek (lásd lentebb) |
@@ -118,7 +119,7 @@ alapértelmezett projekt akkor is használható, ha nincs külön dokumentuma.
 | `date` | string | Az esemény dátuma |
 | `location` | string | Helyszín |
 | `points` | number | Pecsétért járó pont |
-| `qrCode` | string | Opcionális QR-kód |
+| `qrHash` | string | A QR-kód SHA-256 lenyomata |
 | `photos`, `photoUrls`, `imageUrl` | array/string | Képek |
 | `projectId` | string | **Település** |
 
@@ -242,11 +243,15 @@ Dokumentum-azonosító: a QR-kód URI-kódolt alakja.
 
 | Mező | Típus | Leírás |
 |---|---|---|
+| `code` | string | A QR-kód értéke (csak itt tárolódik) |
 | `kind` | string | `station` vagy `event` |
 | `targetId` | string | A cél dokumentum azonosítója |
+| `projectId` | string | A cél települése (tenant-izoláció) |
 
-Elsődleges feloldási út; ha nincs találat, a szerver a `qrCode` mezőre, majd a
-dokumentum-azonosítóra esik vissza.
+Az egyetlen hiteles feloldási út. A nyilvános `qrCode` mező (régi adat) a
+`scripts/harden-qr-codes.mjs` migrációval szűnik meg; addig a szerver
+`QR_LEGACY_FALLBACK=true` mellett erre és a dokumentum-azonosítóra is visszaesik.
+A szabályok a migráció után a nyilvános `qrCode` mezőt tiltják.
 
 ---
 
@@ -297,8 +302,9 @@ Dokumentum-azonosító: a normalizált (kisbetűs, szóköz-tömörített) név.
    developer mindet.
 5. **Szerep-emelés tiltva**: a `role` mezőt csak developer állíthatja.
 6. **App Check**: a mobilból hívott függvények (`redeemQr`,
-   `reconcileAchievements`, `exportUserData`, `deleteMyAccount`) csak érvényes
-   App Check-tokennel fogadnak hívást.
+   `reconcileAchievements`, `renameMe`, `exportUserData`, `deleteMyAccount`) a
+   tokent ellenőrzik és naplózzák; `ENFORCE_APP_CHECK=true` mellett token nélkül
+   elutasítanak (az áruházi kiadás után kapcsolandó be, lásd `docs/LAUNCH.md`).
 7. **Jutalmak**: az `unlocked_achievements` alkollekciót csak a szerver és admin
    írja; a kliens a feloldást a `reconcileAchievements` függvénytől kéri.
 
@@ -334,7 +340,7 @@ a developer fiók bejelentkezésével (REST) dolgozik.
 | `backfill-project-id.mjs` | `projectId` ráírása a régi tartalomra (idempotens, `--dry-run`) |
 | `migrate-inline-images.mjs` | Beágyazott base64 képek átmozgatása Storage-ba (`--dry-run`, `--backup-dir`) |
 | `cleanup-obsolete-station-fields.mjs` | Megszűnt állomás-mezők törlése (`funFact`, `extraInfo`) |
-| `backfill-qr-codes.mjs` | A `qr_codes` leképezés feltöltése |
+| `harden-qr-codes.mjs` | QR-megerősítés: kód csak a leképezésben, nyilvánosan csak `qrHash`; a kitalálható kódok cseréje és újranyomtatási lista (alapból próbafuttatás, `--apply`) |
 | `create-developer.mjs` | Developer fiók létrehozása/frissítése |
 
 ---

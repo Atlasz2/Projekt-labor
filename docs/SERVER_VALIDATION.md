@@ -21,13 +21,18 @@ kliens elől pedig a `firestore.rules` ezeket teljesen lezárja.
 ```
 Mobil app ──(nyers kód + GPS + projectId)──► redeemQr (europe-west1, App Check)
                                            │ 1. qr_codes/{URI-kódolt kód} leképezés
-                                           │    (tartalék: stations/events qrCode mező,
-                                           │     majd doc-id)
+                                           │    (a leképezés települése = a célé; a
+                                           │     qrCode mező / doc-id tartalék csak
+                                           │     QR_LEGACY_FALLBACK=true mellett)
                                            │ 2. település-ellenőrzés (wrong_project)
-                                           │ 3. helyszín-ellenőrzés (Haversine, radius / 150 m)
-                                           │ 4. tranzakció: user_progress jóváírás
-                                           │ 5. túra-teljesítés, ranglista-szinkron
-                                           │ 6. jutalmak (csak a település sajátjai)
+                                           │ 3. kötelező pozíció (requireLocation →
+                                           │    location_required)
+                                           │ 4. helyszín-ellenőrzés (Haversine, radius / 150 m)
+                                           │ 5. tranzakció: user_progress jóváírás ÉS
+                                           │    ranglista-bejegyzések (atomi)
+                                           │ 6. túra-teljesítés (csak létező, saját
+                                           │    településbeli túra) – idempotens
+                                           │ 7. jutalmak (csak a település sajátjai) – idempotens
                                            ▼
                                        Firestore (Admin SDK)
 
@@ -39,9 +44,19 @@ Mobil (jutalmak képernyő) ──► reconcileAchievements (App Check)
   injektált adatbázissal (`redeemQrCore`, `reconcileAchievementsCore`); a
   `functions/test/` alatt memóriabeli Firestore-hamisítvánnyal, a
   `firestore-tests/` alatt valódi emulátorral tesztelt.
-- **`qr_codes` kollekció** – kód → cél (állomás/esemény) leképezés; csak admin és
-  a szerver olvashatja. Az admin felület mentéskor/törléskor karbantartja
-  (`admin/src/utils/qrMapping.js`), ütközésvédelemmel.
+- **`qr_codes` kollekció** – kód → cél (állomás/esemény) leképezés `projectId`-vel;
+  csak a település adminja, a developer és a szerver olvashatja. A kód értéke
+  KIZÁRÓLAG itt él: a nyilvános dokumentum a SHA-256 lenyomatát (`qrHash`)
+  tárolja. Az admin felület a dokumentumot és a leképezést egy kötegben írja
+  (`admin/src/utils/qrMapping.js: stageQrSave`), ütközésvédelemmel; új elemnél
+  kriptográfiailag véletlen, 16 jeles kódot generál, egyedi kódot csak legalább
+  12 karakterrel fogad el. A szabályok a leképezés célját a köteg utáni
+  állapotban ellenőrzik (`existsAfter`/`getAfter`), így kód nem irányítható más
+  település állomására.
+- **Önjavítás** – a pont és a ranglista egy tranzakcióban íródik; a túra-
+  teljesítés és a jutalmak ismételt beolvasáskor is kiértékelődnek, így egy
+  megszakadt kérés utáni újrapróbálkozás (pl. az offline sorból) pótolja a
+  kimaradt lépést.
 - **Mobil** – a `QrProcessingService` csak a szervert hívja. Ismeretlen kódra a
   szerver `found:false`-t ad (végleges hiba, az offline sor eldobja); a nem
   elérhető függvény (`QrServerUnavailableException`) és a hálózati hiba átmeneti,
@@ -82,16 +97,11 @@ firebase deploy --only functions
 firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-1. **Függvények** (köztük az új `reconcileAchievements`).
-2. **`qr_codes` feltöltése** (egyszeri, idempotens), ha még nem futott:
-   `cd functions && GOOGLE_APPLICATION_CREDENTIALS=<service-account.json> node scripts/backfill-qr-codes.mjs`
-3. **Szabályok.** A szerver-utas mobilverzió (App Distribution) kiadása után. A régi,
-   kliensoldali jóváírású verziók ezután nem tudnak pontot írni, és a jutalmak
-   képernyőjük egyeztetése sem működik.
-4. **Opcionális:** a `qrCode` mező eltávolítása a nyilvános `stations`/`events`
-   dokumentumokból és a doc-id tartalék kivezetése a függvényből (teljes
-   enumeráció-védelem). Ehhez a mobil offline QR-felismerését is a leképezésre
-   kell átállítani, mert az jelenleg a gyorsítótárazott `qrCode` mezőt használja.
+Az élesítés pontos, sorrendhez kötött lépései (QR-migráció a
+`scripts/harden-qr-codes.mjs` szkripttel, `QR_LEGACY_FALLBACK=false`, függvények,
+szabályok, App Check-kikényszerítés `ENFORCE_APP_CHECK=true`-val):
+[LAUNCH.md](LAUNCH.md). A kapcsolók a `functions/.env.projekt-labor-a4b1c`
+fájlban vannak, így az élesítés konfigurációval, kódmódosítás nélkül történik.
 
 ## Helyi kipróbálás emulátorral
 

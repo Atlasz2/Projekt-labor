@@ -57,32 +57,64 @@ class PendingQrSyncService {
 
     _syncInProgress = true;
     try {
-      final queueEntries = LocalCache.getPendingQrQueue();
-      for (final entry in queueEntries) {
-        try {
-          await QrProcessingService.processByCode(
-            code: entry.key,
-            location: LocalCache.getPendingQrLocation(entry.key),
-          );
-          await LocalCache.removePendingQr(entry.key);
-        } on QrCodeNotFoundException {
-          // Permanent: the code maps to no station or event — drop it so the
-          // queue can drain instead of retrying this poison entry forever.
-          await LocalCache.removePendingQr(entry.key);
-          debugPrint('Pending QR eldobva (ismeretlen kód): ${entry.key}');
-        } on QrOutOfRangeException {
-          // Permanent for this scan: the recorded position was too far from the
-          // station. Drop it so the queue can drain (a valid re-scan on site
-          // will succeed).
-          await LocalCache.removePendingQr(entry.key);
-          debugPrint('Pending QR eldobva (helyszínen kívül): ${entry.key}');
-        } catch (e) {
-          // Transient (network/Firestore) — keep it queued for the next attempt.
-          debugPrint('Pending QR sync failed for ${entry.key}: $e');
-        }
-      }
+      await drainQueue(
+        codes: LocalCache.getPendingQrQueue().map((e) => e.key).toList(),
+        process: (code) => QrProcessingService.processByCode(
+          code: code,
+          location: LocalCache.getPendingQrLocation(code),
+        ),
+        remove: LocalCache.removePendingQr,
+      );
     } finally {
       _syncInProgress = false;
     }
   }
+
+  /// A sor egyszeri feldolgozása, hibaosztályozással. Sikeres jóváírás és
+  /// végleges hiba (ismeretlen kód, másik település, helyszínen kívül) után az
+  /// elem kikerül a sorból – így egy soha fel nem dolgozható („mérgezett”)
+  /// elem sem blokkolja örökre –, minden más (hálózati, átmeneti szerver-)
+  /// hiba esetén marad a következő próbálkozásig. A [process] és a [remove]
+  /// tesztekben lecserélhető.
+  @visibleForTesting
+  static Future<PendingQrDrainResult> drainQueue({
+    required List<String> codes,
+    required Future<void> Function(String code) process,
+    required Future<void> Function(String code) remove,
+  }) async {
+    var credited = 0, dropped = 0, kept = 0;
+    for (final code in codes) {
+      try {
+        await process(code);
+        await remove(code);
+        credited++;
+      } on QrCodeNotFoundException {
+        await remove(code);
+        dropped++;
+        debugPrint('Pending QR eldobva (ismeretlen kód): $code');
+      } on QrWrongProjectException {
+        await remove(code);
+        dropped++;
+        debugPrint('Pending QR eldobva (másik település): $code');
+      } on QrLocationRequiredException {
+        // A beolvasáskor nem volt pozíció, pedig az állomás megköveteli.
+        await remove(code);
+        dropped++;
+        debugPrint('Pending QR eldobva (pozíció nélkül): $code');
+      } on QrOutOfRangeException {
+        // Erre a beolvasásra végleges: a rögzített pozíció túl messze volt.
+        // Egy helyszíni újrabeolvasás sikerülni fog.
+        await remove(code);
+        dropped++;
+        debugPrint('Pending QR eldobva (helyszínen kívül): $code');
+      } catch (e) {
+        kept++;
+        debugPrint('Pending QR sync failed for $code: $e');
+      }
+    }
+    return (credited: credited, dropped: dropped, kept: kept);
+  }
 }
+
+/// A sorfeldolgozás eredménye: jóváírt, véglegesen eldobott és megtartott elemek.
+typedef PendingQrDrainResult = ({int credited, int dropped, int kept});

@@ -28,14 +28,22 @@ class AppConfig {
   static const bool multiProject =
       bool.fromEnvironment('MULTI_PROJECT', defaultValue: false);
 
-  /// App Check bekapcsolása. ALAPBÓL BE: a szerveroldali kikényszerítés
-  /// (enforceAppCheck: true) él a mobil-only callable-ökön (redeemQr,
-  /// exportUserData, deleteMyAccount – lásd functions/index.js), ezért ez
-  /// a build-nek is be kell kapcsolva lennie, különben ezek a hívások
-  /// 'unauthenticated' hibával elhasalnak. Kikapcsolás csak fejlesztéshez /
-  /// sideloadolt (App Distribution) debug buildhez, ahol a Play Integrity
-  /// esetleg elhasal:
+  /// App Check bekapcsolása. ALAPBÓL BE: a mobil callable-ök a tokent
+  /// mindig ellenőrzik, és a szerver ENFORCE_APP_CHECK kapcsolójával meg is
+  /// követelhetik (lásd functions/index.js és docs/LAUNCH.md) – ezért a
+  /// kiadási buildben bekapcsolva kell lennie. Kikapcsolás csak
+  /// fejlesztéshez / sideloadolt debug buildhez:
   ///   flutter build apk --dart-define=APP_CHECK=false
   static const bool appCheckEnabled =
       bool.fromEnvironment('APP_CHECK', defaultValue: true);
+
+  /// Az adatkezelő neve és címe az adatkezelési tájékoztatóhoz – kiadásonként
+  /// adandó meg (a település üzemeltetője), lásd docs/LAUNCH.md:
+  ///   --dart-define=PRIVACY_CONTROLLER="Nagyvázsony Község Önkormányzata, …"
+  static const String privacyController =
+      String.fromEnvironment('PRIVACY_CONTROLLER');
+
+  /// Az adatvédelmi megkeresések e-mail-címe:
+  ///   --dart-define=PRIVACY_EMAIL=adatvedelem@pelda.hu
+  static const String privacyEmail = String.fromEnvironment('PRIVACY_EMAIL');
 }

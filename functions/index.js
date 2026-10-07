@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { logger } from 'firebase-functions/v2';
+import { defineBoolean } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -32,6 +33,39 @@ const STAFF_ROLES = ['admin', 'developer'];
 // A mobilból hívott callable-ök közös beállítása (lásd a redeemQr feletti
 // App Check-megjegyzést).
 const MOBILE_CALLABLE = { region: 'europe-west1', enforceAppCheck: false };
+
+// Indulási kapcsolók – telepítéskor a functions/.env.<projekt> fájlból
+// olvasódnak, így az élesítés lépései kódmódosítás nélkül, konfigurációval
+// tehetők meg (lásd docs/LAUNCH.md).
+//
+// ENFORCE_APP_CHECK: a mobil callable-ök csak érvényes App Check-tokennel
+// fogadnak kérést. Az áruházi (Play Integrity) kiadás után kapcsolandó be.
+const ENFORCE_APP_CHECK = defineBoolean('ENFORCE_APP_CHECK', {
+  default: false,
+  description: 'A mobil callable-ök megkövetelik az érvényes App Check-tokent.',
+});
+// QR_LEGACY_FALLBACK: a QR-kód feloldása a nyilvános qrCode mezőn és a
+// dokumentum-azonosítón keresztül is. A QR-migráció (scripts/harden-qr-codes.mjs)
+// után kikapcsolandó, különben a kódok kigyűjthetők (T7).
+const QR_LEGACY_FALLBACK = defineBoolean('QR_LEGACY_FALLBACK', {
+  default: true,
+  description: 'QR-feloldás a nyilvános mezőkön át (csak a migráció előtt).',
+});
+
+/** App Check a mobil hívásokon: a token mindig naplózódik; ha a kikényszerítés
+ *  be van kapcsolva, token nélkül a kérés elutasul. */
+function assertAppCheck(request) {
+  if (request.app) return;
+  if (ENFORCE_APP_CHECK.value()) {
+    throw new HttpsError(
+      'unauthenticated',
+      'Az alkalmazás hitelesítése sikertelen. Telepítsd a hivatalos áruházból.',
+    );
+  }
+  logger.warn('Mobil hívás App Check-token nélkül', {
+    uid: request.auth?.uid ?? null,
+  });
+}
 
 async function assertAdmin(db, request) {
   const uid = request.auth?.uid;
@@ -77,16 +111,18 @@ async function assertDeveloper(db, request) {
 //
 // App Check: a mobilból hívott callable-ök (redeemQr, reconcileAchievements,
 // renameMe, exportUserData, deleteMyAccount) az App Check-tokent ellenőrzik és
-// naplózzák, de NEM követelik meg (MOBILE_CALLABLE.enforceAppCheck = false).
+// naplózzák; a kikényszerítést az ENFORCE_APP_CHECK kapcsoló (assertAppCheck)
+// adja, a platform szintű MOBILE_CALLABLE.enforceAppCheck pedig ki van kapcsolva.
 // Ok: a Firebase App Distributionnel terjesztett, nem a Play Áruházból
 // telepített Android-build nem kap érvényes Play Integrity-tokent, így a
 // kikényszerítés minden hívást elutasított ("app: INVALID" a naplóban). A
-// Play Áruházas kiadás és az App Check konzolbeli regisztrációja után
-// visszakapcsolható. A pontintegritást ettől függetlenül a szerveroldali
+// Play Áruházas kiadás és az App Check konzolbeli regisztrációja után az
+// ENFORCE_APP_CHECK=true beállítással visszakapcsolható. A pontintegritást ettől függetlenül a szerveroldali
 // jóváírás és a lezárt Firestore-szabályok védik.
 export const redeemQr = onCall(
   MOBILE_CALLABLE,
   async (request) => {
+  assertAppCheck(request);
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
@@ -121,6 +157,7 @@ export const redeemQr = onCall(
       code,
       location,
       projectId,
+      legacyFallback: QR_LEGACY_FALLBACK.value(),
     });
   } catch (err) {
     logger.error('redeemQr failed', { uid, code, err });
@@ -134,6 +171,7 @@ export const redeemQr = onCall(
 export const reconcileAchievements = onCall(
   MOBILE_CALLABLE,
   async (request) => {
+  assertAppCheck(request);
     const uid = request.auth?.uid;
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
@@ -162,6 +200,7 @@ export const reconcileAchievements = onCall(
 export const renameMe = onCall(
   MOBILE_CALLABLE,
   async (request) => {
+  assertAppCheck(request);
     const uid = request.auth?.uid;
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
@@ -198,6 +237,7 @@ export const renameMe = onCall(
 export const exportUserData = onCall(
   MOBILE_CALLABLE,
   async (request) => {
+  assertAppCheck(request);
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');
@@ -217,6 +257,7 @@ export const exportUserData = onCall(
 export const deleteMyAccount = onCall(
   MOBILE_CALLABLE,
   async (request) => {
+  assertAppCheck(request);
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Bejelentkezés szükséges.');

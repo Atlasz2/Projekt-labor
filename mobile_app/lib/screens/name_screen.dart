@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+import 'privacy_screen.dart';
 
 class NameScreen extends StatefulWidget {
   const NameScreen({super.key});
@@ -382,7 +383,20 @@ class _NameScreenState extends State<NameScreen> {
                                           ),
                                         ),
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 4),
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const PrivacyScreen(),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'A folytatással elfogadod az adatkezelési '
+                                    'tájékoztatót (megnyitás)',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 12.5),
+                                  ),
+                                ),
                                 TextButton.icon(
                                   onPressed: _isLoading
                                       ? null

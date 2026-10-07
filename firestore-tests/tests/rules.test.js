@@ -4,7 +4,8 @@
 // A fenyegetésmodell vektorai (docs/SZAKDOLGOZAT_BIZTONSAG.md):
 // T1 pontfelfújás létrehozáskor, T2 pontfelfújás módosítással, T3 rongálás,
 // T4 idegen adat írása, T5 jogosultság-eszkaláció, T6 ranglista-hamisítás,
-// T7 QR-enumeráció, T8 tartalom írása – plusz a white-label tenant-izoláció.
+// T7 QR-enumeráció, T8 tartalom írása – plusz a white-label tenant-izoláció
+// és a QR-leképezés település szerinti elkülönítése.
 
 import { test, before, after, beforeEach } from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -14,7 +15,19 @@ import {
   assertFails,
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
-import { deleteDoc, deleteField, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 
 let env;
 
@@ -296,4 +309,66 @@ test('bug_reports: más bejelentését nem szerkesztheti és nem törölheti', a
   await seed('bug_reports/idegen', { description: 'Bobé', status: 'open', reported_by: { user_id: BOB } });
   await assertFails(updateDoc(doc(aliceDb(), 'bug_reports/idegen'), { description: 'Átírva' }));
   await assertFails(deleteDoc(doc(aliceDb(), 'bug_reports/idegen')));
+});
+
+// ── QR-kódok: nyilvános érték tilalma és tenant-izoláció ───────────────────
+
+test('TÁMADÁS (T7): a QR-kód értéke nem kerülhet nyilvános dokumentumba', async () => {
+  await assertFails(
+    setDoc(doc(adminDb(), 'stations/q1'), { name: 'Vár', qrCode: 'NV-ABCDEFGHJKMNPQRS' }),
+  );
+  await assertSucceeds(
+    setDoc(doc(adminDb(), 'stations/q2'), { name: 'Vár', qrHash: 'abc123' }),
+  );
+  // Migráció előtti dokumentum: csak úgy módosítható, ha a régi mező törlődik.
+  await seed('stations/regi', { name: 'Régi', qrCode: 'regi' });
+  await assertFails(updateDoc(doc(adminDb(), 'stations/regi'), { name: 'Átírt' }));
+  await assertSucceeds(
+    updateDoc(doc(adminDb(), 'stations/regi'), { name: 'Átírt', qrCode: deleteField(), qrHash: 'h' }),
+  );
+});
+
+test('QR: az állomás és a leképezése egy kötegben menthető (saját település)', async () => {
+  const fs = adminDb();
+  const batch = writeBatch(fs);
+  batch.set(doc(fs, 'stations/uj'), { name: 'Új', qrHash: 'h', projectId: 'nagyvazsony' });
+  batch.set(doc(fs, 'qr_codes/NV-UJKOD123456789A'), {
+    code: 'NV-UJKOD123456789A', kind: 'station', targetId: 'uj', projectId: 'nagyvazsony',
+  });
+  await assertSucceeds(batch.commit());
+});
+
+test('TÁMADÁS: leképezés nem létező célra, vagy más település céljára tiltva', async () => {
+  await assertFails(
+    setDoc(doc(adminDb(), 'qr_codes/NV-SEHOVA'), {
+      code: 'NV-SEHOVA', kind: 'station', targetId: 'nincs-ilyen', projectId: 'nagyvazsony',
+    }),
+  );
+  // A saját településre címkézett leképezés egy másik település állomására mutat.
+  await seed('stations/m1', { name: 'Mencshelyi', projectId: 'mencshely' });
+  await assertFails(
+    setDoc(doc(adminDb(), 'qr_codes/NV-ELTERIT'), {
+      code: 'NV-ELTERIT', kind: 'station', targetId: 'm1', projectId: 'nagyvazsony',
+    }),
+  );
+  // Más település nevében sem írhat.
+  await assertFails(
+    setDoc(doc(adminDb(), 'qr_codes/NV-IDEGEN'), {
+      code: 'NV-IDEGEN', kind: 'station', targetId: 'm1', projectId: 'mencshely',
+    }),
+  );
+});
+
+test('TENANT: admin csak a saját települése QR-kódjait olvashatja és törölheti', async () => {
+  await seed('qr_codes/NV-MENCSHELY', { kind: 'station', targetId: 'm1', projectId: 'mencshely' });
+  await seed('qr_codes/NV-NAGYVAZSONY', { kind: 'station', targetId: 'n1', projectId: 'nagyvazsony' });
+  await assertFails(getDoc(doc(adminDb(), 'qr_codes/NV-MENCSHELY')));
+  await assertFails(deleteDoc(doc(adminDb(), 'qr_codes/NV-MENCSHELY')));
+  await assertSucceeds(getDoc(doc(otherAdminDb(), 'qr_codes/NV-MENCSHELY')));
+  // Listázás csak település szerinti szűréssel.
+  await assertFails(getDocs(collection(adminDb(), 'qr_codes')));
+  await assertSucceeds(
+    getDocs(query(collection(adminDb(), 'qr_codes'), where('projectId', '==', 'nagyvazsony'))),
+  );
+  await assertSucceeds(getDocs(collection(devDb(), 'qr_codes')));
 });

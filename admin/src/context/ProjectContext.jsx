@@ -78,9 +78,11 @@ export function ProjectProvider({ children }) {
     try {
       const snap = await getDocs(collection(db, 'projects'));
       const fromDb = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // Az alapértelmezett projekt mindig legyen elöl, duplikátum nélkül.
+      // Az alapértelmezett projekt mindig legyen elöl, duplikátum nélkül; ha
+      // már van saját dokumentuma (pl. átnevezték), annak adatai érvényesek.
+      const storedDefault = fromDb.find((p) => p.id === DEFAULT_PROJECT_ID);
       const merged = [
-        DEFAULT_PROJECT,
+        { ...DEFAULT_PROJECT, ...storedDefault },
         ...fromDb.filter((p) => p.id !== DEFAULT_PROJECT_ID),
       ];
       setProjects(merged);

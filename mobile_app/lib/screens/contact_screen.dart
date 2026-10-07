@@ -39,13 +39,6 @@ class _ContactScreenState extends State<ContactScreen>
   Map<String, dynamic>? _contactData;
   bool _isLoading = true;
 
-  final Map<String, dynamic> _demoData = {
-    'name': 'Nagyvázsony Turisztikai Információ',
-    'address': 'Nagyvázsony, Kastély utca 1.',
-    'phone': '+36 88 564 000',
-    'email': 'info@nagyvazsony.hu',
-  };
-
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
   final _nameController = TextEditingController();
@@ -92,14 +85,16 @@ class _ContactScreenState extends State<ContactScreen>
           _isLoading = false;
         });
       } else {
+        // Nincs megadott elérhetőség: nem mutatunk ellenőrizetlen adatot.
         setState(() {
-          _contactData = _demoData;
+          _contactData = null;
           _isLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Elérhetőségek betöltése sikertelen: $e');
       setState(() {
-        _contactData = _demoData;
+        _contactData = null;
         _isLoading = false;
       });
     }
@@ -242,7 +237,16 @@ class _ContactScreenState extends State<ContactScreen>
   Widget _buildContactTab() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_contactData == null) {
-      return const Center(child: Text('Nincs kapcsolati adat.'));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Az elérhetőségek most nem érhetők el. Ellenőrizd az '
+            'internetkapcsolatot, vagy nézz vissza később.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
     }
 
     return SingleChildScrollView(

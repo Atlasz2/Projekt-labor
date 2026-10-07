@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:crypto/crypto.dart';
 
 import 'location_service.dart';
 import '../config/app_config.dart';
@@ -88,6 +90,16 @@ class QrOutOfRangeException implements Exception {
       'Túl messze vagy az állomástól ($distance m, max $threshold m).';
 }
 
+/// Végleges hiba (erre a beolvasásra): az állomáshoz kötelező a
+/// helymeghatározás, de a beolvasáskor nem volt pozíció.
+class QrLocationRequiredException implements Exception {
+  const QrLocationRequiredException();
+
+  @override
+  String toString() =>
+      'Ennél az állomásnál a pontszerzéshez be kell kapcsolni a helymeghatározást.';
+}
+
 /// A szerveroldali jóváírás hívása — tesztekben lecserélhető.
 typedef ServerRedeem =
     Future<Map<String, dynamic>> Function(String code, ScanLocation? location);
@@ -113,6 +125,9 @@ class QrProcessingService {
     if (payload['found'] == false) throw QrCodeNotFoundException(code);
     if (payload['rejected'] == 'wrong_project') {
       throw const QrWrongProjectException();
+    }
+    if (payload['rejected'] == 'location_required') {
+      throw const QrLocationRequiredException();
     }
     if (payload['rejected'] == 'out_of_range') {
       throw QrOutOfRangeException(
@@ -160,6 +175,28 @@ class QrProcessingService {
     }
     return 'A beolvasás feldolgozása nem sikerült. Próbáld újra.';
   }
+
+  /// A kód SHA-256 lenyomata (kisbetűs hex) – ugyanaz, amit az admin felület
+  /// a nyilvános dokumentum `qrHash` mezőjébe ír.
+  static String qrHash(String code) =>
+      sha256.convert(utf8.encode(code)).toString();
+
+  /// Ehhez az (offline gyorsítótárban lévő) állomáshoz tartozik-e a kód.
+  /// A QR-migráció után a nyilvános dokumentum csak a lenyomatot tárolja
+  /// (`qrHash`); a migráció előtti adatnál a régi `qrCode` mező, illetve a
+  /// dokumentum-azonosító dönt.
+  static bool matchesStation(Map<String, dynamic> station, String code) {
+    final normalized = code.trim();
+    if (normalized.isEmpty) return false;
+    final hash = station['qrHash']?.toString();
+    if (hash != null && hash.isNotEmpty) return qrHash(normalized) == hash;
+    return station['qrCode']?.toString().trim() == normalized ||
+        station['id']?.toString().trim() == normalized;
+  }
+
+  /// Kötelező-e a helymeghatározás ennél az állomásnál (admin beállítás).
+  static bool requiresLocation(Map<String, dynamic> station) =>
+      station['requireLocation'] == true;
 
   /// A cél koordinátája `(lat, lng)`, vagy null, ha nincs érvényes helye.
   static ScanLocation? _targetLatLng(Map<String, dynamic> data) {

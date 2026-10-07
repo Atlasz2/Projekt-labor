@@ -31,11 +31,10 @@ Future<void> main() async {
       );
     }
     // App Check – ALAPBÓL BEKAPCSOLVA (AppConfig.appCheckEnabled).
-    // A szerveroldali kikényszerítés (enforceAppCheck: true) él a
-    // mobil-only callable-ökön (redeemQr, exportUserData, deleteMyAccount –
-    // lásd functions/index.js), ezért ennek is be kell lennie kapcsolva.
-    // Kikapcsolás csak fejlesztéshez / sideloadolt debug buildhez, ahol a
-    // Play Integrity esetleg elhasal:
+    // A mobilból hívott callable-ök a tokent mindig ellenőrzik és naplózzák;
+    // a kikényszerítést a szerver ENFORCE_APP_CHECK kapcsolója adja (lásd
+    // functions/index.js és docs/LAUNCH.md). Kikapcsolás csak fejlesztéshez /
+    // sideloadolt debug buildhez:
     //   flutter build apk --dart-define=APP_CHECK=false
     if (AppConfig.appCheckEnabled) {
       try {

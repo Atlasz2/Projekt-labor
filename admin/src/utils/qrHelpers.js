@@ -1,7 +1,5 @@
 import QRCode from 'qrcode';
 
-export const getQrValue = (item) => item.qrCode || item.id;
-
 /**
  * A QR-kód PNG data URL-je, a böngészőben generálva. Korábban egy külső
  * szolgáltatás (api.qrserver.com) állította elő, ami a QR-értékeket egy

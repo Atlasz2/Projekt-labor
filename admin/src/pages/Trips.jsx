@@ -4,14 +4,16 @@ import { useNavigate } from "react-router-dom";
 import { db } from "../firebaseConfig";
 import { useProject } from "../context/ProjectContext";
 import { filterByProject } from "../utils/projects";
-import { stationTripIds, stationsForTrip } from "../utils/stationTrips";
+import { stationTripIds, stationsForTrip, tripUnlinkPatch } from "../utils/stationTrips";
 import {
   collection,
   getDocs,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
+  writeBatch,
+  arrayRemove,
+  deleteField,
 } from "firebase/firestore";
 import {
   GoogleMap,
@@ -29,7 +31,8 @@ import {
   formatDuration,
   getStoredRouteCoordinates,
 } from "../utils/routeService";
-import { getQrValue, qrDataUrl } from "../utils/qrHelpers";
+import { qrDataUrl } from "../utils/qrHelpers";
+import { currentQrCode, loadQrCodesByTarget } from "../utils/qrMapping";
 import QrImage from "../components/QrImage";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
@@ -181,6 +184,7 @@ function Trips() {
   const { activeProjectId } = useProject();
   const [trips, setTrips] = useState([]);
   const [stations, setStations] = useState([]);
+  const [qrCodes, setQrCodes] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -241,6 +245,8 @@ function Trips() {
         activeProjectId,
       );
       setStations(stationsData);
+      // A QR-értékek csak a privát leképezésben élnek (a nyomtatáshoz kellenek).
+      setQrCodes(await loadQrCodesByTarget(db, activeProjectId));
     } catch {
       showMsg("Hiba az adatok betöltéseinél");
     } finally {
@@ -372,11 +378,21 @@ function Trips() {
     setDeleteDialog({ open: true, id: tripId });
   };
 
+  // A túra törlése egy kötegben leválasztja a túrát az állomásairól is
+  // (tripIds, tripOrder, régi tripId) – különben a szerver a már nem létező
+  // túra teljesítését is jóváírhatná. Az állomások megmaradnak.
   const confirmDelete = async () => {
     if (!deleteDialog.id) return;
     try {
-      await deleteDoc(doc(db, "trips", deleteDialog.id));
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "trips", deleteDialog.id));
+      for (const station of stations) {
+        const patch = tripUnlinkPatch(station, deleteDialog.id, { arrayRemove, deleteField });
+        if (patch) batch.update(doc(db, "stations", station.id), patch);
+      }
+      await batch.commit();
       setDeleteDialog({ open: false, id: null });
+      if (expandedTripId === deleteDialog.id) setExpandedTripId(null);
       fetchData();
     } catch {
       showMsg("Hiba a törléskor");
@@ -520,7 +536,7 @@ function Trips() {
         const station = tripStations[i];
         if (i > 0) docPdf.addPage();
 
-        const qrValue = getQrValue(station);
+        const qrValue = currentQrCode(qrCodes, "station", station);
         const qrData = await qrDataUrl(qrValue, 440);
 
         docPdf.setFont("helvetica", "bold");
@@ -552,7 +568,7 @@ function Trips() {
   const handleDownloadPdf = async (station, tripName) => {
     try {
       const docPdf = new jsPDF({ unit: "mm", format: "a4" });
-      const qrValue = getQrValue(station);
+      const qrValue = currentQrCode(qrCodes, "station", station);
       const qrData = await qrDataUrl(qrValue, 440);
 
       docPdf.setFont("helvetica", "bold");
@@ -730,7 +746,11 @@ function Trips() {
                       <div className="trip-title-content">
                         <h3>{trip.name}</h3>
                         {trip.description && (
-                          <p className="trip-desc-preview">{trip.description.substring(0, 80)}...</p>
+                          <p className="trip-desc-preview">
+                            {trip.description.length > 80
+                              ? `${trip.description.substring(0, 80)}…`
+                              : trip.description}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -748,10 +768,11 @@ function Trips() {
                         <span className="meta-icon">📍</span>
                         <span className="meta-value">{tripStations.length}</span>
                       </div>
+                      {/* A mező hiánya aktívat jelent (a mobil és a szerkesztő is így kezeli). */}
                       <span
-                        className={`trip-badge ${trip.isActive ? "badge-active" : "badge-inactive"}`}
+                        className={`trip-badge ${trip.isActive !== false ? "badge-active" : "badge-inactive"}`}
                       >
-                        {trip.isActive ? "Aktív" : "Inaktív"}
+                        {trip.isActive !== false ? "Aktív" : "Inaktív"}
                       </span>
                     </div>
                   </div>
@@ -809,7 +830,7 @@ function Trips() {
                         {tripStations.length > 0 ? (
                           <ul className="stations-list">
                             {tripStations.map((station, idx) => {
-                              const qrValue = getQrValue(station);
+                              const qrValue = currentQrCode(qrCodes, "station", station);
                               return (
                                 <li key={station.id} className="station-item">
                                   <div className="station-order-btns">
@@ -904,7 +925,12 @@ function Trips() {
       <ConfirmDialog
         open={deleteDialog.open}
         title="Túra törlése"
-        message="Biztosan törölni szeretnéd ezt a túrát?"
+        message={(() => {
+          const linked = deleteDialog.id ? getTripsStations(deleteDialog.id).length : 0;
+          return linked > 0
+            ? `Biztosan törölni szeretnéd ezt a túrát? A hozzá tartozó ${linked} állomás megmarad, de lekerül a túráról.`
+            : "Biztosan törölni szeretnéd ezt a túrát?";
+        })()}
         confirmText="Törlés"
         onClose={() => setDeleteDialog({ open: false, id: null })}
         onConfirm={confirmDelete}

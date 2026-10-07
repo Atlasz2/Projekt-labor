@@ -616,3 +616,14 @@ html.dark .card-link { color: #c9d8ae; }
 .form-group + .form-row,
 .form-row + .form-group,
 .form-row + .form-row { margin-top: 14px; }
+
+/* QR-kód mező: beviteli mező + „Új véletlen kód” gomb egy sorban */
+.qr-code-row { display: flex; gap: 8px; align-items: stretch; }
+.qr-code-row input { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; }
+.qr-code-row .btn-secondary { white-space: nowrap; }
+@media (max-width: 560px) { .qr-code-row { flex-direction: column; } }
+
+.field-hint.field-warning { color: var(--admin-warning); font-weight: 600; }
+
+.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.checkbox-label input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--admin-accent); }

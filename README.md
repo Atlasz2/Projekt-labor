@@ -38,7 +38,7 @@ Firebase-projekt: `projekt-labor-a4b1c` (Blaze-csomag, régió: `europe-west1`).
 
 | Függvény | Hívó | Feladat |
 |---|---|---|
-| `redeemQr` | mobil (App Check) | QR-beváltás: validáció, jóváírás, jutalom, ranglista |
+| `redeemQr` | mobil (App Check) | QR-beváltás: validáció, atomi jóváírás és ranglista, túra, jutalom |
 | `reconcileAchievements` | mobil (App Check) | utólag teljesült jutalmak feloldása |
 | `renameMe` | mobil (App Check) | a játékos nevének módosítása (foglalás, profil, ranglisták) |
 | `exportUserData` | mobil (App Check) | GDPR 20. cikk – adatexport |
@@ -113,6 +113,7 @@ npm run rules:test         # szabályok + integráció a Firestore-emulátor ell
 npm run mobile:test        # flutter test
 npm run admin:lint         # ESLint, 0 figyelmeztetés
 npm run mobile:analyze     # flutter analyze
+npm run functions:coverage # lefedettség: functions:/admin:/mobile:coverage
 ```
 
 A tesztelés részletei: [docs/TESTING.md](docs/TESTING.md). A GitHub Actions CI
@@ -127,14 +128,17 @@ firebase deploy --only functions
 firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-Sorrend: előbb a függvények, majd a szabályok – a mobil csak a szerveren keresztül
-ír pontot, a régi (kliensoldali jóváírású) alkalmazásverziók a lezárt szabályok
-mellett nem tudnak pontot írni. Részletek: [docs/SERVER_VALIDATION.md](docs/SERVER_VALIDATION.md).
+Mindig `--only`-val telepíts: a `firebase.json` hosting-blokkja miatt a
+paraméter nélküli `firebase deploy` az admin felületet is közzétenné. Az admin
+felület közzététele kizárólag a kézzel indítható „Admin – telepítés”
+munkafolyamattal történik. Az élesítés teljes, sorrendhez kötött lépéssora (QR-
+migráció, kapcsolók, App Check, áruházi kiadás): [docs/LAUNCH.md](docs/LAUNCH.md).
 
 ## Ismert korlátok
 
-- A helyszín-ellenőrzés a pozíció hiányát átengedi (GPS nélküli eszközök), és a
-  pozíció szoftveresen hamisítható; az App Check a módosított klienseket szűri.
+- A helyszín-ellenőrzés a pozíció hiányát átengedi (GPS nélküli eszközök), kivéve
+  a kötelező helymeghatározású állomásokat; a pozíció szoftveresen hamisítható, az
+  App Check (kikényszerítve az áruházi kiadás után) a módosított klienseket szűri.
 - A mobilfiók e-mailes visszaállításának jelszava a névből képződik (tudatos
   egyszerűsítés: pontgyűjtő fiók, nyilvános név + nem nyilvános e-mail).
 - Az admin felület a település szerinti szűrést kliensoldalon végzi; sok település

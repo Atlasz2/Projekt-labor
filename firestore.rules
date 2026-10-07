@@ -193,17 +193,26 @@ service cloud.firestore {
       allow delete: if canDeleteContent();
     }
 
+    // A QR-kód értéke nem kerülhet nyilvános dokumentumba (T7): az állomás és
+    // a rendezvény csak a lenyomatát (qrHash) tárolja, maga a kód a privát
+    // qr_codes leképezésben él. (A QR-migráció előtti dokumentumokon még ott
+    // lehet a régi qrCode mező – ezért ezt a szabályt a migráció után kell
+    // élesíteni, lásd docs/LAUNCH.md.)
+    function noPublicQrCode() {
+      return !('qrCode' in request.resource.data);
+    }
+
     match /stations/{stationId} {
       allow read: if true;
-      allow create: if canCreateContent();
-      allow update: if canUpdateContent();
+      allow create: if canCreateContent() && noPublicQrCode();
+      allow update: if canUpdateContent() && noPublicQrCode();
       allow delete: if canDeleteContent();
     }
 
     match /events/{eventId} {
       allow read: if true;
-      allow create: if canCreateContent();
-      allow update: if canUpdateContent();
+      allow create: if canCreateContent() && noPublicQrCode();
+      allow update: if canUpdateContent() && noPublicQrCode();
       allow delete: if canDeleteContent();
     }
 
@@ -246,8 +255,33 @@ service cloud.firestore {
     // karban, a redeemQr Cloud Function Admin SDK-val olvassa (a rules
     // megkerülésével). Kliens nem olvashatja, így a QR-értékek nem
     // enumerálhatók a nyilvános kollekciókból való kigyűjtéssel.
+    //
+    // Tenant-izoláció: a leképezés a cél településéhez tartozik (projectId), az
+    // admin csak a saját településének kódjait olvashatja és írhatja. Íráskor a
+    // leképezett célnak a köteg UTÁNI állapotban léteznie kell, és ugyanahhoz a
+    // településhez kell tartoznia – így egy admin nem irányíthat kódot más
+    // település állomására.
+    function qrTargetPath(data) {
+      return /databases/$(database)/documents/$(data.kind == 'event' ? 'events' : 'stations')/$(data.targetId);
+    }
+
+    function qrTargetConsistent() {
+      return request.resource.data.kind in ['station', 'event']
+        && request.resource.data.targetId is string
+        && existsAfter(qrTargetPath(request.resource.data))
+        && docProject(getAfter(qrTargetPath(request.resource.data)).data)
+             == docProject(request.resource.data);
+    }
+
     match /qr_codes/{codeId} {
-      allow read, write: if isAdmin();
+      allow get: if isDeveloper()
+        || (isAdmin() && docProject(resource.data) == myProject());
+      // Listázás csak település szerinti szűréssel (where projectId == …).
+      allow list: if isDeveloper()
+        || (isAdmin() && resource.data.projectId == myProject());
+      allow create: if canCreateContent() && qrTargetConsistent();
+      allow update: if canUpdateContent() && qrTargetConsistent();
+      allow delete: if canDeleteContent();
     }
 
     match /bug_reports/{reportId} {

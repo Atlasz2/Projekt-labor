@@ -126,6 +126,17 @@ void main() {
       );
     });
 
+    test(
+      'location_required → QrLocationRequiredException (végleges)',
+      () async {
+        serverReturns({'found': true, 'rejected': 'location_required'});
+        await expectLater(
+          QrProcessingService.processByCode(code: 'KILATO'),
+          throwsA(isA<QrLocationRequiredException>()),
+        );
+      },
+    );
+
     test('out_of_range → QrOutOfRangeException a mért értékekkel', () async {
       serverReturns({
         'found': true,
@@ -289,6 +300,46 @@ void main() {
         QrProcessingService.rejectionMessage(e),
         contains('hitelesítését'),
       );
+    });
+  });
+
+  group('offline kódfelismerés (QR-lenyomat)', () {
+    // Közös ellenőrző értékek – az admin (Web Crypto) és a Cloud Functions
+    // (node:crypto) tesztje ugyanezeket várja.
+    test('qrHash: SHA-256 hex, egyezik a közös ellenőrző értékekkel', () {
+      expect(
+        QrProcessingService.qrHash('NV-TEST'),
+        '0abb45e3145aaa2aa1615ef649495da944a4ddabf2ab985ab4977df7a6f18c7e',
+      );
+      expect(
+        QrProcessingService.qrHash('Kinizsi-vár-ÁRVÍZTŰRŐ'),
+        '4b0ad59562f24dd4fcdb87acf1aa7e50f8f0520f619b8ba0929bec5da53676c1',
+      );
+    });
+
+    test('migrált állomás: csak a lenyomatnak megfelelő kód illeszkedik', () {
+      final station = <String, dynamic>{
+        'id': 'st1',
+        'qrHash': QrProcessingService.qrHash('NV-TEST'),
+      };
+      expect(QrProcessingService.matchesStation(station, ' NV-TEST '), isTrue);
+      expect(QrProcessingService.matchesStation(station, 'st1'), isFalse);
+      expect(QrProcessingService.matchesStation(station, 'NV-MASIK'), isFalse);
+    });
+
+    test('migráció előtti állomás: a régi qrCode mező vagy az azonosító', () {
+      final legacy = <String, dynamic>{'id': 'st2', 'qrCode': 'VAR-001'};
+      expect(QrProcessingService.matchesStation(legacy, 'VAR-001'), isTrue);
+      expect(QrProcessingService.matchesStation(legacy, 'st2'), isTrue);
+      expect(QrProcessingService.matchesStation(legacy, ''), isFalse);
+    });
+
+    test('kötelező helymeghatározás jelzője', () {
+      expect(
+        QrProcessingService.requiresLocation({'requireLocation': true}),
+        isTrue,
+      );
+      expect(QrProcessingService.requiresLocation(const {}), isFalse);
     });
   });
 }

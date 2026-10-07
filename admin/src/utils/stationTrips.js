@@ -65,3 +65,27 @@ export function buildTripOrderOnSave({ station, allStations, selectedTripIds }) 
   }
   return result;
 }
+
+/**
+ * Egy túra törlésekor az állomáson elvégzendő módosítás (Firestore update-
+ * mezők), hogy ne maradjon rá hivatkozás: kikerül a `tripIds` tömbből és a
+ * `tripOrder` leképezésből, a régi egyszeres `tripId`/`orderIndex` mezőkkel
+ * együtt. Ha az állomás nem tartozik a túrához, `null`. A Firestore-
+ * transzformációkat ({ arrayRemove, deleteField }) a hívó adja, így a
+ * függvény tiszta és tesztelhető marad.
+ */
+export function tripUnlinkPatch(station, tripId, { arrayRemove, deleteField }) {
+  const id = String(tripId);
+  const patch = {};
+  if (Array.isArray(station?.tripIds) && station.tripIds.map(String).includes(id)) {
+    patch.tripIds = arrayRemove(id);
+  }
+  if (station?.tripOrder && Object.prototype.hasOwnProperty.call(station.tripOrder, id)) {
+    patch[`tripOrder.${id}`] = deleteField();
+  }
+  if (String(station?.tripId ?? '').trim() === id) {
+    patch.tripId = deleteField();
+    patch.orderIndex = deleteField();
+  }
+  return Object.keys(patch).length > 0 ? patch : null;
+}

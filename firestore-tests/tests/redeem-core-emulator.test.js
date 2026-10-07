@@ -98,6 +98,10 @@ test('párhuzamos jóváírások: N konkurens hívásból pontosan egy ír', asy
   assert.deepEqual(progress.completedStations, ['st1']);
   const awarded = results.filter((r) => !r.alreadyDone);
   assert.equal(awarded.length, 1, 'pontosan egy hívás írhat jóvá');
+  // A ranglista a jóváírással egy tranzakcióban íródik: ott sem duplázódhat.
+  const entry = (await db.doc(`leaderboards/nagyvazsony/entries/${uid}`).get()).data();
+  assert.equal(entry.points, 25, 'a települési ranglista pontja sem duplázódhat');
+  assert.equal(entry.completedStationsCount, 1);
 });
 
 test('esemény + event_count jutalom + túra-teljesítés valós lekérdezésekkel', async () => {
@@ -107,6 +111,7 @@ test('esemény + event_count jutalom + túra-teljesítés valós lekérdezésekk
     completedEvents: [],
     completedTripIds: [],
   });
+  await db.doc('trips/trip1').set({ name: 'Vár-túra' });
   await db.doc('stations/stA').set({ name: 'A', tripId: 'trip1', points: 10 });
   await db.doc('stations/stB').set({ name: 'B', qrCode: 'STB', tripId: 'trip1', points: 10 });
   await db.doc('achievements/local_legend').set({

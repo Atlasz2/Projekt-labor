@@ -20,14 +20,24 @@ vi.mock("../context/ProjectContext", () => ({
   }),
 }));
 
+// A mentés és a törlés egy kötegben (writeBatch) írja az állomást és a
+// QR-leképezést; a köteg műveleteit a `batchOps` gyűjti.
+const batchOps = [];
 vi.mock("firebase/firestore", () => ({
   collection: vi.fn((_db, name) => name),
+  query: vi.fn((col) => col),
+  where: vi.fn(() => null),
   getDocs: vi.fn(),
-  addDoc: vi.fn().mockResolvedValue({ id: "new1" }),
-  updateDoc: vi.fn().mockResolvedValue(undefined),
-  deleteDoc: vi.fn().mockResolvedValue(undefined),
+  getDoc: vi.fn(async () => ({ exists: () => false })),
   deleteField: vi.fn(() => "DELETE_FIELD"),
-  doc: vi.fn((_db, _col, id) => ({ _id: id })),
+  serverTimestamp: vi.fn(() => "TS"),
+  doc: vi.fn((_db, col, id) => ({ _col: col, _id: id ?? "uj-id", id: id ?? "uj-id" })),
+  writeBatch: vi.fn(() => ({
+    set: (ref, data) => batchOps.push(["set", ref, data]),
+    update: (ref, data) => batchOps.push(["update", ref, data]),
+    delete: (ref) => batchOps.push(["delete", ref]),
+    commit: vi.fn(async () => {}),
+  })),
 }));
 
 vi.mock("@react-google-maps/api", () => ({
@@ -43,9 +53,9 @@ vi.mock("../utils/imageUpload", () => ({
 }));
 vi.mock("../utils/photoHelpers", () => ({
   normalizePhotosFromDoc: vi.fn(() => []),
+  buildPhotoFields: vi.fn(() => ({ photos: [], photoUrls: [], imageUrl: "" })),
 }));
 vi.mock("../utils/qrHelpers", () => ({
-  getQrValue: vi.fn(() => "QR123"),
   qrDataUrl: vi.fn(async () => "data:image/png;base64,"),
 }));
 
@@ -70,9 +80,13 @@ const makeSnap = (items) => ({
 
 // Route getDocs by collection name so the stations grid and the trip-filter
 // dropdown (populated from the trips collection) get distinct data sets.
-const setData = (stationItems, tripItems = []) =>
+const setData = (stationItems, tripItems = [], qrMappings = []) =>
   getDocs.mockImplementation((col) =>
-    Promise.resolve(makeSnap(col === "trips" ? tripItems : stationItems))
+    Promise.resolve(
+      col === "qr_codes"
+        ? { docs: qrMappings.map((m) => ({ id: m.code, data: () => m })) }
+        : makeSnap(col === "trips" ? tripItems : stationItems),
+    )
   );
 
 const mkClient = () =>
@@ -203,5 +217,77 @@ describe("Stations", () => {
     const nameInput = document.querySelector('.station-editor-shell input[type="text"]');
     expect(nameInput.value).toBe("Vár állomás");
   });
-});
 
+  describe("mentés a QR-leképezéssel egy kötegben", () => {
+    beforeEach(() => {
+      batchOps.length = 0;
+    });
+
+    const openEditorAndSave = async (prepare) => {
+      renderStations();
+      await screen.findByText("Teszt állomás");
+      await userEvent.click(screen.getByRole("button", { name: /Szerkesztés/ }));
+      if (prepare) await prepare();
+      await userEvent.click(screen.getByRole("button", { name: "Mentés" }));
+      await waitFor(() => expect(batchOps.length).toBeGreaterThan(0));
+    };
+
+    it("a nyilvános dokumentumba csak a lenyomat kerül, a régi qrCode mező törlődik", async () => {
+      setData([makeStation({ qrCode: "VARKERT-2026-TAVASZ" })]);
+      await openEditorAndSave();
+
+      const [op, ref, data] = batchOps[0];
+      expect(op).toBe("update");
+      expect(ref._id).toBe("s1");
+      expect(data.qrCode).toBe("DELETE_FIELD");
+      expect(data.qrHash).toMatch(/^[0-9a-f]{64}$/);
+      const mapping = batchOps.find(([o, r]) => o === "set" && r._col === "qr_codes");
+      expect(mapping[2]).toMatchObject({
+        code: "VARKERT-2026-TAVASZ", kind: "station", targetId: "s1", projectId: "nagyvazsony",
+      });
+    });
+
+    it("a leképezésben tárolt kódot tartja meg, és a gyenge kódra figyelmeztet", async () => {
+      setData([makeStation({ qrCode: undefined })], [], [
+        { code: "s1", kind: "station", targetId: "s1", projectId: "nagyvazsony" },
+      ]);
+      renderStations();
+      await screen.findByText("Teszt állomás");
+      await userEvent.click(screen.getByRole("button", { name: /Szerkesztés/ }));
+      expect(screen.getByLabelText("QR-kód")).toHaveValue("s1");
+      expect(screen.getByText(/Ez a kód kitalálható/)).toBeInTheDocument();
+    });
+
+    it("új véletlen kód generálásakor a régi leképezés törlődik", async () => {
+      setData([makeStation({ qrCode: "VARKERT-2026-TAVASZ" })]);
+      await openEditorAndSave(() =>
+        userEvent.click(screen.getByRole("button", { name: "Új véletlen kód" })),
+      );
+
+      expect(batchOps).toContainEqual(["delete", expect.objectContaining({ _col: "qr_codes", _id: "VARKERT-2026-TAVASZ" })]);
+      const mapping = batchOps.find(([o, r]) => o === "set" && r._col === "qr_codes");
+      expect(mapping[2].code).toMatch(/^NV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{16}$/);
+    });
+
+    it("a rövid egyedi kódot nem menti", async () => {
+      setData([makeStation({ qrCode: "VARKERT-2026-TAVASZ" })]);
+      renderStations();
+      await screen.findByText("Teszt állomás");
+      await userEvent.click(screen.getByRole("button", { name: /Szerkesztés/ }));
+      const input = screen.getByLabelText("QR-kód");
+      await userEvent.clear(input);
+      await userEvent.type(input, "VAR-1");
+      await userEvent.click(screen.getByRole("button", { name: "Mentés" }));
+      expect(await screen.findByText(/legalább 12 karakter/)).toBeInTheDocument();
+      expect(batchOps).toEqual([]);
+    });
+
+    it("a kötelező helymeghatározás beállítása mentésre kerül", async () => {
+      setData([makeStation({ qrCode: "VARKERT-2026-TAVASZ" })]);
+      await openEditorAndSave(() =>
+        userEvent.click(screen.getByLabelText(/Helymeghatározás kötelező/)),
+      );
+      expect(batchOps[0][2].requireLocation).toBe(true);
+    });
+  });
+});
