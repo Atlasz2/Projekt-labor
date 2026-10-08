@@ -74,7 +74,7 @@ const EMPTY_FORM = {
   points: 10,
   photos: [],
   qrCode: '',
-  requireLocation: false,
+  allowWithoutLocation: false,
   tripIds: [],
   unlockContent: '',
   unlockContentImageUrl: '',
@@ -140,7 +140,8 @@ export default function Stations() {
       points: station.points || 10,
       photos: normalizePhotosFromDoc(station),
       qrCode: stationCode(station),
-      requireLocation: station.requireLocation === true,
+      // Alapból kötelező a helymeghatározás; csak a kifejezett false engedi.
+      allowWithoutLocation: station.requireLocation === false,
       tripIds: stationTripIds(station),
       unlockContent: station.unlockContent || '',
       unlockContentImageUrl: station.unlockContentImageUrl || '',
@@ -224,7 +225,7 @@ export default function Stations() {
         description: formData.description.trim(),
         points: parseInt(formData.points, 10) || 10,
         ...buildPhotoFields(formData.photos),
-        requireLocation: !!formData.requireLocation,
+        requireLocation: !formData.allowWithoutLocation,
         tripIds: formData.tripIds,
         tripOrder: buildTripOrderOnSave({
           station: editingStation,
@@ -562,10 +563,10 @@ export default function Stations() {
                   </div>
                   <div className="field-group">
                     <label className="checkbox-label">
-                      <input type="checkbox" checked={!!formData.requireLocation} onChange={(e) => setFormData({ ...formData, requireLocation: e.target.checked })} />
-                      Helymeghatározás kötelező a beolvasáshoz
+                      <input type="checkbox" checked={!!formData.allowWithoutLocation} onChange={(e) => setFormData({ ...formData, allowWithoutLocation: e.target.checked })} />
+                      Helymeghatározás nélkül is beváltható
                     </label>
-                    <span className="field-hint">Bekapcsolva csak a helyszínen lévő, bekapcsolt helymeghatározású telefon kap pontot (a lefényképezett kód távolról nem váltható be). Kikapcsolva a GPS nélküli eszközök is gyűjthetnek.</span>
+                    <span className="field-hint">Alapesetben csak bekapcsolt helymeghatározással, a helyszínen jár pont (a lefényképezett kód távolról nem váltható be). Csak akkor jelöld be, ha az állomásnál indokolt a GPS nélküli beváltás, például akadálymentességi okból.</span>
                   </div>
                 </section>
 

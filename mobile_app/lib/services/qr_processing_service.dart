@@ -194,9 +194,11 @@ class QrProcessingService {
         station['id']?.toString().trim() == normalized;
   }
 
-  /// Kötelező-e a helymeghatározás ennél az állomásnál (admin beállítás).
+  /// Kell-e pozíció a beváltáshoz – a szerveroldali requiresLocation tükre:
+  /// minden helyhez kötött (koordinátával rendelkező) célnál igen, hacsak az
+  /// admin kifejezetten nem engedi a pozíció nélküli beváltást.
   static bool requiresLocation(Map<String, dynamic> station) =>
-      station['requireLocation'] == true;
+      _targetLatLng(station) != null && station['requireLocation'] != false;
 
   /// A cél koordinátája `(lat, lng)`, vagy null, ha nincs érvényes helye.
   static ScanLocation? _targetLatLng(Map<String, dynamic> data) {

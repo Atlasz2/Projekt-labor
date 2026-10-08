@@ -95,29 +95,32 @@ class _CameraScreenState extends State<CameraScreen> {
     await _offlineSyncService.init();
 
     // A beolvasás pillanatában rögzített pozíció a helyszín-ellenőrzéshez.
-    // Ha nem elérhető (megtagadott engedély / kikapcsolt GPS), null — a
-    // szerver a pozíció hiányát átengedi (graceful).
+    // Null, ha nem elérhető (kikapcsolt helymeghatározás, megtagadott engedély).
     final location = await LocationService.currentLatLng();
+    final cachedStation = _findStationFromLocalCache(code);
+
+    // Helyhez kötött állomásnál pozíció nélkül nincs pont – ezt online és
+    // offline is azonnal jelezzük (a szerver is elutasítaná), egy gombbal a
+    // helymeghatározás bekapcsolásához.
+    if (cachedStation != null &&
+        location == null &&
+        QrProcessingService.requiresLocation(cachedStation)) {
+      if (!mounted) return;
+      setState(() {
+        _scanning = false;
+        _loading = false;
+        _station = null;
+        _errorMsg = _locationRequiredMessage;
+        _locationProblem = true;
+      });
+      _controller.stop();
+      return;
+    }
 
     if (!_offlineSyncService.isOnline) {
-      final cachedStation = _findStationFromLocalCache(code);
-
       // Offline helyszín-kapu: ha a cache-elt állomás helyhez kötött és a
-      // pozíció túl messze – vagy kötelező a pozíció, de nincs –, azonnal
-      // elutasítjuk (nem tesszük sorba, a szerver is elutasítaná).
-      if (cachedStation != null &&
-          location == null &&
-          QrProcessingService.requiresLocation(cachedStation)) {
-        if (!mounted) return;
-        setState(() {
-          _scanning = false;
-          _loading = false;
-          _station = null;
-          _errorMsg = _locationRequiredMessage;
-        });
-        _controller.stop();
-        return;
-      }
+      // pozíció túl messze van, azonnal elutasítjuk (nem tesszük sorba, a
+      // szerver is elutasítaná).
       if (cachedStation != null) {
         final rejection = QrProcessingService.locationRejection(
           cachedStation,
@@ -223,6 +226,7 @@ class _CameraScreenState extends State<CameraScreen> {
         _loading = false;
         _station = null;
         _errorMsg = _locationRequiredMessage;
+        _locationProblem = true;
       });
     } on QrCodeNotFoundException {
       if (!mounted) return;
@@ -264,8 +268,12 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   static const _locationRequiredMessage =
-      'Ennél az állomásnál csak bekapcsolt helymeghatározással jár pont. '
-      'Kapcsold be a helymeghatározást, és olvasd be újra a kódot!';
+      'Az állomás beolvasásához be kell kapcsolni a helymeghatározást, '
+      'hogy ellenőrizhessük, a helyszínen vagy-e. Kapcsold be, és olvasd be '
+      'újra a kódot!';
+
+  /// Az utolsó hiba a hiányzó helymeghatározás volt (bekapcsoló gombbal).
+  bool _locationProblem = false;
 
   Map<String, dynamic>? _findStationFromLocalCache(String code) {
     for (final station in LocalCache.getStations()) {
@@ -276,6 +284,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
   void _reset() {
     setState(() {
+      _locationProblem = false;
       _scanning = true;
       _station = null;
       _errorMsg = null;
@@ -454,11 +463,27 @@ class _CameraScreenState extends State<CameraScreen> {
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _reset,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Újrapróbálás'),
-            ),
+            if (_locationProblem) ...[
+              FilledButton.icon(
+                onPressed: () async {
+                  final ready = await LocationService.requestEnable();
+                  if (ready && mounted) _reset();
+                },
+                icon: const Icon(Icons.location_on_outlined),
+                label: const Text('Helymeghatározás bekapcsolása'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _reset,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Újrapróbálás'),
+              ),
+            ] else
+              FilledButton.icon(
+                onPressed: _reset,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Újrapróbálás'),
+              ),
           ],
         ),
       ),

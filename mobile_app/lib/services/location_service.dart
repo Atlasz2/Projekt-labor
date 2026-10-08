@@ -51,6 +51,26 @@ class LocationService {
     }
   }
 
+  /// A helymeghatározás bekapcsolásához szükséges beállítás megnyitása: a
+  /// kikapcsolt helyszolgáltatásnál a rendszerbeállítás, véglegesen megtagadott
+  /// engedélynél az alkalmazás engedélyei; egyébként újra bekéri az engedélyt.
+  /// Igazat ad, ha a helymeghatározás ezután használható.
+  static Future<bool> requestEnable() async {
+    final state = await ensureReady();
+    switch (state) {
+      case LocationReadyState.ready:
+        return true;
+      case LocationReadyState.serviceDisabled:
+        await Geolocator.openLocationSettings();
+        return false;
+      case LocationReadyState.deniedForever:
+        await Geolocator.openAppSettings();
+        return false;
+      case LocationReadyState.denied:
+        return false;
+    }
+  }
+
   /// Folyamatos pozíció-adatfolyam a navigációhoz. A [distanceFilter] méterben
   /// szabja meg, mekkora elmozdulás után jöjjön új esemény (kisebb érték =
   /// sűrűbb frissítés, több energia).
@@ -114,7 +134,8 @@ class LocationService {
     double toRad(double d) => d * math.pi / 180.0;
     final dLat = toRad(lat2 - lat1);
     final dLng = toRad(lng2 - lng1);
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(toRad(lat1)) *
             math.cos(toRad(lat2)) *
             math.sin(dLng / 2) *

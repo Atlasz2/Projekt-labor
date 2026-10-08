@@ -578,6 +578,92 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// E-mail-cím utólagos megadása (ha a regisztrációkor kimaradt): ezzel a
+  /// fiók másik eszközön vagy újratelepítés után is visszaállítható.
+  Future<void> _addEmailDialog() async {
+    final controller = TextEditingController();
+    final email = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('E-mail-cím megadása'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Az e-mail-címmel és a neveddel egy másik telefonon vagy '
+              'újratelepítés után is visszakapod a pontjaidat és a '
+              'jutalmaidat. Mások nem látják.',
+              style: TextStyle(height: 1.35),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'E-mail-cím',
+                hintText: 'pl. kiss.janos@example.com',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Mégse'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Mentés'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (email == null || email.isEmpty || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Érvénytelen e-mail-cím.')),
+      );
+      return;
+    }
+    try {
+      await AccountService.addEmail(
+        email,
+        _currentUserData?['name']?.toString() ?? '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _currentUserData = {...?_currentUserData, 'email': email};
+      });
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'E-mail-cím mentve. Másik eszközön az e-mail-címeddel és a '
+            'neveddel léphetsz be.',
+          ),
+        ),
+      );
+    } on AddEmailRejectedException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      debugPrint('E-mail hozzáadása sikertelen: $e');
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Az e-mail-cím mentése nem sikerült. Ellenőrizd a kapcsolatot, '
+            'és próbáld újra.',
+          ),
+        ),
+      );
+    }
+  }
+
   Widget _buildProfileHeader() {
     return Container(
       width: double.infinity,
@@ -620,10 +706,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 4),
-          Text(
-            _currentUserData?['email']?.toString() ?? '',
-            style: const TextStyle(color: Colors.white70),
-          ),
+          // E-mailhez kötött fióknál a cím, egyébként lehetőség a megadására.
+          if (FirebaseAuth.instance.currentUser?.email != null)
+            Text(
+              FirebaseAuth.instance.currentUser!.email!,
+              style: const TextStyle(color: Colors.white70),
+            )
+          else
+            TextButton.icon(
+              onPressed: _addEmailDialog,
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              icon: const Icon(Icons.alternate_email, size: 18),
+              label: const Text('E-mail-cím megadása'),
+            ),
           const SizedBox(height: 8),
           Text(
             'Rang: ${rankMedal(_userRank)}',

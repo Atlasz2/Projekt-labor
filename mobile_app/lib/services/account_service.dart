@@ -1,12 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'auth_service.dart';
 import 'local_cache.dart';
 
 /// GDPR adatjogok kliensoldali kapuja: a szerveroldali exportUserData /
@@ -15,6 +17,17 @@ import 'local_cache.dart';
 /// mutatni (foglalt név, érvénytelen név).
 class RenameRejectedException implements Exception {
   const RenameRejectedException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Az e-mail utólagos hozzáadása olyan okból hiúsult meg, amelyet a
+/// felhasználónak meg kell mutatni (foglalt vagy érvénytelen cím).
+class AddEmailRejectedException implements Exception {
+  const AddEmailRejectedException(this.message);
 
   final String message;
 
@@ -50,6 +63,44 @@ class AccountService {
         throw RenameRejectedException(e.message ?? 'Érvénytelen név.');
       }
       rethrow;
+    }
+  }
+
+  /// Tesztekben lecserélhető e-mail-hozzáadás.
+  static Future<void> Function(String email, String name)? addEmailOverride;
+
+  /// E-mail-cím utólagos hozzáadása a (regisztrációkor e-mail nélkül
+  /// létrehozott) fiókhoz: a fiók e-mail/jelszó hitelesítővel kapcsolódik
+  /// össze, így másik eszközön vagy újratelepítés után visszaállítható.
+  static Future<void> addEmail(String email, String name) async {
+    final override = addEmailOverride;
+    if (override != null) return override(email, name);
+    final trimmed = email.trim();
+    try {
+      await AuthService.linkEmailPassword(email: trimmed, name: name);
+    } on FirebaseAuthException catch (e) {
+      final code = e.code.toLowerCase();
+      if (code.contains('email-already-in-use') ||
+          code.contains('credential-already-in-use')) {
+        throw const AddEmailRejectedException(
+          'Ehhez az e-mail-címhez már tartozik fiók.',
+        );
+      }
+      if (code.contains('invalid-email')) {
+        throw const AddEmailRejectedException('Érvénytelen e-mail-cím.');
+      }
+      if (code.contains('provider-already-linked')) {
+        throw const AddEmailRejectedException(
+          'Ehhez a fiókhoz már tartozik e-mail-cím.',
+        );
+      }
+      rethrow;
+    }
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'email': trimmed,
+      }, SetOptions(merge: true));
     }
   }
 

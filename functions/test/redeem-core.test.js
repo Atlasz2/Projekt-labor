@@ -412,13 +412,28 @@ test('redeem: helyszínen lévő pozícióval a jóváírás megtörténik', asy
   assert.equal(db.read(`user_progress/${uid}`).totalPoints, 25);
 });
 
-test('redeem: pozíció nélkül a helyhez kötött állomás is jóváíródik (graceful)', async () => {
+test('redeem: pozíció nélkül a helyhez kötött állomás alapból location_required', async () => {
   db.seed('stations/st1', {
     name: 'Kinizsi vár',
     qrCode: 'VAR-001',
     points: 25,
     latitude: 47.06,
     longitude: 17.715,
+  });
+
+  const result = await redeem('VAR-001'); // nincs location (kikapcsolt GPS)
+  assert.equal(result.rejected, 'location_required');
+  assert.equal(db.read(`user_progress/${uid}`).totalPoints, 0);
+});
+
+test('redeem: a pozíció nélküli beváltást kifejezetten engedő állomás jóváíródik', async () => {
+  db.seed('stations/st1', {
+    name: 'Akadálymentes állomás',
+    qrCode: 'VAR-001',
+    points: 25,
+    latitude: 47.06,
+    longitude: 17.715,
+    requireLocation: false,
   });
 
   const result = await redeem('VAR-001'); // nincs location

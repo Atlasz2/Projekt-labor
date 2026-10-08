@@ -282,12 +282,18 @@ describe("Stations", () => {
       expect(batchOps).toEqual([]);
     });
 
-    it("a kötelező helymeghatározás beállítása mentésre kerül", async () => {
+    it("alapból kötelező a helymeghatározás", async () => {
+      setData([makeStation({ qrCode: "VARKERT-2026-TAVASZ" })]);
+      await openEditorAndSave();
+      expect(batchOps[0][2].requireLocation).toBe(true);
+    });
+
+    it("a pozíció nélküli beváltás kifejezetten engedélyezhető", async () => {
       setData([makeStation({ qrCode: "VARKERT-2026-TAVASZ" })]);
       await openEditorAndSave(() =>
-        userEvent.click(screen.getByLabelText(/Helymeghatározás kötelező/)),
+        userEvent.click(screen.getByLabelText(/Helymeghatározás nélkül is beváltható/)),
       );
-      expect(batchOps[0][2].requireLocation).toBe(true);
+      expect(batchOps[0][2].requireLocation).toBe(false);
     });
   });
 });

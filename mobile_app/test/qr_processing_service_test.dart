@@ -336,10 +336,27 @@ void main() {
 
     test('kötelező helymeghatározás jelzője', () {
       expect(
-        QrProcessingService.requiresLocation({'requireLocation': true}),
+        QrProcessingService.requiresLocation({
+          'latitude': 47.06,
+          'longitude': 17.715,
+        }),
         isTrue,
+        reason: 'helyhez kötött állomásnál alapból kötelező',
       );
-      expect(QrProcessingService.requiresLocation(const {}), isFalse);
+      expect(
+        QrProcessingService.requiresLocation({
+          'latitude': 47.06,
+          'longitude': 17.715,
+          'requireLocation': false,
+        }),
+        isFalse,
+        reason: 'az admin kifejezetten engedheti a pozíció nélküli beváltást',
+      );
+      expect(
+        QrProcessingService.requiresLocation(const {}),
+        isFalse,
+        reason: 'koordináta nélküli célnál (rendezvény) nincs helyhez kötés',
+      );
     });
   });
 }

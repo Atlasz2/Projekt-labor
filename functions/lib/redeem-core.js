@@ -374,6 +374,14 @@ function writeLeaderboards(tx, {
   );
 }
 
+/** Kell-e pozíció a cél beváltásához: minden helyhez kötött (koordinátával
+ *  rendelkező) célnál igen, hacsak az admin kifejezetten nem engedi a pozíció
+ *  nélküli beváltást (requireLocation === false, pl. akadálymentes állomás).
+ *  A koordináta nélküli célok (helyhez nem kötött rendezvények) mentesek. */
+export function requiresLocation(targetData) {
+  return targetLatLng(targetData) != null && targetData?.requireLocation !== false;
+}
+
 /** Érvényes-e a beolvasáskori pozíció (mindkét koordináta véges szám). */
 function hasValidLocation(location) {
   return (
@@ -426,9 +434,11 @@ export async function redeemQrCore({
     };
   }
 
-  // Az admin állomásonként előírhatja a helymeghatározást: ilyenkor a pozíció
-  // nélküli kérés (GPS kikapcsolva, módosított kliens) nem kap pontot.
-  if (target.data?.requireLocation === true && !hasValidLocation(location)) {
+  // Helyhez kötött célnál a pozíció nélküli kérés (kikapcsolt helymeghatározás,
+  // módosított kliens) nem kap pontot – különben a GPS kikapcsolásával a
+  // helyszín-ellenőrzés megkerülhető volna. Az admin állomásonként
+  // engedélyezheti a pozíció nélküli beváltást (requireLocation: false).
+  if (requiresLocation(target.data) && !hasValidLocation(location)) {
     return {
       found: true,
       rejected: 'location_required',
