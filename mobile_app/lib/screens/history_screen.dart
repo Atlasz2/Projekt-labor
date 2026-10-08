@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../widgets/app_background.dart';
 import '../widgets/offline_image.dart';
+import '../services/offline_sync_service.dart';
+import '../utils/offline_query.dart';
 import '../utils/project_filter.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -51,15 +53,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
           .collection('about')
           .orderBy('year', descending: false);
 
-      QuerySnapshot<Map<String, dynamic>> snapshot;
-      try {
-        // A szerveres lekérés timeoutol, ha a hálózat csatlakozott, de halott,
-        // különben a képernyő örökké pörögne.
-        snapshot = await query.get().timeout(const Duration(seconds: 10));
-      } catch (_) {
-        // Visszalépés a Firestore helyi gyorsítótárára (offline / gyenge net).
-        snapshot = await query.get(const GetOptions(source: Source.cache));
-      }
+      // Offline azonnal a helyi gyorsítótárból (az előtöltés tölti fel).
+      final sync = OfflineSyncService();
+      await sync.init();
+      final snapshot = await getWithOfflineFallback(
+        query,
+        online: sync.isOnline,
+      );
 
       if (!mounted) return;
       setState(() {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/privacy_screen.dart';
+import '../utils/app_messenger.dart';
 import '../services/account_service.dart';
 
 /// A profil "Adataim és adatvédelem" (GDPR) szekciója: adatexport és
@@ -63,7 +64,12 @@ class _DataRightsSectionState extends State<DataRightsSection> {
     try {
       await AccountService.deleteAccount();
       // Sikeres törlés után az AuthGate a kijelentkezésre reagálva a
-      // bejelentkező képernyőre vált — nincs több teendő itt.
+      // regisztrációs képernyőre vált, ez a widget eltűnik – ezért az
+      // alkalmazásszintű üzenetkezelőn jelezzük a sikert.
+      showAppMessage(
+        'A fiókodat és minden hozzá tartozó adatodat töröltük.',
+        duration: const Duration(seconds: 6),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _deleteInProgress = false);

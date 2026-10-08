@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../services/offline_sync_service.dart';
+import '../utils/offline_query.dart';
 import '../utils/project_filter.dart';
 import '../config/app_config.dart';
 import '../utils/app_version.dart';
@@ -69,7 +70,12 @@ class _ContactScreenState extends State<ContactScreen>
       setState(() => _isLoading = true);
       // Településenként külön kapcsolati dokumentum van, ezért a teljes
       // kollekcióból az aktív településhez tartozót választjuk ki.
-      final snapshot = await _firestore.collection('contact').get();
+      final sync = OfflineSyncService();
+      await sync.init();
+      final snapshot = await getWithOfflineFallback(
+        _firestore.collection('contact'),
+        online: sync.isOnline,
+      );
       final scoped = whereActiveProject(snapshot.docs);
       if (scoped.isNotEmpty) {
         final rawData = scoped.first.data();

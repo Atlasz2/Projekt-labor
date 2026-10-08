@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'local_cache.dart';
+
 /// GDPR adatjogok kliensoldali kapuja: a szerveroldali exportUserData /
 /// deleteMyAccount Cloud Functionöket hívja (lásd functions/lib/gdpr-core.js).
 /// A névmódosítás olyan okból hiúsult meg, amelyet a felhasználónak meg kell
@@ -90,6 +92,7 @@ class AccountService {
   static Future<void> deleteAccount() async {
     final callable = _functions.httpsCallable('deleteMyAccount');
     await callable.call<dynamic>();
+    await LocalCache.clearPendingQr();
     try {
       await FirebaseAuth.instance.signOut();
     } catch (e) {

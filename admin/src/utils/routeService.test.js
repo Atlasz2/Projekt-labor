@@ -3,6 +3,7 @@ import {
   formatDistance,
   formatDuration,
   getStoredRouteCoordinates,
+  toStoredRouteCoordinates,
 } from "./routeService";
 
 describe("formatDistance", () => {
@@ -60,5 +61,18 @@ describe("getStoredRouteCoordinates", () => {
   it("üres tömböt ad, ha nincs mentett útvonal", () => {
     expect(getStoredRouteCoordinates({})).toEqual([]);
     expect(getStoredRouteCoordinates(null)).toEqual([]);
+  });
+});
+
+describe("toStoredRouteCoordinates", () => {
+  it("Firestore-kompatibilis { lat, lng } pontokká alakít (nincs beágyazott tömb)", () => {
+    const stored = toStoredRouteCoordinates([[47.06, 17.71], ["47.07", "17.72"], [null, 1]]);
+    expect(stored).toEqual([{ lat: 47.06, lng: 17.71 }, { lat: 47.07, lng: 17.72 }]);
+    expect(stored.some(Array.isArray)).toBe(false);
+  });
+
+  it("az így mentett útvonal visszaolvasható", () => {
+    const trip = { routeCoordinates: toStoredRouteCoordinates([[47.06, 17.71], [47.07, 17.72]]) };
+    expect(getStoredRouteCoordinates(trip)).toEqual([[47.06, 17.71], [47.07, 17.72]]);
   });
 });

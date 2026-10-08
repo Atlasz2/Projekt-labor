@@ -50,10 +50,21 @@ export const formatDuration = (seconds) => {
   return `${minutes} p`;
 };
 
-/** Egy [a, b] koordinátapár normalizálása számokká. A `reverse` a GeoJSON
- *  [lng, lat] sorrendet fordítja [lat, lng]-re. */
+/** Egy koordinátapár normalizálása [lat, lng] számpárrá. Elfogadja az
+ *  [a, b] tömböt (a `reverse` a GeoJSON [lng, lat] sorrendet fordítja) és a
+ *  Firestore-ban tárolt { lat, lng } objektumot is. */
 export const normalizeCoordinatePair = (pair, reverse = false) => {
+  if (pair && !Array.isArray(pair) && typeof pair === "object") {
+    const rawLat = pair.lat ?? pair.latitude;
+    const rawLng = pair.lng ?? pair.lon ?? pair.longitude;
+    if (rawLat == null || rawLng == null) return null;
+    const lat = Number(rawLat);
+    const lng = Number(rawLng);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+  }
   if (!Array.isArray(pair) || pair.length < 2) return null;
+  // Hiányzó érték ne váljon 0-vá (az Atlanti-óceánba kerülő pont).
+  if (pair[0] == null || pair[1] == null || pair[0] === "" || pair[1] === "") return null;
 
   const first = Number(pair[0]);
   const second = Number(pair[1]);
@@ -66,6 +77,15 @@ export const normalizeCoordinatePair = (pair, reverse = false) => {
 /** A túrához KORÁBBAN ELMENTETT útvonal pontjai (a Túrák oldal menti el a
  *  Valhalla-lekérés eredményét). Ha van, ezt kell használni: azonnali, és a
  *  valódi turistaút — nem légvonal. Több régi mezőnevet is elfogad. */
+/** Az útvonal Firestore-ba írható alakja: a Firestore nem enged egymásba
+ *  ágyazott tömböt, ezért a pontok { lat, lng } objektumként tárolódnak
+ *  (a mobil decodeStoredRoute-ja mindkét alakot olvassa). */
+export const toStoredRouteCoordinates = (coords) =>
+  (coords ?? [])
+    .map((pair) => normalizeCoordinatePair(pair))
+    .filter(Boolean)
+    .map(([lat, lng]) => ({ lat, lng }));
+
 export const getStoredRouteCoordinates = (trip) => {
   const routeFields = [
     trip?.routeCoordinates,

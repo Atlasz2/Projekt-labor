@@ -6,6 +6,7 @@ import '../widgets/offline_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/project_filter.dart';
 import '../utils/venue_info.dart';
+import '../services/offline_sync_service.dart';
 
 class AccommodationScreen extends StatefulWidget {
   const AccommodationScreen({super.key});
@@ -316,9 +317,23 @@ class _AccommodationScreenState extends State<AccommodationScreen>
             .where((d) => inActiveProject(d.data() as Map<String, dynamic>?))
             .toList();
         if (docs.isEmpty) {
+          // Offline, még le nem töltött lista: ne „nincs ilyen” legyen az
+          // üzenet, hanem hogy előbb kapcsolat kell.
+          final notYetDownloaded =
+              (snapshot.data?.metadata.isFromCache ?? false) &&
+              !OfflineSyncService().isOnline;
           return Center(
-            child: Text(
-              isRestaurant ? 'Nincsenek éttermek.' : 'Nincsenek szállások.',
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                notYetDownloaded
+                    ? 'Ez a lista még nincs letöltve. Csatlakozz egyszer az '
+                          'internethez, utána offline is elérhető lesz.'
+                    : isRestaurant
+                    ? 'Nincsenek éttermek.'
+                    : 'Nincsenek szállások.',
+                textAlign: TextAlign.center,
+              ),
             ),
           );
         }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../utils/image_normalizer.dart';
 import '../widgets/offline_image.dart';
 import '../utils/project_filter.dart';
+import '../services/offline_sync_service.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -424,21 +425,42 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               ),
               if (events.isEmpty)
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.event_busy_outlined,
-                          size: 46,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 10),
-                        Text('Jelenleg nincsenek rendezvények.'),
-                        SizedBox(height: 6),
-                        Text('Nézz vissza később az új programokért.'),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.event_busy_outlined,
+                            size: 46,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(height: 10),
+                          // Offline, még le nem töltött lista esetén nem
+                          // „nincs rendezvény”, hanem hogy kapcsolat kell.
+                          if ((snapshot.data?.metadata.isFromCache ?? false) &&
+                              !OfflineSyncService().isOnline) ...[
+                            const Text(
+                              'A rendezvények még nincsenek letöltve.',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Csatlakozz egyszer az internethez, utána '
+                              'offline is elérhetők lesznek.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ] else ...[
+                            const Text('Jelenleg nincsenek rendezvények.'),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Nézz vissza később az új programokért.',
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 )

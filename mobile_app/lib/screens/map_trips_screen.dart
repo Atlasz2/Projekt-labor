@@ -9,7 +9,7 @@ import '../widgets/offline_image.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:latlong2/latlong.dart' as ll;
 
-import '../services/hiking_route_service.dart';
+import '../services/trip_route_service.dart';
 import '../services/local_cache.dart';
 import '../services/offline_image_service.dart';
 import '../services/offline_tiles_service.dart';
@@ -413,8 +413,11 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       return;
     }
 
+    // A memóriában tartott útvonal azonnal kirajzolható – kivéve a légvonalas
+    // közelítést, amelyet hálózat mellett újra megpróbálunk valódira cserélni.
     final cachedRoute = _routeCache[tripId];
-    if (cachedRoute != null) {
+    if (cachedRoute != null &&
+        _routeMetrics[tripId]?['status'] != TripRouteService.fallbackStatus) {
       if (!mounted) return;
       setState(() {
         _markers = markers;
@@ -426,101 +429,37 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
       return;
     }
 
-    final persistedRoute = LocalCache.getRoute(tripId);
-    if (persistedRoute != null) {
-      final persistedPoints = HikingRouteService.decodeStoredRoute(
-        persistedRoute['points'],
-      );
-      final persistedMetrics = persistedRoute['metrics'];
-      if (persistedPoints.length >= 2) {
-        _routeCache[tripId] = persistedPoints;
-        if (persistedMetrics is Map) {
-          _routeMetrics[tripId] = persistedMetrics.map(
-            (k, v) => MapEntry(k.toString(), v.toString()),
-          );
-        }
-        if (!mounted) return;
-        setState(() {
-          _markers = markers;
-          _polylines = _buildPolylines(persistedPoints, visibleStations);
-          _routeLoading = false;
-          _routeStatus = _routeMetrics[tripId]?['status'] ?? 'Offline útvonal';
-        });
-        _fitRouteOrStations(persistedPoints, visibleStations);
-        return;
-      }
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _markers = markers;
-      _polylines = {};
-      _routeLoading = true;
-      _routeStatus = 'Túraútvonal keresése...';
-    });
-
+    final trip = _trips.firstWhere(
+      (t) => t['id'] == tripId,
+      orElse: () => const <String, dynamic>{},
+    );
     final stationPoints = visibleStations
         .map(_stationPoint)
         .whereType<LatLng>()
         .toList();
 
-    List<LatLng> routePoints = const [];
-    String status = 'Turistaútvonal';
-    String distanceLabel = 'Nincs adat';
-    String durationLabel = 'Nincs adat';
-    bool isValhallaRoute = false;
-
-    // Elsodlegesen Valhalla-t hasznalunk, hogy turistautak/foldutak legyenek preferalva.
-    if (stationPoints.length >= 2) {
-      try {
-        final routeData = await HikingRouteService.fetchRoute(stationPoints);
-        final fetchedPoints = (routeData['points'] as List<dynamic>)
-            .whereType<LatLng>()
-            .toList();
-        final fallback = routeData['fallback'] == true;
-        final osrm = routeData['osrm'] == true;
-
-        if (fetchedPoints.length >= 2) {
-          routePoints = fetchedPoints;
-          distanceLabel = routeData['distanceLabel']?.toString() ?? 'N/A';
-          durationLabel = routeData['durationLabel']?.toString() ?? 'N/A';
-          isValhallaRoute = !fallback && !osrm;
-          status = fallback
-              ? 'Közelítő összekötés állomások között'
-              : osrm
-              ? 'Gyalogos útvonal'
-              : 'OpenStreetMap turistaút';
-        }
-      } catch (_) {
-        // timeout vagy halozati hiba
-      }
+    // Offline is elérhető útvonal (a túrában tárolt vagy az eszközön mentett)
+    // esetén nincs töltés; egyébként jelezzük, hogy keresünk.
+    if (TripRouteService.available(tripId, trip) == null) {
+      if (!mounted) return;
+      setState(() {
+        _markers = markers;
+        _polylines = {};
+        _routeLoading = true;
+        _routeStatus = 'Túraútvonal keresése...';
+      });
     }
 
-    if (routePoints.length < 2) {
-      routePoints = stationPoints;
-      status = stationPoints.length >= 2
-          ? 'Közelítő összekötés állomások között'
-          : 'Nincs elég állomás útvonalhoz';
-    }
-
+    final route = await TripRouteService.resolve(
+      tripId: tripId,
+      trip: trip,
+      stationPoints: stationPoints,
+      allowNetwork: OfflineSyncService().isOnline,
+    );
+    final routePoints = route.points;
     _routeCache[tripId] = routePoints;
-    _routeMetrics[tripId] = {
-      'status': status,
-      'distance': distanceLabel,
-      'duration': durationLabel,
-    };
-
-    if (routePoints.length >= 2 &&
-        status != 'Közelítő összekötés állomások között' &&
-        isValhallaRoute) {
-      await LocalCache.saveRoute(
-        tripId,
-        routePoints
-            .map((p) => ll.LatLng(p.latitude, p.longitude))
-            .toList(growable: false),
-        _routeMetrics[tripId]!,
-      );
-    }
+    _routeMetrics[tripId] = route.metrics;
+    final status = route.status;
 
     if (!mounted || _selectedTripId != tripId) return;
     setState(() {

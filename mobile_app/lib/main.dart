@@ -15,6 +15,7 @@ import 'services/local_cache.dart';
 import 'firebase_options.dart';
 import 'screens/auth_gate.dart';
 import 'theme/app_colors.dart';
+import 'utils/app_messenger.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,6 +95,7 @@ class MyApp extends StatelessWidget {
     );
 
     return MaterialApp(
+      scaffoldMessengerKey: appMessengerKey,
       title: 'Nagyvazsony',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

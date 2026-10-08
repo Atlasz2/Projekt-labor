@@ -177,6 +177,19 @@ class LocalCache {
 
   static bool get hasData => _trips.isNotEmpty && _stations.isNotEmpty;
 
+  /// Az offline előtöltés tartalmának verziója. Növelni kell, ha az
+  /// előtöltés új adatot kezd letölteni, hogy a már telepített alkalmazások
+  /// a következő indításkor – a 12 órás frissítést meg nem várva – pótolják.
+  /// 2: tartalmi kollekciók (rendezvény, szállás, kapcsolat, történet) és a
+  ///    túraútvonalak előtöltése.
+  static const int bootstrapVersion = 2;
+
+  static bool get bootstrapOutdated =>
+      ((_meta.get('bootstrapVersion') as int?) ?? 1) < bootstrapVersion;
+
+  static Future<void> markBootstrapped() =>
+      _meta.put('bootstrapVersion', bootstrapVersion);
+
   static bool get isCacheStale {
     final ts = _meta.get('tripsAt') as int?;
     if (ts == null) return true;
@@ -189,6 +202,14 @@ class LocalCache {
     final current = getOfflineTileTripIds();
     if (!current.add(tripId)) return;
     await _meta.put('offlineTileTripIds', current.toList(growable: false));
+  }
+
+  /// A fiók törlésekor: a törölt fiókhoz tartozó, még be nem küldött offline
+  /// beolvasások nem maradhatnak az eszközön (különben a következő fiókhoz
+  /// íródnának jóvá).
+  static Future<void> clearPendingQr() async {
+    await _pendingQr.clear();
+    pendingQrCountNotifier.value = 0;
   }
 
   static Future<void> clearOfflineTileTripIds() async {

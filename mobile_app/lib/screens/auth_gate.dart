@@ -55,7 +55,7 @@ class _AuthGateState extends State<AuthGate> {
     if (_lastBootstrappedUid == uid) return;
     _lastBootstrappedUid = uid;
     _servicesStoppedForSignedOut = false;
-    unawaited(BootstrapService.run());
+    unawaited(BootstrapService.start());
     unawaited(PendingQrSyncService.start());
     unawaited(NotificationService.init());
   }
@@ -66,6 +66,7 @@ class _AuthGateState extends State<AuthGate> {
     _lastBootstrappedUid = null;
     _userDocStream = null;
     _userDocStreamUid = null;
+    BootstrapService.stop();
     await PendingQrSyncService.stop();
   }
 
@@ -92,7 +93,6 @@ class _AuthGateState extends State<AuthGate> {
 
         _initialAuthResolved = true;
         final user = snapshot.data!;
-        _startBackgroundServices(user.uid);
 
         return StreamBuilder<DocumentSnapshot>(
           stream: _userDocByUid(user.uid),
@@ -109,6 +109,11 @@ class _AuthGateState extends State<AuthGate> {
               return _nameScreen();
             }
 
+            // A háttérfolyamatok (előtöltés, offline sor, értesítések) csak a
+            // kész profillal indulnak: a regisztráció alatt ugyanazon a
+            // Firestore-kapcsolaton versenyeznének a profilt létrehozó
+            // tranzakcióval, és jelentősen lassítanák a belépést.
+            _startBackgroundServices(user.uid);
             _showingNameScreen = false;
             return const MainMenuScreen();
           },

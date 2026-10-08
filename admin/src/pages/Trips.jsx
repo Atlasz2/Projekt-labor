@@ -30,6 +30,7 @@ import {
   formatDistance,
   formatDuration,
   getStoredRouteCoordinates,
+  toStoredRouteCoordinates,
 } from "../utils/routeService";
 import { qrDataUrl } from "../utils/qrHelpers";
 import { currentQrCode, loadQrCodesByTarget } from "../utils/qrMapping";
@@ -471,8 +472,9 @@ function Trips() {
         }
       }
 
+      // A Firestore nem tárol egymásba ágyazott tömböt: { lat, lng } pontok.
       const payload = {
-        routeCoordinates: nextRoute,
+        routeCoordinates: toStoredRouteCoordinates(nextRoute),
         routeSource,
       };
 
