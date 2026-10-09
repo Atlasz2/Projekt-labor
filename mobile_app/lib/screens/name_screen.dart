@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,6 +21,57 @@ class _NameScreenState extends State<NameScreen> {
   final _emailFocus = FocusNode();
   bool _isLoading = false;
 
+  /// A gépelt név már egy másik fiókhoz tartozik (élő ellenőrzés).
+  bool _nameTaken = false;
+  Timer? _nameCheckDebounce;
+
+  /// Az előre elindított névtelen bejelentkezés (lásd [_startSignIn]).
+  Future<User?>? _signInFuture;
+
+  /// A névtelen bejelentkezés elindítása már a „Folytatás” lenyomásakor, a
+  /// megerősítő ablak alatt – így a regisztráció hálózati körei nem egymás
+  /// után, a felhasználó várakozása alatt futnak le.
+  Future<User?> _startSignIn() {
+    final current = FirebaseAuth.instance.currentUser;
+    if (current != null) return Future.value(current);
+    return _signInFuture ??= FirebaseAuth.instance
+        .signInAnonymously()
+        .then((c) => c.user)
+        .catchError((Object e) {
+          _signInFuture = null; // a következő kísérlet újrapróbálja
+          throw e;
+        });
+  }
+
+  /// Élő névellenőrzés gépelés közben (rövid késleltetéssel). Mellékhatásként
+  /// már ekkor felépül a kapcsolat az adatbázissal, így a regisztráció
+  /// gyorsabb. Hiba esetén csendben marad – a végső döntést a regisztráció
+  /// tranzakciója hozza.
+  void _onNameChanged(String value) {
+    _nameCheckDebounce?.cancel();
+    if (_nameTaken) setState(() => _nameTaken = false);
+    final normalized = _normalizeDisplayName(value);
+    if (normalized.isEmpty) return;
+    _nameCheckDebounce = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('usernames')
+            .doc(normalized)
+            .get();
+        final owner = snap.data()?['uid']?.toString();
+        final taken =
+            snap.exists && owner != FirebaseAuth.instance.currentUser?.uid;
+        if (!mounted ||
+            _normalizeDisplayName(_displayNameController.text) != normalized) {
+          return;
+        }
+        if (taken != _nameTaken) setState(() => _nameTaken = taken);
+      } catch (_) {
+        // Hálózati hiba: nincs élő visszajelzés.
+      }
+    });
+  }
+
   String _normalizeDisplayName(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
@@ -32,6 +85,7 @@ class _NameScreenState extends State<NameScreen> {
     _displayNameController.dispose();
     _emailController.dispose();
     _emailFocus.dispose();
+    _nameCheckDebounce?.cancel();
     super.dispose();
   }
 
@@ -57,6 +111,16 @@ class _NameScreenState extends State<NameScreen> {
       return;
     }
 
+    if (_nameTaken) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ez a név már foglalt. Válassz másikat.')),
+      );
+      return;
+    }
+
+    // A bejelentkezés már most elindul (a hibáját a lenti await kezeli).
+    unawaited(_startSignIn().then((_) {}, onError: (_) {}));
+
     // E-mail nélkül is lehet regisztrálni, de érdemes tudni, mivel jár.
     if (email.isEmpty) {
       final proceed = await _confirmWithoutEmail();
@@ -73,9 +137,7 @@ class _NameScreenState extends State<NameScreen> {
       final firestore = FirebaseFirestore.instance;
       final normalizedName = _normalizeDisplayName(displayName);
       final usernameRef = firestore.collection('usernames').doc(normalizedName);
-      final currentUser = FirebaseAuth.instance.currentUser;
-      final user =
-          currentUser ?? (await FirebaseAuth.instance.signInAnonymously()).user;
+      final user = await _startSignIn();
       if (user == null) {
         throw Exception('Nem sikerült bejelentkezni.');
       }
@@ -353,6 +415,7 @@ class _NameScreenState extends State<NameScreen> {
                                     TextField(
                                       controller: _displayNameController,
                                       enabled: !_isLoading,
+                                      onChanged: _onNameChanged,
                                       textCapitalization:
                                           TextCapitalization.words,
                                       textInputAction: TextInputAction.next,
@@ -360,6 +423,9 @@ class _NameScreenState extends State<NameScreen> {
                                       decoration: InputDecoration(
                                         labelText: 'Név *',
                                         hintText: 'pl. Kiss János',
+                                        errorText: _nameTaken
+                                            ? 'Ez a név már foglalt.'
+                                            : null,
                                         prefixIcon: const Icon(
                                           Icons.person_outline,
                                         ),

@@ -29,6 +29,7 @@ dependencies:
   firebase_app_check: ^0.4.7
   package_info_plus: ^10.2.2
   crypto: ^3.0.7
+  pdf: ^3.12.0
 
 dev_dependencies:
   flutter_test:
@@ -44,6 +45,8 @@ flutter:
     - assets/logo_splash.png
     - assets/var.jpg
     - assets/name_bg.jpg
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
 
 flutter_launcher_icons:
   android: true

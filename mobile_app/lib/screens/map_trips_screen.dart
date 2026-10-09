@@ -132,10 +132,35 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     super.initState();
     _initOfflineTileState();
     _loadAll();
+    _listenToProgress();
+  }
+
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _progressSub;
+
+  /// A teljesített állomások élő követése: egy beolvasás után (akár a
+  /// navigációból indítva) a jelölők és az állomáslap feloldott tartalma
+  /// azonnal frissül, nem csak a képernyő újranyitásakor.
+  void _listenToProgress() {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    _progressSub = _firestore
+        .collection('user_progress')
+        .doc(uid)
+        .snapshots()
+        .listen((snap) {
+          final fromDoc = Set<String>.from(
+            (snap.data() ?? const {})['completedStations'] ?? const [],
+          );
+          if (!mounted || fromDoc.isEmpty) return;
+          if (setEquals(fromDoc, _completedIds)) return;
+          setState(() => _completedIds = fromDoc);
+          unawaited(_refreshSelectedTripMap());
+        }, onError: (_) {});
   }
 
   @override
   void dispose() {
+    _progressSub?.cancel();
     _mapController?.dispose();
     super.dispose();
   }

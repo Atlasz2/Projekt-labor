@@ -45,6 +45,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await Future.wait([_loadUserData(), _loadAchievementCatalogAndUnlocks()]);
   }
 
+  Map<String, dynamic> _profileFrom(
+    String uid,
+    Map<String, dynamic> progressData,
+    Map<String, dynamic> userData,
+  ) => <String, dynamic>{
+    'id': uid,
+    'name':
+        userData['displayName']?.toString() ??
+        userData['name']?.toString() ??
+        progressData['name']?.toString() ??
+        'Felhasználó',
+    'email': userData['email']?.toString() ?? _auth.currentUser?.email ?? '',
+    'completedStations': safeCount(progressData['completedStations']) > 0
+        ? safeCount(progressData['completedStations'])
+        : safeCount(userData['visitedStations']),
+    'completedEvents': safeCount(progressData['completedEvents']) > 0
+        ? safeCount(progressData['completedEvents'])
+        : safeCount(userData['visitedEvents']),
+    'points': safeInt(progressData['totalPoints']) > 0
+        ? safeInt(progressData['totalPoints'])
+        : safeInt(userData['points']),
+    'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs túra',
+  };
+
+  /// Gyorsítótár-először betöltés: a készüléken tárolt profil azonnal
+  /// megjelenik, a friss adat (profil, dobogó, saját helyezés) EGY
+  /// párhuzamos körben érkezik utána.
   Future<void> _loadUserData() async {
     try {
       setState(() {
@@ -56,61 +83,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (currentUid == null) {
         throw Exception('Nincs bejelentkezett felhasználó.');
       }
+      final progressRef = _firestore
+          .collection('user_progress')
+          .doc(currentUid);
+      final userRef = _firestore.collection('users').doc(currentUid);
 
-      // Fetch the two profile docs together; if the network is slow/unreachable
-      // fall back to the local cache so the screen never hangs on a spinner.
-      List<DocumentSnapshot<Map<String, dynamic>>> userDocs;
-      try {
-        userDocs = await Future.wait([
-          _firestore.collection('user_progress').doc(currentUid).get(),
-          _firestore.collection('users').doc(currentUid).get(),
-        ]).timeout(const Duration(seconds: 10));
-      } catch (_) {
-        userDocs = await Future.wait([
-          _firestore
-              .collection('user_progress')
-              .doc(currentUid)
-              .get(const GetOptions(source: Source.cache)),
-          _firestore
-              .collection('users')
-              .doc(currentUid)
-              .get(const GetOptions(source: Source.cache)),
-        ]);
+      // 1. A helyi példány – azonnal, hálózat nélkül.
+      if (_currentUserData == null) {
+        try {
+          const cache = GetOptions(source: Source.cache);
+          final cached = await Future.wait([
+            progressRef.get(cache),
+            userRef.get(cache),
+          ]);
+          if (mounted && (cached[0].exists || cached[1].exists)) {
+            setState(() {
+              _currentUserData = _profileFrom(
+                currentUid,
+                cached[0].data() ?? const {},
+                cached[1].data() ?? const {},
+              );
+              _isLoading = false;
+            });
+          }
+        } catch (_) {
+          // Még nincs helyi példány – a hálózati kör pótolja.
+        }
       }
 
-      final progressData = userDocs[0].data() ?? <String, dynamic>{};
-      final userData = userDocs[1].data() ?? <String, dynamic>{};
+      // 2. Friss adat: profil és ranglista egyszerre (korábban egymás után).
+      final docsFuture = Future.wait([
+        progressRef.get(),
+        userRef.get(),
+      ]).timeout(const Duration(seconds: 10));
+      final leaderboardFuture = Future.wait<Object>([
+        LeaderboardService.top(3),
+        LeaderboardService.rankOf(currentUid),
+      ]).timeout(const Duration(seconds: 10));
 
-      final current = <String, dynamic>{
-        'id': currentUid,
-        'name':
-            userData['displayName']?.toString() ??
-            userData['name']?.toString() ??
-            progressData['name']?.toString() ??
-            'Felhasználó',
-        'email':
-            userData['email']?.toString() ?? _auth.currentUser?.email ?? '',
-        'completedStations': safeCount(progressData['completedStations']) > 0
-            ? safeCount(progressData['completedStations'])
-            : safeCount(userData['visitedStations']),
-        'completedEvents': safeCount(progressData['completedEvents']) > 0
-            ? safeCount(progressData['completedEvents'])
-            : safeCount(userData['visitedEvents']),
-        'points': safeInt(progressData['totalPoints']) > 0
-            ? safeInt(progressData['totalPoints'])
-            : safeInt(userData['points']),
-        'currentTrip': progressData['currentTrip']?.toString() ?? 'Nincs túra',
-      };
-
-      // A dobogó (top 3) és a saját helyezés együtt fut; ha a ranglista lassú
-      // vagy nem elérhető, a profil akkor is megjelenik (rangsor nélkül).
-      List<QueryDocumentSnapshot<Map<String, dynamic>>> podiumDocs = const [];
-      var userRank = 0;
+      List<DocumentSnapshot<Map<String, dynamic>>> userDocs;
       try {
-        final leaderboard = await Future.wait<Object>([
-          LeaderboardService.top(3),
-          LeaderboardService.rankOf(currentUid),
-        ]).timeout(const Duration(seconds: 10));
+        userDocs = await docsFuture;
+      } catch (_) {
+        if (_currentUserData != null) {
+          // A helyi példány már látszik; a hálózat most nem elérhető.
+          unawaited(leaderboardFuture.then((_) {}, onError: (_) {}));
+          return;
+        }
+        rethrow;
+      }
+
+      // A dobogó és a saját helyezés: ha lassú vagy nem elérhető, a profil
+      // akkor is megjelenik (rangsor nélkül).
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> podiumDocs = const [];
+      var userRank = _userRank;
+      try {
+        final leaderboard = await leaderboardFuture;
         podiumDocs =
             leaderboard[0] as List<QueryDocumentSnapshot<Map<String, dynamic>>>;
         userRank = leaderboard[1] as int;
@@ -131,13 +159,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       if (!mounted) return;
       setState(() {
-        _currentUserData = current;
-        _allUsers = users;
+        _currentUserData = _profileFrom(
+          currentUid,
+          userDocs[0].data() ?? const {},
+          userDocs[1].data() ?? const {},
+        );
+        if (users.isNotEmpty || _allUsers.isEmpty) _allUsers = users;
         _userRank = userRank;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
+      if (_currentUserData != null) {
+        setState(() => _isLoading = false);
+        return;
+      }
       setState(() {
         _error =
             'A profil betöltése nem sikerült. Ellenőrizd a kapcsolatot, és próbáld újra.';
@@ -151,17 +187,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final uid = _auth.currentUser?.uid;
       if (uid == null) return;
 
-      final achSnap = await _firestore.collection('achievements').get();
-      // Csak ennek a településnek a jutalmai.
-      final defs = whereActiveProject(
-        achSnap.docs,
-      ).map((d) => <String, dynamic>{'id': d.id, ...d.data()}).toList();
-
+      // A katalógus és a saját feloldások egyszerre.
+      final achFuture = _firestore.collection('achievements').get();
       final unlockedSnap = await _firestore
           .collection('user_progress')
           .doc(uid)
           .collection('unlocked_achievements')
           .get();
+      final achSnap = await achFuture;
+      // Csak ennek a településnek a jutalmai.
+      final defs = whereActiveProject(
+        achSnap.docs,
+      ).map((d) => <String, dynamic>{'id': d.id, ...d.data()}).toList();
 
       final unlockedIds = unlockedSnap.docs.map((d) => d.id).toSet();
       final unlockedAt = <String, DateTime>{};

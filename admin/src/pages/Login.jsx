@@ -15,6 +15,9 @@ const AUTH_ERROR_MESSAGES = {
   "auth/user-not-found": "Ez az email nincs regisztrálva.",
   "auth/wrong-password": "Hibás email vagy jelszó.",
   "auth/invalid-credential": "Hibás email vagy jelszó.",
+  "auth/network-request-failed":
+    "Nem sikerült elérni a bejelentkezési szervert. Ellenőrizd az internetkapcsolatot, és kapcsold ki a hirdetésblokkolót / VPN-t ezen az oldalon.",
+  "auth/too-many-requests": "Túl sok sikertelen próbálkozás. Várj pár percet, és próbáld újra.",
 };
 
 function consumePersistedAccessError() {

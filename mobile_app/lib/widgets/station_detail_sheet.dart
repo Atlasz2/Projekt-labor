@@ -13,6 +13,8 @@ void showStationDetailSheet(
 }) {
   final photos = photoListFromDoc(station);
   final stationName = station['name']?.toString() ?? 'Állomás';
+  final unlockText = station['unlockContent']?.toString().trim() ?? '';
+  final unlockImage = station['unlockContentImageUrl']?.toString().trim() ?? '';
 
   showModalBottomSheet<void>(
     context: context,
@@ -164,65 +166,135 @@ void showStationDetailSheet(
                 style: const TextStyle(height: 1.45),
               ),
             ],
-            if (isCompleted &&
-                (station['unlockContent']?.toString() ?? '').isNotEmpty) ...[
+            if (unlockText.isNotEmpty) ...[
               const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0F3EC),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFC9D4BC)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF5B6F4C).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.auto_stories_rounded,
-                        color: Color(0xFF5B6F4C),
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'FELOLDOTT TARTALOM',
-                            style: TextStyle(
-                              color: Color(0xFF5B6F4C),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.6,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            station['unlockContent'].toString(),
-                            style: const TextStyle(
-                              color: Color(0xFF3A3226),
-                              fontWeight: FontWeight.w500,
-                              height: 1.45,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              isCompleted
+                  ? _UnlockedSection(text: unlockText, imageUrl: unlockImage)
+                  : const _LockedTeaser(),
             ],
           ],
         ),
       ),
     ),
   );
+}
+
+/// A beolvasással feloldott érdekesség – a sima leírástól jól elkülönítve.
+class _UnlockedSection extends StatelessWidget {
+  const _UnlockedSection({required this.text, required this.imageUrl});
+
+  final String text;
+  final String imageUrl;
+
+  static const _olive = Color(0xFF5B6F4C);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F3EC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFC9D4BC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _olive.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.lock_open_rounded,
+                  color: _olive,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FELOLDOTT ÉRDEKESSÉG',
+                      style: TextStyle(
+                        color: _olive,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Az állomás beolvasásával nyitottad meg',
+                      style: TextStyle(color: Color(0xFF6B7A5E), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (imageUrl.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => showStationImageViewer(context, [imageUrl], 0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: OfflineImage.network(
+                  imageUrl,
+                  height: 170,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xFF3A3226),
+              fontWeight: FontWeight.w500,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Még nem teljesített állomásnál: jelzi, hogy beolvasással érdekesség nyílik.
+class _LockedTeaser extends StatelessWidget {
+  const _LockedTeaser();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3EEE4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE3D5BC)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.lock_outline_rounded, color: Color(0xFF8B7355)),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Olvasd be az állomás QR-kódját, és feloldasz egy rejtett érdekességet!',
+              style: TextStyle(color: Color(0xFF6B5A44), height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

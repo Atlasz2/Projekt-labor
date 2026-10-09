@@ -91,13 +91,33 @@ class _CameraScreenState extends State<CameraScreen> {
 
   Future<void> _onQrDetected(String code) async {
     if (!_scanning || _loading) return;
+    // Azonnali, SZINKRON zárolás: a kamera ugyanazt a kódot másodpercenként
+    // többször is felismeri. Ha a zár csak a lenti várakozások (állomás,
+    // GPS) után kapcsolna, ugyanaz a beolvasás többször futna le
+    // párhuzamosan – az első jóváírná a pontot, a többi „már beolvastad”
+    // választ kapna, és az utolsó válasz maradna a képernyőn.
+    setState(() {
+      _scanning = false;
+      _loading = true;
+      _errorMsg = null;
+      _locationProblem = false;
+    });
+    _controller.stop();
 
     await _offlineSyncService.init();
+    final online = _offlineSyncService.isOnline;
 
     // Az állomás – online a friss adat, mert az admin közben átállíthatta,
-    // kell-e hozzá helymeghatározás.
+    // kell-e hozzá helymeghatározás. A GPS-lekérés párhuzamosan indul, ha a
+    // tárolt adat szerint kell (így a kettő nem egymás után várakozik).
     var cachedStation = _findStationFromLocalCache(code);
-    if (cachedStation != null && _offlineSyncService.isOnline) {
+    final cachedNeedsLocation =
+        cachedStation == null ||
+        QrProcessingService.requiresLocation(cachedStation);
+    final earlyLocation = cachedNeedsLocation
+        ? LocationService.currentLatLng()
+        : null;
+    if (cachedStation != null && online) {
       cachedStation = await _freshStation(cachedStation) ?? cachedStation;
     }
 
@@ -108,8 +128,9 @@ class _CameraScreenState extends State<CameraScreen> {
         cachedStation == null ||
         QrProcessingService.requiresLocation(cachedStation);
     final location = needsLocation
-        ? await LocationService.currentLatLng()
+        ? await (earlyLocation ?? LocationService.currentLatLng())
         : null;
+    if (!mounted) return;
 
     // Helyhez kötött állomásnál pozíció nélkül nincs pont – ezt online és
     // offline is azonnal jelezzük (a szerver is elutasítaná), egy gombbal a
@@ -129,7 +150,7 @@ class _CameraScreenState extends State<CameraScreen> {
       return;
     }
 
-    if (!_offlineSyncService.isOnline) {
+    if (!online) {
       // Offline helyszín-kapu: ha a cache-elt állomás helyhez kötött és a
       // pozíció túl messze van, azonnal elutasítjuk (nem tesszük sorba, a
       // szerver is elutasítaná).
@@ -182,13 +203,6 @@ class _CameraScreenState extends State<CameraScreen> {
       _controller.stop();
       return;
     }
-
-    setState(() {
-      _scanning = false;
-      _loading = true;
-      _errorMsg = null;
-    });
-    _controller.stop();
 
     try {
       final uid = _auth.currentUser?.uid;
@@ -299,7 +313,7 @@ class _CameraScreenState extends State<CameraScreen> {
           .collection('stations')
           .doc(id)
           .get()
-          .timeout(const Duration(seconds: 3));
+          .timeout(const Duration(seconds: 2));
       final data = snap.data();
       return data == null ? null : <String, dynamic>{'id': id, ...data};
     } catch (_) {

@@ -1,14 +1,16 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'auth_service.dart';
+import 'data_export_pdf.dart';
 import 'local_cache.dart';
 
 /// GDPR adatjogok kliensoldali kapuja: a szerveroldali exportUserData /
@@ -33,6 +35,17 @@ class AddEmailRejectedException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Az adatexport eredménye: a fájl neve és – ha a Letöltések mappába került –
+/// a megnyitásához szükséges azonosító.
+class ExportResult {
+  const ExportResult({required this.fileName, this.uri});
+
+  final String fileName;
+  final String? uri;
+
+  bool get savedToDownloads => uri != null;
 }
 
 class AccountService {
@@ -107,35 +120,116 @@ class AccountService {
   static FirebaseFunctions get _functions =>
       FirebaseFunctions.instanceFor(region: 'europe-west1');
 
-  /// A felhasználó összes adatának lekérése és JSON-fájlba írása a készülék
-  /// ideiglenes könyvtárába. A fájl útját adja vissza (a hívó megoszthatja/
-  /// megnyithatja). Hitelesítést és deployolt függvényt igényel.
-  static Future<File> exportToFile() async {
-    final callable = _functions.httpsCallable('exportUserData');
-    final response = await callable.call<dynamic>();
-    final data = _stringKeyed(response.data);
+  static const _downloads = MethodChannel('nagyvazsony/downloads');
+  static const _pdfMime = 'application/pdf';
 
-    const encoder = JsonEncoder.withIndent('  ');
-    final json = encoder.convert(data);
+  /// Tesztekben lecserélhető adatlekérés (élesben az exportUserData függvény).
+  static Future<Map<String, dynamic>> Function()? exportDataOverride;
 
-    final dir = await getTemporaryDirectory();
-    final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final file = File('${dir.path}/nagyvazsony-adataim-$stamp.json');
-    await file.writeAsString(json, flush: true);
-    return file;
+  /// A felhasználó összes tárolt adatának lekérése a szerverről és olvasható
+  /// PDF-dokumentummá alakítása (nem nyers JSON: technikai azonosítók nélkül,
+  /// az állomások és jutalmak nevével).
+  static Future<Uint8List> buildExportPdf() async {
+    final dataFuture =
+        (exportDataOverride ?? _fetchExportData)(); // a lassú rész – indul
+    final names = _exportNames(); // közben a nevek a helyi tárból
+    final fonts = Future.wait([
+      rootBundle.load('assets/fonts/Roboto-Regular.ttf'),
+      rootBundle.load('assets/fonts/Roboto-Bold.ttf'),
+    ]);
+    final data = await dataFuture;
+    final (stations, events, achievements) = await names;
+    final [regular, bold] = await fonts;
+    return DataExportPdf.build(
+      data,
+      regular: pw.Font.ttf(regular),
+      bold: pw.Font.ttf(bold),
+      stationNames: stations,
+      eventNames: events,
+      achievementNames: achievements,
+    );
   }
 
-  /// Export + a rendszer megosztó lapjának megnyitása (mentés fájlba,
-  /// e-mail, felhő stb.), hogy a felhasználó ténylegesen hozzáférjen az
-  /// adataihoz.
-  static Future<void> exportAndShare() async {
-    final file = await exportToFile();
+  static Future<Map<String, dynamic>> _fetchExportData() async {
+    final response = await _functions
+        .httpsCallable('exportUserData')
+        .call<dynamic>();
+    return Map<String, dynamic>.from(_stringKeyed(response.data) as Map);
+  }
+
+  static Future<(Map<String, String>, Map<String, String>, Map<String, String>)>
+  _exportNames() async {
+    Map<String, String> byId(Iterable<Map<String, dynamic>> docs) => {
+      for (final d in docs)
+        if (d['id'] != null)
+          d['id'].toString(): (d['name'] ?? d['title'] ?? '').toString(),
+    }..removeWhere((_, v) => v.isEmpty);
+
+    var events = <String, String>{};
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('events')
+          .get(const GetOptions(source: Source.cache));
+      events = byId(snap.docs.map((d) => {'id': d.id, ...d.data()}));
+    } catch (_) {
+      // A rendezvénynevek nélkül is elkészül a dokumentum.
+    }
+    return (
+      byId(LocalCache.getStations()),
+      events,
+      byId(LocalCache.getAchievements()),
+    );
+  }
+
+  /// Az adatexport letöltése: a PDF a telefon Letöltések mappájába kerül
+  /// (Android 10+). Ahol ez nem lehetséges (régebbi Android, iOS), a
+  /// rendszer mentés/megosztás lapja nyílik meg. A letöltött fájl
+  /// megnyitásához használható azonosítót adja vissza (vagy null-t).
+  static Future<ExportResult> exportToDownloads() async {
+    final bytes = await buildExportPdf();
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final fileName =
+        'nagyvazsony-adataim-${now.year}-${two(now.month)}-${two(now.day)}'
+        '-${two(now.hour)}${two(now.minute)}.pdf';
+
+    if (Platform.isAndroid) {
+      try {
+        final uri = await _downloads.invokeMethod<String>('save', {
+          'name': fileName,
+          'mime': _pdfMime,
+          'bytes': bytes,
+        });
+        if (uri != null) return ExportResult(fileName: fileName, uri: uri);
+      } on PlatformException catch (e) {
+        debugPrint('Mentés a Letöltésekbe sikertelen: $e');
+      }
+    }
+
+    // Tartalék: ideiglenes fájl + a rendszer lapja (ott „Mentés fájlba”).
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(bytes, flush: true);
     await SharePlus.instance.share(
       ShareParams(
-        files: [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Nagyvázsony – exportált adataim',
+        files: [XFile(file.path, mimeType: _pdfMime)],
+        subject: 'Nagyvázsony – adataim',
       ),
     );
+    return ExportResult(fileName: fileName);
+  }
+
+  /// A letöltött PDF megnyitása a telefon PDF-olvasójával.
+  static Future<bool> openDownloaded(String uri) async {
+    try {
+      return await _downloads.invokeMethod<bool>('open', {
+            'uri': uri,
+            'mime': _pdfMime,
+          }) ??
+          false;
+    } on PlatformException {
+      return false;
+    }
   }
 
   /// A fiók és minden kapcsolódó adat törlése a szerveren, majd helyi

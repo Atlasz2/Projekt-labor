@@ -64,6 +64,10 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
   bool _arrivalAnnounced = false;
 
   final Set<String> _reachedIds = <String>{};
+
+  /// A ténylegesen beolvasott (pontot érő) állomások – a beolvasás után
+  /// frissül, így az állomáslap a feloldott tartalmat is mutatja.
+  final Set<String> _completedIds = <String>{};
   int _targetIndex = 0;
   bool _allDone = false;
 
@@ -71,6 +75,7 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
   void initState() {
     super.initState();
     _reachedIds.addAll(widget.completedIds);
+    _completedIds.addAll(widget.completedIds);
     final firstPending = _firstUnreachedIndex();
     if (firstPending == null) {
       _allDone = true;
@@ -218,6 +223,7 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
       if (!mounted) return;
       setState(() {
         _reachedIds.addAll(completed);
+        _completedIds.addAll(completed);
         final next = _firstUnreachedIndex();
         _arrivalAnnounced = false;
         if (next == null) {
@@ -315,7 +321,7 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
           onTap: () => showStationDetailSheet(
             context,
             station: station,
-            isCompleted: widget.completedIds.contains(id),
+            isCompleted: _completedIds.contains(id),
           ),
         ),
       );
@@ -605,7 +611,7 @@ class _TripNavigationScreenState extends State<TripNavigationScreen> {
                       : () => showStationDetailSheet(
                           context,
                           station: target,
-                          isCompleted: widget.completedIds.contains(
+                          isCompleted: _completedIds.contains(
                             target['id'] as String? ?? '',
                           ),
                         ),

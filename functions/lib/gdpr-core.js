@@ -39,23 +39,30 @@ async function readSubcollection(db, uid, name) {
  * kliens oldalon (a payload map-ként utazik).
  */
 export async function collectUserData({ db, uid }) {
-  const [userSnap, progressSnap, leaderboardSnap] = await Promise.all([
+  // Minden olvasás egyszerre indul (egymás után ~8 hálózati kör lenne).
+  const [
+    userSnap,
+    progressSnap,
+    leaderboardSnap,
+    subLists,
+    projectEntries,
+    usernamesSnap,
+    bugReportsSnap,
+  ] = await Promise.all([
     db.collection('users').doc(uid).get(),
     db.collection('user_progress').doc(uid).get(),
     db.collection('public_leaderboard').doc(uid).get(),
-  ]);
-
-  const subcollections = {};
-  for (const name of USER_PROGRESS_SUBCOLLECTIONS) {
-    subcollections[name] = await readSubcollection(db, uid, name);
-  }
-
-  const projectEntries = await projectLeaderboardEntries(db, uid);
-
-  const [usernamesSnap, bugReportsSnap] = await Promise.all([
+    Promise.all(
+      USER_PROGRESS_SUBCOLLECTIONS.map((name) => readSubcollection(db, uid, name)),
+    ),
+    projectLeaderboardEntries(db, uid),
     db.collection('usernames').where('uid', '==', uid).get(),
     db.collection('bug_reports').where('reported_by.user_id', '==', uid).get(),
   ]);
+
+  const subcollections = Object.fromEntries(
+    USER_PROGRESS_SUBCOLLECTIONS.map((name, i) => [name, subLists[i]]),
+  );
 
   return {
     exportedAt: new Date().toISOString(),
@@ -91,18 +98,27 @@ export async function deleteUserData({ db, uid, deleteAuthUser }) {
   const deleted = [];
   const batch = db.batch();
 
+  // A törlendő/anonimizálandó dokumentumok felderítése egyszerre (egymás
+  // után ~6 hálózati kör lenne, ami érezhetően nyújtotta a törlést).
+  const [subSnaps, projectEntries, usernamesSnap, bugReportsSnap] =
+    await Promise.all([
+      Promise.all(
+        USER_PROGRESS_SUBCOLLECTIONS.map((name) =>
+          db.collection('user_progress').doc(uid).collection(name).get(),
+        ),
+      ),
+      projectLeaderboardEntries(db, uid),
+      db.collection('usernames').where('uid', '==', uid).get(),
+      db.collection('bug_reports').where('reported_by.user_id', '==', uid).get(),
+    ]);
+
   // 1. user_progress alkollekciók
-  for (const name of USER_PROGRESS_SUBCOLLECTIONS) {
-    const snap = await db
-      .collection('user_progress')
-      .doc(uid)
-      .collection(name)
-      .get();
-    for (const d of snap.docs) {
+  USER_PROGRESS_SUBCOLLECTIONS.forEach((name, i) => {
+    for (const d of subSnaps[i].docs) {
       batch.delete(db.collection('user_progress').doc(uid).collection(name).doc(d.id));
       deleted.push(`user_progress/${uid}/${name}/${d.id}`);
     }
-  }
+  });
 
   // 2. fő dokumentumok
   for (const [coll, id] of [
@@ -115,26 +131,18 @@ export async function deleteUserData({ db, uid, deleteAuthUser }) {
   }
 
   // 2/b. településenkénti ranglista-bejegyzések
-  for (const d of await projectLeaderboardEntries(db, uid)) {
+  for (const d of projectEntries) {
     batch.delete(d.ref);
     deleted.push(d.ref.path);
   }
 
   // 3. foglalt felhasználónevek
-  const usernamesSnap = await db
-    .collection('usernames')
-    .where('uid', '==', uid)
-    .get();
   for (const d of usernamesSnap.docs) {
     batch.delete(db.collection('usernames').doc(d.id));
     deleted.push(`usernames/${d.id}`);
   }
 
   // 4. hibabejelentések anonimizálása (törlés helyett)
-  const bugReportsSnap = await db
-    .collection('bug_reports')
-    .where('reported_by.user_id', '==', uid)
-    .get();
   for (const d of bugReportsSnap.docs) {
     batch.update(db.collection('bug_reports').doc(d.id), {
       reported_by: { user_id: '[törölt fiók]', email: null, name: null },

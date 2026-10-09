@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/image_normalizer.dart';
 import '../widgets/app_background.dart';
+import '../widgets/station_detail_sheet.dart';
 import '../widgets/station_image_viewer.dart';
 import '../widgets/unlocked_card.dart';
 import '../utils/project_filter.dart';
@@ -43,10 +46,10 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
   Future<Set<String>> _loadCompletedStationIds(String uid) async {
     final ids = <String>{};
 
-    final progressDoc = await _firestore
-        .collection('user_progress')
-        .doc(uid)
-        .get();
+    // A haladás-dokumentum és az alkollekció egyszerre.
+    final progressRef = _firestore.collection('user_progress').doc(uid);
+    final subFuture = progressRef.collection('completed_stations').get();
+    final progressDoc = await progressRef.get();
     final data = progressDoc.data();
     if (data != null) {
       ids.addAll(_idsFromDynamic(data['completedStations']));
@@ -54,11 +57,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       ids.addAll(_idsFromDynamic(data['completed_stations']));
     }
 
-    final subSnap = await _firestore
-        .collection('user_progress')
-        .doc(uid)
-        .collection('completed_stations')
-        .get();
+    final subSnap = await subFuture;
     ids.addAll(subSnap.docs.map((d) => d.id));
 
     return ids;
@@ -74,8 +73,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) throw Exception('Nem azonosított felhasználó.');
 
+      // Az állomáslista a teljesítések lekérésével párhuzamosan töltődik.
+      final stationsFuture = _firestore.collection('stations').get();
       final completedIds = await _loadCompletedStationIds(uid);
       if (completedIds.isEmpty) {
+        unawaited(stationsFuture.then((_) {}, onError: (_) {}));
         if (!mounted) return;
         setState(() {
           _unlockedItems = [];
@@ -84,7 +86,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
         return;
       }
 
-      final stationsSnap = await _firestore.collection('stations').get();
+      final stationsSnap = await stationsFuture;
       final unlocked = <Map<String, dynamic>>[];
 
       for (final doc in whereActiveProject(stationsSnap.docs)) {
@@ -104,6 +106,7 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
             'content': extra,
             'type': 'unlock',
             'images': photoListFromDoc(data, preferred: unlockImage),
+            'station': <String, dynamic>{'id': doc.id, ...data},
           });
         }
       }
@@ -291,6 +294,11 @@ class _UnlockedContentScreenState extends State<UnlockedContentScreen> {
                         final item = _unlockedItems[index - 1];
                         return UnlockedCard(
                           item: item,
+                          onOpenStation: () => showStationDetailSheet(
+                            context,
+                            station: item['station'] as Map<String, dynamic>,
+                            isCompleted: true,
+                          ),
                           onTapImage: () {
                             final images =
                                 (item['images'] as List<String>? ?? const []);

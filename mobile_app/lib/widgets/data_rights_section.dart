@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../screens/privacy_screen.dart';
@@ -20,9 +22,30 @@ class _DataRightsSectionState extends State<DataRightsSection> {
 
   Future<void> _handleExport() async {
     setState(() => _exportInProgress = true);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Adataid összegyűjtése… ez pár másodpercig tart.'),
+        duration: Duration(seconds: 20),
+      ),
+    );
     try {
-      await AccountService.exportAndShare();
+      final result = await AccountService.exportToDownloads();
+      messenger.hideCurrentSnackBar();
+      if (result.savedToDownloads) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Letöltve a Letöltések mappába: ${result.fileName}'),
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: 'Megnyitás',
+              onPressed: () => AccountService.openDownloaded(result.uri!),
+            ),
+          ),
+        );
+      }
     } catch (e) {
+      messenger.hideCurrentSnackBar();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -61,16 +84,42 @@ class _DataRightsSectionState extends State<DataRightsSection> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _deleteInProgress = true);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    // Blokkoló folyamatjelző: a törlés alatt ne lehessen mást csinálni.
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const PopScope(
+          canPop: false,
+          child: AlertDialog(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+                SizedBox(width: 18),
+                Expanded(child: Text('Fiókod törlése folyamatban…')),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
     try {
       await AccountService.deleteAccount();
-      // Sikeres törlés után az AuthGate a kijelentkezésre reagálva a
-      // regisztrációs képernyőre vált, ez a widget eltűnik – ezért az
-      // alkalmazásszintű üzenetkezelőn jelezzük a sikert.
+      // A kijelentkezés után az AuthGate (a navigátor első oldala) a
+      // regisztrációs képernyőt mutatja: minden felette lévő oldalt (profil,
+      // folyamatjelző) bezárunk, hogy oda kerüljön a felhasználó.
+      navigator.popUntil((route) => route.isFirst);
       showAppMessage(
         'A fiókodat és minden hozzá tartozó adatodat töröltük.',
         duration: const Duration(seconds: 6),
       );
     } catch (e) {
+      navigator.pop(); // folyamatjelző
       if (!mounted) return;
       setState(() => _deleteInProgress = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -119,16 +168,16 @@ class _DataRightsSectionState extends State<DataRightsSection> {
               title: const Text('Adatkezelési tájékoztató'),
               subtitle: const Text('Milyen adatot, miért és meddig kezelünk'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PrivacyScreen()),
-              ),
+              onTap: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const PrivacyScreen())),
             ),
             const Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.download_outlined),
               title: const Text('Adataim letöltése'),
-              subtitle: const Text('Exportál JSON-fájlba és megoszt'),
+              subtitle: const Text('PDF a telefon Letöltések mappájába'),
               trailing: _exportInProgress
                   ? const SizedBox(
                       width: 20,
@@ -141,8 +190,14 @@ class _DataRightsSectionState extends State<DataRightsSection> {
             const Divider(height: 1),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.delete_forever_outlined, color: Colors.red.shade400),
-              title: Text('Fiók törlése', style: TextStyle(color: Colors.red.shade400)),
+              leading: Icon(
+                Icons.delete_forever_outlined,
+                color: Colors.red.shade400,
+              ),
+              title: Text(
+                'Fiók törlése',
+                style: TextStyle(color: Colors.red.shade400),
+              ),
               subtitle: const Text('Végleges, nem visszavonható'),
               trailing: _deleteInProgress
                   ? const SizedBox(

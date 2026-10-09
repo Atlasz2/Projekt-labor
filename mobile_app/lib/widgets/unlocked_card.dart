@@ -9,10 +9,14 @@ class UnlockedCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTapImage;
 
+  /// Az állomás adatlapjának megnyitása (fotók, leírás, feloldott tartalom).
+  final VoidCallback? onOpenStation;
+
   const UnlockedCard({
     super.key,
     required this.item,
     required this.onTapImage,
+    this.onOpenStation,
   });
 
   static const _cardBg = Color(0xFFFBF7EF);
@@ -58,7 +62,11 @@ class UnlockedCard extends StatelessWidget {
               color: _olive.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.auto_stories_rounded, color: _olive, size: 22),
+            child: const Icon(
+              Icons.auto_stories_rounded,
+              color: _olive,
+              size: 22,
+            ),
           ),
           title: Text(
             item['stationName']?.toString() ?? 'Ismeretlen állomás',
@@ -148,6 +156,18 @@ class UnlockedCard extends StatelessWidget {
                 height: 1.55,
               ),
             ),
+            if (onOpenStation != null) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: onOpenStation,
+                  style: TextButton.styleFrom(foregroundColor: _olive),
+                  icon: const Icon(Icons.place_outlined, size: 18),
+                  label: const Text('Állomás megnyitása'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
