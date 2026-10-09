@@ -123,6 +123,9 @@ function targetLatLng(data) {
  * hiányát. Ezt a korlátot a szakdolgozat dokumentálja.
  */
 export function checkLocation(targetData, location) {
+  // Az admin által helyhez kötöttségből kivett állomásnál (pozíció nélkül is
+  // beváltható) a távolság sem számít.
+  if (targetData?.requireLocation === false) return null;
   const target = targetLatLng(targetData);
   if (!target) return null;
   if (

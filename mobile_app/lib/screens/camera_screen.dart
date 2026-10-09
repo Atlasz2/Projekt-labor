@@ -94,10 +94,22 @@ class _CameraScreenState extends State<CameraScreen> {
 
     await _offlineSyncService.init();
 
-    // A beolvasás pillanatában rögzített pozíció a helyszín-ellenőrzéshez.
-    // Null, ha nem elérhető (kikapcsolt helymeghatározás, megtagadott engedély).
-    final location = await LocationService.currentLatLng();
-    final cachedStation = _findStationFromLocalCache(code);
+    // Az állomás – online a friss adat, mert az admin közben átállíthatta,
+    // kell-e hozzá helymeghatározás.
+    var cachedStation = _findStationFromLocalCache(code);
+    if (cachedStation != null && _offlineSyncService.isOnline) {
+      cachedStation = await _freshStation(cachedStation) ?? cachedStation;
+    }
+
+    // A beolvasás pillanatában rögzített pozíció a helyszín-ellenőrzéshez –
+    // csak ha kell: a helyhez kötöttségből kivett állomásnál nem kérünk GPS-t.
+    // Ismeretlen állomásnál kérünk (a szerver dönt).
+    final needsLocation =
+        cachedStation == null ||
+        QrProcessingService.requiresLocation(cachedStation);
+    final location = needsLocation
+        ? await LocationService.currentLatLng()
+        : null;
 
     // Helyhez kötött állomásnál pozíció nélkül nincs pont – ezt online és
     // offline is azonnal jelezzük (a szerver is elutasítaná), egy gombbal a
@@ -274,6 +286,26 @@ class _CameraScreenState extends State<CameraScreen> {
 
   /// Az utolsó hiba a hiányzó helymeghatározás volt (bekapcsoló gombbal).
   bool _locationProblem = false;
+
+  /// Az állomás friss dokumentuma (rövid időkorláttal); hiba vagy lassú
+  /// hálózat esetén null – ilyenkor a gyorsítótárazott adat marad.
+  Future<Map<String, dynamic>?> _freshStation(
+    Map<String, dynamic> station,
+  ) async {
+    final id = station['id']?.toString();
+    if (id == null || id.isEmpty) return null;
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('stations')
+          .doc(id)
+          .get()
+          .timeout(const Duration(seconds: 3));
+      final data = snap.data();
+      return data == null ? null : <String, dynamic>{'id': id, ...data};
+    } catch (_) {
+      return null;
+    }
+  }
 
   Map<String, dynamic>? _findStationFromLocalCache(String code) {
     for (final station in LocalCache.getStations()) {

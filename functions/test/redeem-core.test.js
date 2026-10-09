@@ -426,6 +426,21 @@ test('redeem: pozíció nélkül a helyhez kötött állomás alapból location_
   assert.equal(db.read(`user_progress/${uid}`).totalPoints, 0);
 });
 
+test('redeem: a helyhez kötöttségből kivett állomásnál távoli pozícióval is jóváíródik', async () => {
+  db.seed('stations/st1', {
+    name: 'Akadálymentes állomás',
+    qrCode: 'VAR-001',
+    points: 25,
+    latitude: 47.06,
+    longitude: 17.715,
+    requireLocation: false,
+  });
+
+  const result = await redeem('VAR-001', { lat: 47.5, lng: 19.04 }); // Budapest
+  assert.equal(result.rejected, undefined);
+  assert.equal(result.updatedPoints, 25);
+});
+
 test('redeem: a pozíció nélküli beváltást kifejezetten engedő állomás jóváíródik', async () => {
   db.seed('stations/st1', {
     name: 'Akadálymentes állomás',

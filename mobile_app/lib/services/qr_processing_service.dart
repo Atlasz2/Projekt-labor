@@ -222,6 +222,8 @@ class QrProcessingService {
     Map<String, dynamic> targetData,
     ScanLocation? location,
   ) {
+    // A helyhez kötöttségből kivett állomásnál a távolság sem számít.
+    if (targetData['requireLocation'] == false) return null;
     final target = _targetLatLng(targetData);
     if (target == null || location == null) return null;
 

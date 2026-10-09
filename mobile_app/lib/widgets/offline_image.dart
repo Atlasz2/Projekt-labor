@@ -35,6 +35,9 @@ class _OfflineImageState extends State<OfflineImage> {
   File? _cachedFile;
   Uint8List? _inlineBytes;
 
+  /// A saját letöltés nem sikerült – ekkor a hálózati kép a tartalék.
+  bool _downloadFailed = false;
+
   String get _normalizedUrl => widget.imageUrl.trim();
 
   bool _isDataImageUrl(String url) {
@@ -72,6 +75,7 @@ class _OfflineImageState extends State<OfflineImage> {
     if (oldWidget.imageUrl != widget.imageUrl) {
       _cachedFile = null;
       _inlineBytes = null;
+      _downloadFailed = false;
       _resolveImage();
     }
   }
@@ -100,10 +104,17 @@ class _OfflineImageState extends State<OfflineImage> {
       return;
     }
 
+    // Egyetlen letöltés, ami egyben el is menti a képet offline használatra
+    // (korábban mellette az Image.network is letöltötte ugyanazt).
     final downloaded = await OfflineImageService.cacheImage(url);
-    if (downloaded != null && stillCurrent()) {
-      setState(() => _cachedFile = downloaded);
-    }
+    if (!stillCurrent()) return;
+    setState(() {
+      if (downloaded != null) {
+        _cachedFile = downloaded;
+      } else {
+        _downloadFailed = true;
+      }
+    });
   }
 
   /// A dekódolási szélesség fizikai pixelben: a kép csak akkora felbontásban
@@ -116,7 +127,9 @@ class _OfflineImageState extends State<OfflineImage> {
     final requested = widget.width;
     final logical = (requested != null && requested.isFinite)
         ? requested
-        : (constraints.hasBoundedWidth ? constraints.maxWidth : media.size.width);
+        : (constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : media.size.width);
     return (logical * media.devicePixelRatio * widget.decodeScale)
         .round()
         .clamp(1, 4096);
@@ -146,6 +159,18 @@ class _OfflineImageState extends State<OfflineImage> {
             height: widget.height,
             cacheWidth: cacheWidth,
             errorBuilder: widget.errorBuilder,
+          );
+        }
+
+        // Letöltés közben helykitöltő; csak sikertelen saját letöltés után
+        // (vagy weben, ahol nincs fájlrendszer) próbálkozik a hálózati kép.
+        if (!kIsWeb && !_downloadFailed && !_isDataImageUrl(_normalizedUrl)) {
+          return SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: ColoredBox(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            ),
           );
         }
 

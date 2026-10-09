@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -314,87 +317,157 @@ class _MapTripsScreenState extends State<MapTripsScreen> {
     });
   }
 
+  /// A kiadás településéhez tartozó, aktív túrák. Hibatűrő: ha a szűrés
+  /// mindent kidobna, inkább a teljes listát mutatjuk, semmint üres térképet.
+  List<Map<String, dynamic>> _visibleTrips(List<Map<String, dynamic>> all) =>
+      filterToActiveProject<Map<String, dynamic>>(
+        all.where((t) => t['isActive'] != false).toList(),
+        (t) => t,
+      );
+
+  List<Map<String, dynamic>> _visibleStations(List<Map<String, dynamic>> all) =>
+      filterToActiveProject<Map<String, dynamic>>(all, (st) => st);
+
+  /// A teljesített állomások – a [source] szerint szerverről vagy a Firestore
+  /// helyi gyorsítótárából.
+  Future<Set<String>> _completedStations(String uid, Source source) async {
+    final options = GetOptions(source: source);
+    final progressRef = _firestore.collection('user_progress').doc(uid);
+    final progress = await progressRef.get(options);
+    final fromDoc = Set<String>.from(
+      (progress.data() ?? const {})['completedStations'] ?? const [],
+    );
+    if (fromDoc.isNotEmpty) return fromDoc;
+    final completedSnap = await progressRef
+        .collection('completed_stations')
+        .get(options);
+    return completedSnap.docs.map((doc) => doc.id).toSet();
+  }
+
+  /// Gyorsítótár-először betöltés: a készüléken tárolt túrák és állomások
+  /// azonnal megjelennek, a friss adat a háttérben érkezik és csak akkor
+  /// rajzolja újra a térképet, ha változott. Üres gyorsítótárnál (első
+  /// indítás) a szerverre várunk.
   Future<void> _loadAll() async {
     setState(() {
-      _loading = true;
       _error = null;
     });
-    try {
-      final uid = _auth.currentUser?.uid;
-      List<Map<String, dynamic>> trips = [];
-      List<Map<String, dynamic>> stations = [];
-      Set<String> completed = {};
+    final uid = _auth.currentUser?.uid;
 
-      try {
-        final results = await Future.wait([
-          _firestore.collection('trips').get(),
-          _firestore.collection('stations').get(),
-          if (uid != null)
-            _firestore.collection('user_progress').doc(uid).get(),
-        ]).timeout(const Duration(seconds: 15));
+    final cachedTrips = _visibleTrips(LocalCache.getTrips());
+    final cachedStations = _visibleStations(LocalCache.getStations());
+    final showedCache = cachedTrips.isNotEmpty || cachedStations.isNotEmpty;
 
-        final tripsSnap = results[0] as QuerySnapshot;
-        final stationsSnap = results[1] as QuerySnapshot;
-        // Ennek a kiadásnak a településéhez tartozó tartalom. Hibatűrő: ha a
-        // szűrés mindent kidobna, inkább a teljes listát mutatjuk, semmint
-        // üres térképet.
-        trips = filterToActiveProject<Map<String, dynamic>>(
-          tripsSnap.docs
-              .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
-              .where((t) => t['isActive'] != false)
-              .toList(),
-          (t) => t,
-        );
-        stations = filterToActiveProject<Map<String, dynamic>>(
-          stationsSnap.docs
-              .map((d) => <String, dynamic>{'id': d.id, ...d.data() as Map})
-              .toList(),
-          (st) => st,
-        );
-
-        if (uid != null && results.length > 2) {
-          final progress = results[2] as DocumentSnapshot;
-          if (progress.exists) {
-            completed = Set<String>.from(
-              (progress.data() as Map)['completedStations'] ?? [],
-            );
-          }
-
-          if (completed.isEmpty) {
-            final completedStationsSnap = await _firestore
-                .collection('user_progress')
-                .doc(uid)
-                .collection('completed_stations')
-                .get();
-            completed = completedStationsSnap.docs.map((doc) => doc.id).toSet();
-          }
+    if (showedCache) {
+      var completed = <String>{};
+      if (uid != null) {
+        try {
+          completed = await _completedStations(uid, Source.cache);
+        } catch (_) {
+          // Még nincs helyi példány – a háttérfrissítés pótolja.
         }
+      }
+      if (!mounted) return;
+      _applyData(cachedTrips, cachedStations, completed);
+      unawaited(_refreshSelectedTripMap());
+    } else {
+      setState(() => _loading = true);
+    }
 
-        if (trips.isNotEmpty) await LocalCache.saveTrips(trips);
-        if (stations.isNotEmpty) await LocalCache.saveStations(stations);
-      } catch (_) {
-        final cachedTrips = LocalCache.getTrips();
-        final cachedStations = LocalCache.getStations();
-        if (cachedTrips.isEmpty && cachedStations.isEmpty) rethrow;
-        trips = cachedTrips;
-        stations = cachedStations;
+    try {
+      final results = await Future.wait([
+        _firestore.collection('trips').get(),
+        _firestore.collection('stations').get(),
+      ]).timeout(const Duration(seconds: 15));
+
+      final allTrips = results[0].docs
+          .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
+          .toList();
+      final allStations = results[1].docs
+          .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
+          .toList();
+      if (allTrips.isNotEmpty) await LocalCache.saveTrips(allTrips);
+      if (allStations.isNotEmpty) await LocalCache.saveStations(allStations);
+
+      var completed = _completedIds;
+      if (uid != null) {
+        try {
+          completed = await _completedStations(
+            uid,
+            Source.serverAndCache,
+          ).timeout(const Duration(seconds: 10));
+        } catch (_) {
+          // A haladás nélkül is megjeleníthető a térkép.
+        }
       }
 
+      // A tárolt (egységesített) alakot használjuk, így a gyorsítótárból
+      // mutatott adattal megbízhatóan összevethető.
+      final trips = _visibleTrips(
+        allTrips.isNotEmpty ? LocalCache.getTrips() : allTrips,
+      );
+      final stations = _visibleStations(
+        allStations.isNotEmpty ? LocalCache.getStations() : allStations,
+      );
       if (!mounted) return;
-      setState(() {
-        _trips = trips;
-        _stations = stations;
-        _completedIds = completed;
-        _selectedTripId = trips.isNotEmpty ? trips.first['id'] as String : null;
-        _loading = false;
-      });
+      final changed =
+          !showedCache ||
+          !_sameDocs(trips, _trips) ||
+          !_sameDocs(stations, _stations) ||
+          !setEquals(completed, _completedIds);
+      if (!changed) return;
+      _applyData(trips, stations, completed);
       await _refreshSelectedTripMap();
     } catch (e) {
       if (!mounted) return;
+      // Ha már a gyorsítótárból megjelent a térkép, a sikertelen frissítés
+      // nem hiba (offline / lassú hálózat).
+      if (showedCache) return;
       setState(() {
         _loading = false;
         _error = e.toString();
       });
+    }
+  }
+
+  void _applyData(
+    List<Map<String, dynamic>> trips,
+    List<Map<String, dynamic>> stations,
+    Set<String> completed,
+  ) {
+    // A kiválasztott túra megmarad, ha a frissítés után is létezik.
+    final keepSelection =
+        _selectedTripId != null && trips.any((t) => t['id'] == _selectedTripId);
+    // A megváltozott túráknál az útvonalat újra kell számolni.
+    for (final trip in trips) {
+      final id = trip['id'] as String;
+      final old = _trips.where((t) => t['id'] == id).firstOrNull;
+      if (old != null && jsonEncode(old) != jsonEncode(trip)) {
+        _routeCache.remove(id);
+        _routeMetrics.remove(id);
+      }
+    }
+    setState(() {
+      _trips = trips;
+      _stations = stations;
+      _completedIds = completed;
+      _selectedTripId = keepSelection
+          ? _selectedTripId
+          : (trips.isNotEmpty ? trips.first['id'] as String : null);
+      _loading = false;
+    });
+  }
+
+  /// Két dokumentumlista tartalmilag azonos-e (azonosító és mezők szerint).
+  static bool _sameDocs(
+    List<Map<String, dynamic>> a,
+    List<Map<String, dynamic>> b,
+  ) {
+    if (a.length != b.length) return false;
+    try {
+      return jsonEncode(a) == jsonEncode(b);
+    } catch (_) {
+      return false;
     }
   }
 

@@ -72,9 +72,66 @@ export async function fileToOptimizedDataUrl(file) {
   throw new Error("A kép túl nagy. Válassz kisebb képet (legfeljebb kb. 1 MB).");
 }
 
-export async function uploadImageWithFallback({ file, storage, folder }) {
-  if (!file) throw new Error("Nincs kiválasztott fájl.");
+// A feltöltött képek felső határa: a telefon kijelzőjén ennél nagyobb
+// felbontás nem látszik, a nagyobb fájl viszont lassítja a betöltést (egy
+// tömörítetlen 2 MB-os fotó mobilneten másodpercekig töltődik).
+const UPLOAD_MAX_DIM = 1600;
+const UPLOAD_JPEG_QUALITY = 0.82;
+// Ez alatt a méret alatt nem nyúlunk a fájlhoz (már elég kicsi).
+const UPLOAD_SKIP_BYTES = 300_000;
+const IMAGE_LOAD_TIMEOUT_MS = 8000;
 
+/** A kép betöltése időkorláttal; hiba vagy időtúllépés esetén null. */
+const loadImage = (src) =>
+  new Promise((resolve) => {
+    const el = new Image();
+    const t = setTimeout(() => resolve(null), IMAGE_LOAD_TIMEOUT_MS);
+    el.onload = () => { clearTimeout(t); resolve(el); };
+    el.onerror = () => { clearTimeout(t); resolve(null); };
+    el.src = src;
+  });
+
+/**
+ * Feltöltés előtti kicsinyítés és tömörítés: a hosszabbik oldal legfeljebb
+ * UPLOAD_MAX_DIM pixel, JPEG (a PNG átlátszóság miatt PNG marad). Bármilyen
+ * hiba esetén, vagy ha nem lenne kisebb, az eredeti fájl megy fel.
+ */
+export async function shrinkImageForUpload(file) {
+  if (!file?.type?.startsWith("image/")) return file;
+  // Az animált GIF és a vektoros SVG vászonra rajzolva elveszítené a lényegét.
+  if (file.type === "image/gif" || file.type === "image/svg+xml") return file;
+  if (file.size <= UPLOAD_SKIP_BYTES) return file;
+
+  try {
+    const img = await loadImage(await readAsDataUrl(file));
+    if (!img || !img.width || !img.height) return file;
+
+    const scale = Math.min(1, UPLOAD_MAX_DIM / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const type = file.type === "image/png" ? "image/png" : "image/jpeg";
+    const blob = await canvasToBlob(canvas, type, UPLOAD_JPEG_QUALITY);
+    if (!blob || blob.size >= file.size) return file;
+
+    const ext = type === "image/png" ? ".png" : ".jpg";
+    const name = file.name.replace(/\.[^.]*$/, "") + ext;
+    return new File([blob], name, { type });
+  } catch {
+    return file;
+  }
+}
+
+export async function uploadImageWithFallback({ file: original, storage, folder }) {
+  if (!original) throw new Error("Nincs kiválasztott fájl.");
+
+  const file = await shrinkImageForUpload(original);
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
 
   // Firebase Storage feltöltés kemény időkorláttal: enélkül az uploadBytes
