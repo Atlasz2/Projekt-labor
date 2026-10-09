@@ -2,6 +2,7 @@ import PropTypes from "prop-types";
 import React, { useState } from "react";
 import {
   browserLocalPersistence,
+  sendPasswordResetEmail,
   setPersistence,
   signInWithEmailAndPassword,
   signOut,
@@ -84,12 +85,60 @@ function CastleSvg() {
   );
 }
 
+/** A visszajelzés szándékosan nem árulja el, létezik-e a fiók (különben az
+ *  oldal alkalmas lenne admin e-mail-címek kipuhatolására). */
+export const RESET_SENT_MESSAGE =
+  "Ha ehhez a címhez tartozik admin fiók, elküldtük rá a jelszó-visszaállító levelet. Nézd meg a beérkező leveleidet (és a levélszemét mappát is).";
+
 function Login() {
   const [email, setEmail] = useState(localStorage.getItem("last_admin_email") || "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(consumePersistedAccessError);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Elfelejtett jelszó mód: ugyanazon a kártyán, külön űrlappal.
+  const [resetMode, setResetMode] = useState(false);
+  const [resetInfo, setResetInfo] = useState("");
+
+  const handleReset = async (event) => {
+    event.preventDefault();
+    setError("");
+    setResetInfo("");
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) {
+      setError("Adj meg egy érvényes e-mail-címet.");
+      return;
+    }
+    setLoading(true);
+    auth.languageCode = "hu";
+    // A levélben lévő link a jelszó beállítása után ide hoz vissza. Ha az
+    // aktuális domain nincs engedélyezve a Firebase-ben, link nélkül küldjük.
+    const continueSettings = { url: `${window.location.origin}/` };
+    try {
+      try {
+        await sendPasswordResetEmail(auth, normalizedEmail, continueSettings);
+      } catch (err) {
+        if (err?.code !== "auth/unauthorized-continue-uri" && err?.code !== "auth/invalid-continue-uri") throw err;
+        await sendPasswordResetEmail(auth, normalizedEmail);
+      }
+      setResetInfo(RESET_SENT_MESSAGE);
+    } catch (err) {
+      // A nem létező fiók is „sikeres” – ne derüljön ki, kinek van fiókja.
+      if (err?.code === "auth/user-not-found") {
+        setResetInfo(RESET_SENT_MESSAGE);
+      } else {
+        setError(AUTH_ERROR_MESSAGES[err.code] || "A levél küldése nem sikerült, próbáld újra.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchMode = (nextReset) => {
+    setResetMode(nextReset);
+    setError("");
+    setResetInfo("");
+  };
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -137,7 +186,12 @@ function Login() {
         <section className="login-card-panel">
           <div className="login-card-surface">
             <div className="login-header">
-              <h2>Admin belépés</h2>
+              <h2>{resetMode ? "Elfelejtett jelszó" : "Admin belépés"}</h2>
+              {resetMode && (
+                <p className="panel-subtitle">
+                  Add meg az admin fiókod e-mail-címét, és küldünk rá egy linket, amellyel új jelszót állíthatsz be.
+                </p>
+              )}
             </div>
 
             {error && (
@@ -147,6 +201,43 @@ function Login() {
               </div>
             )}
 
+            {resetInfo && (
+              <div className="info-alert" role="status">
+                <span className="info-icon">✓</span>
+                <p>{resetInfo}</p>
+              </div>
+            )}
+
+            {resetMode ? (
+              <form onSubmit={handleReset} className="login-form">
+                <div className="form-group">
+                  <label htmlFor="reset-email">Email cím</label>
+                  <input
+                    type="email"
+                    id="reset-email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@nagyvazsony.hu"
+                    required
+                    disabled={loading}
+                    autoFocus
+                  />
+                </div>
+                <button type="submit" className="login-button" disabled={loading}>
+                  {loading ? (
+                    <span className="button-loading">
+                      <span className="spinner" />
+                      Küldés...
+                    </span>
+                  ) : (
+                    "Visszaállító link küldése"
+                  )}
+                </button>
+                <button type="button" className="link-button" onClick={() => switchMode(false)} disabled={loading}>
+                  ← Vissza a belépéshez
+                </button>
+              </form>
+            ) : (
             <form onSubmit={handleLogin} className="login-form">
               <div className="form-group">
                 <label htmlFor="email">Email cím</label>
@@ -196,7 +287,11 @@ function Login() {
                   "Belépés a vezérlőközpontba"
                 )}
               </button>
+              <button type="button" className="link-button" onClick={() => switchMode(true)} disabled={loading}>
+                Elfelejtettem a jelszavam
+              </button>
             </form>
+            )}
           </div>
         </section>
       </div>

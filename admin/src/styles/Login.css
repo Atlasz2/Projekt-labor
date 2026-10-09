@@ -340,3 +340,32 @@
   .login-story-panel h1 { font-size: 2rem; }
   .story-lead { font-size: 0.92rem; }
 }
+/* Elfelejtett jelszó: visszajelzés és szöveges gomb */
+.info-alert {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  font-size: 0.88rem;
+}
+.info-alert p { margin: 0; line-height: 1.45; }
+.info-icon { font-weight: 800; }
+.link-button {
+  justify-self: center;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  color: #8b5e34;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.link-button:hover:not(:disabled) { color: #5b3d22; }
+.link-button:disabled { opacity: 0.6; cursor: default; }

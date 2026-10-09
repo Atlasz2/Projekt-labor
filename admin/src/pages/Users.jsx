@@ -325,12 +325,16 @@ function Users() {
   // A users doksi azonosítója: ahonnan olvastuk (id), egyébként az uid.
   const targetDocId = (user) => user.id || user.uid;
 
-  // Admin jog adása/elvétele. A szabályok szerint szerepet csak developer
-  // állíthat, ezért a gomb is csak neki jelenik meg.
-  const handleToggleAdmin = async (user) => {
+  // Admin jog visszavonása. Adni itt szándékosan NEM lehet: a mobilapp
+  // felhasználóinak nincs ismert jelszavuk (a mobilos belépés a névből képzett
+  // belső kulcsot használja), így a webes felületre be sem tudnának lépni, egy
+  // jelszó-visszaállítás pedig a mobilos belépésüket rontaná el. Új admin csak
+  // az „Admin meghívása” úton jön létre (saját jelszó-beállító linkkel).
+  // Szerepet a szabályok szerint csak developer állíthat.
+  const handleRevokeAdmin = async (user) => {
     const id = targetDocId(user);
-    if (!id) return;
-    const nextRole = user.role === "admin" ? "user" : "admin";
+    if (!id || user.role !== "admin") return;
+    const nextRole = "user";
     setActionBusyId(id);
     try {
       await setDoc(
@@ -735,19 +739,17 @@ function Users() {
                               </span>
                             ) : (
                               <>
-                                <button
-                                  type="button"
-                                  className="user-action-btn"
-                                  disabled={busy}
-                                  onClick={() => handleToggleAdmin(user)}
-                                  title={
-                                    user.role === "admin"
-                                      ? "Admin jog visszavonása"
-                                      : "Admin jog adása"
-                                  }
-                                >
-                                  {user.role === "admin" ? "Jog elvétele" : "Admin jog"}
-                                </button>
+                                {user.role === "admin" && (
+                                  <button
+                                    type="button"
+                                    className="user-action-btn"
+                                    disabled={busy}
+                                    onClick={() => handleRevokeAdmin(user)}
+                                    title="Admin jog visszavonása"
+                                  >
+                                    Jog elvétele
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   className="user-action-btn"
@@ -875,6 +877,8 @@ function Users() {
               A megadott e-mail címhez admin fiók jön létre (ha még nincs), és
               hozzárendeljük a kiválasztott településhez. A mentés után kapsz egy
               jelszó-beállító linket, amit el kell juttatnod a meghívottnak.
+              Mobilapp-felhasználó e-mail-címe nem lehet admin: adminnak külön
+              címet adj meg.
             </p>
 
             <label className="invite-label" htmlFor="invite-email">E-mail *</label>

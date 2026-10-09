@@ -65,3 +65,14 @@ describe("Admin meghívása", () => {
     expect(screen.getByDisplayValue("https://reset.example/link")).toBeInTheDocument();
   });
 });
+
+describe("Admin jog", () => {
+  it("mobilapp-felhasználónak nem adható admin jog (csak meghívással)", async () => {
+    render(<Users />);
+    expect(await screen.findByText("Anna")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Admin jog" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Jog elvétele" })).not.toBeInTheDocument();
+    // A kitiltás és a törlés továbbra is elérhető.
+    expect(screen.getByRole("button", { name: "Kitiltás" })).toBeInTheDocument();
+  });
+});

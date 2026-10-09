@@ -450,7 +450,19 @@ export const inviteAdmin = onCall({ region: 'europe-west1' }, async (request) =>
     let created = false;
     try {
       uid = (await auth.getUserByEmail(email)).uid;
+      // Meglévő fiók csak akkor kaphat (újra) meghívót, ha már admin: egy
+      // mobilapp-felhasználó jelszava a nevéből képzett belső kulcs, a
+      // jelszó-beállítás az ő mobilos belépését tenné tönkre.
+      const existing = await db.collection('users').doc(uid).get();
+      const role = existing.exists ? existing.data()?.role : null;
+      if (role !== 'admin' && role !== 'developer') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Ez az e-mail-cím egy mobilapp-felhasználóhoz tartozik. Adminnak külön e-mail-címet adj meg.',
+        );
+      }
     } catch (err) {
+      if (err instanceof HttpsError) throw err;
       if (err?.code !== 'auth/user-not-found') throw err;
       // Ideiglenes, véletlen jelszó – a meghívott a linken állítja be a sajátját.
       const temporary = `Inv-${randomBytes(24).toString('base64url')}`;
